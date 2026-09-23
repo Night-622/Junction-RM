@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Junction — keep the city moving</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+  <div id="stage">
+    <canvas id="cv" aria-label="City map"></canvas>
+
+    <!-- top bar -->
+    <header id="topbar">
+      <div class="plate brand"><b>Junction</b><span>keep the city moving</span></div>
+
+      <div class="plate stats">
+        <div class="stat big" data-tip="Parcels delivered" data-sub="Your score for this city"><small class="lbl"><svg class="si" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8l8-4.5L20 8v8.5L12 21l-8-4.5z"/><path d="M4 8l8 4.5L20 8M12 12.5V21"/></svg>Parcels</small><b id="v-score" class="num">0</b><span id="v-rate" class="num sub">0.0 a min</span></div>
+        <div class="stat money" data-tip="Cash" data-sub="Delivery income over the last minute, before grants and upkeep"><small class="lbl"><svg class="si" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg>Cash</small><b id="v-money" class="num">$25</b><span id="v-income" class="num sub">$0 a min</span></div>
+        <div class="stat weekstat" data-tip="Week progress" data-sub="A reward and a council grant arrive when the week ends"><small class="lbl"><svg class="si" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>Week <span id="v-week" class="num">1</span></small>
+          <div class="row2"><b id="v-weektime" class="num">1:50</b><span id="v-weekleft">left</span></div>
+          <div class="meter"><i id="v-weekfill"></i></div>
+        </div>
+        <div class="stat jamstat" data-tip="Traffic" data-sub="Share of cars standing still right now"><small class="lbl"><svg class="si" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="3"/><circle cx="12" cy="7.5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="16.5" r="1.5"/></svg>Traffic</small>
+          <div class="row2"><b id="v-jam">Flowing</b></div>
+          <div class="meter jam"><i id="v-jamfill" data-level="ok"></i></div>
+        </div>
+        <div class="stat" data-tip="Cars on the road" data-sub="Driving now, out of every car in the city"><small class="lbl"><svg class="si" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 16V11l2-5h10l2 5v5M5 16h14M5 16v2M19 16v2M5 11h14"/></svg>Cars out</small><b id="v-cars" class="num">0/0</b></div>
+        <div class="stat" id="v-day" data-night="0" data-tip="Time of day"><small class="lbl"><svg class="si" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>Time</small><b id="v-clock" class="num">12:00</b></div>
+      </div>
+
+      <div class="chips">
+        <div class="chip alarm" id="alarm" hidden data-hot="0" role="button" tabindex="0" data-tip="Jump to this store"><svg class="hi" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l9.5 16.5h-19z"/><path d="M12 10v4.5M12 17.2v.3"/></svg><span id="alarm-text" class="altext"></span></div>
+        <div class="eventbar" id="events"></div>
+      </div>
+
+      <div class="plate controls">
+        <button class="cbtn" id="btn-play" type="button" title="Pause (P)" aria-pressed="false"></button>
+        <div class="seg" id="speed-seg" role="group" aria-label="Game speed" data-tip="Game speed" data-key="+ / −">
+          <button type="button" data-speed="0.5" aria-pressed="false">½×</button><button type="button" data-speed="1" aria-pressed="true">1×</button><button type="button" data-speed="2" aria-pressed="false">2×</button><button type="button" data-speed="3" aria-pressed="false">3×</button>
+        </div>
+        <span class="csep" aria-hidden="true"></span>
+        <button class="cbtn txt" id="btn-heat" type="button" aria-pressed="false" title="Show where traffic is standing still (H)">Jams</button>
+        <button class="cbtn txt" id="btn-side" type="button" title="Which side cars drive on">Keep left</button>
+        <span class="csep" aria-hidden="true"></span>
+        <button class="cbtn" id="btn-undo" type="button" title="Undo (Ctrl+Z)" aria-label="Undo"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/></svg></button>
+        <button class="cbtn" id="btn-redo" type="button" title="Redo (Ctrl+Y)" aria-label="Redo"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 000 12h3"/></svg></button>
+        <button class="cbtn" id="btn-fit" type="button" title="Fit the city (0)" aria-label="Fit the city"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+        <span class="csep" aria-hidden="true"></span>
+        <button class="cbtn" id="btn-sound" type="button" aria-pressed="false" title="Sound (M)" aria-label="Sound"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9z"/><path class="wave" d="M16.5 8.5a5 5 0 010 7M19 6a8.5 8.5 0 010 12"/><path class="mute" d="M17 9l5 6M22 9l-5 6"/></svg></button>
+        <button class="cbtn" id="btn-theme" type="button" title="Light or dark (T)" aria-label="Switch theme"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 010 16z" fill="currentColor"/></svg></button>
+        <button class="cbtn" id="btn-menu" type="button" title="Settings" aria-label="Settings" aria-expanded="false" aria-controls="menu"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg></button>
+        <button class="cbtn" id="btn-help" type="button" title="How to play (?)" aria-label="How to play"><b>?</b></button>
+        <button class="cbtn" id="btn-panel" type="button" title="Show or hide the side panel" aria-label="Side panel"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg></button>
+      </div>
+
+      <div class="plate menu" id="menu" hidden role="dialog" aria-label="Settings">
+        <div class="mhead"><b>Settings</b><span class="ver">Junction v1.3</span></div>
+        <section class="msec">
+          <h4>Display</h4>
+          <label class="tgl"><input type="checkbox" id="opt-night" checked><span>Day and night</span></label>
+          <label class="tgl"><input type="checkbox" id="opt-grid"><span>Tile grid</span><kbd>G</kbd></label>
+          <label class="tgl"><input type="checkbox" id="opt-fx" checked><span>Pop-ups and rings</span></label>
+        </section>
+        <section class="msec">
+          <h4>Colour mode</h4>
+          <p class="mnote">Every house, store and car uses these six colours. Pick a mode that's easy for you to tell apart, or choose a slot below and swap in any colour from the library.</p>
+          <div class="palpicks" id="pal-picks"></div>
+          <div class="swpicks" id="pal-swatches"></div>
+          <label class="tgl"><input type="checkbox" id="opt-symbols"><span>Shapes on houses and stores</span></label>
+          <button class="linkbtn" id="pal-reset" type="button">Reset to standard colours</button>
+        </section>
+        <section class="msec">
+          <h4>City</h4>
+          <div class="mgrid">
+            <button class="act" id="btn-snap" type="button">Save snapshot <kbd>C</kbd></button>
+            <button class="act" id="btn-export" type="button">Export city</button>
+            <button class="act" id="btn-import" type="button">Import city…</button>
+            <button class="act danger" id="btn-restart" type="button">New city…</button>
+          </div>
+          <input type="file" id="file-import" accept=".json,application/json" hidden>
+        </section>
+      </div>
+    </header>
+
+    <!-- tool dock -->
+    <nav id="dock" class="plate" aria-label="Build tools">
+      <div class="tools" id="tools-build"></div>
+      <div class="toolsdiv"></div>
+      <div class="tools" id="tools-manage"></div>
+      <div class="bridgechip" title="Bridges left">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 15h18M5 15v-4M9 15v-4M15 15v-4M19 15v-4M3 19c3-2 6-2 9 0s6 2 9 0"/></svg>
+        <b id="v-bridge">1</b>
+      </div>
+    </nav>
+    <div class="plate signbar" id="signs" hidden></div>
+
+    <div id="hint" role="status"></div>
+    <div id="tip" role="tooltip" hidden></div>
+    <div class="toasts" id="toasts" aria-live="polite"></div>
+
+    <!-- inspector -->
+    <div class="inspect plate" id="inspect" hidden>
+      <div class="ihead"><b id="i-title">Car</b><button class="iclose" id="i-close" type="button" aria-label="Close">×</button></div>
+      <div class="ibody" id="i-body"></div>
+    </div>
+
+    <!-- side panel -->
+    <aside id="panel" class="plate" aria-label="City overview">
+      <div class="tabs" role="tablist">
+        <button class="tab" data-tab="city" role="tab" aria-selected="true">City</button>
+        <button class="tab" data-tab="shop" role="tab" aria-selected="false">Shop</button>
+        <button class="tab" data-tab="perks" role="tab" aria-selected="false">Upgrades</button>
+        <button class="tab" data-tab="goals" role="tab" aria-selected="false">Goals</button>
+      </div>
+      <div class="tabpane" data-tab="city">
+        <div class="kpis">
+          <div><b id="k-rate" class="num">0</b><span>parcels a minute</span></div>
+          <div><b id="k-wait" class="num">0s</b><span>stopped per trip</span></div>
+          <div><b id="k-jam" class="num">0%</b><span>cars stuck</span></div>
+          <div><b id="k-out" class="num">0</b><span>cars driving</span></div>
+          <div><b id="k-trips" class="num">0</b><span>trips made</span></div>
+          <div><b id="k-tows" class="num">0</b><span>tow trucks</span></div>
+        </div>
+        <div class="sparkwrap"><canvas id="spark" width="264" height="54"></canvas><small><i class="g"></i>parcels a minute <i class="r"></i>traffic jammed</small></div>
+        <h3>Trouble spots</h3>
+        <div class="trouble" id="trouble"></div>
+        <h3>Stores</h3>
+        <div class="stores" id="stores"></div>
+      </div>
+      <div class="tabpane" data-tab="shop" id="tab-shop-pane" hidden>
+        <h3>Hire and buy</h3>
+        <div id="shop-list"></div>
+        <h3>Prices</h3>
+        <div class="invgrid" id="price-list"></div>
+      </div>
+      <div class="tabpane" data-tab="perks" hidden>
+        <h3>Permanent upgrades</h3>
+        <div id="perk-list"></div>
+        <h3>Pieces in stock <small>used before cash</small></h3>
+        <div class="invgrid" id="inv-list"></div>
+      </div>
+      <div class="tabpane" data-tab="goals" hidden>
+        <h3>Goals <span id="goal-count" class="num">0 of 0</span></h3>
+        <div id="goal-list"></div>
+      </div>
+      <div class="minibox"><div class="minihead"><span>Map</span><small>click to jump</small></div><canvas id="mini" width="220" height="220" aria-label="Minimap"></canvas></div>
+    </aside>
+
+    <!-- tutorial panel: shown instead of the side panel while the interactive tutorial runs -->
+    <aside id="tut-panel" class="plate" aria-label="Tutorial" hidden>
+      <div class="tut-head">
+        <span class="tut-kicker">Interactive tutorial</span>
+        <h3>Your progress <span id="tut-count" class="num">Step 1 of 13</span></h3>
+        <div class="tut-track"><i id="tut-bar"></i></div>
+      </div>
+      <div id="tut-list"></div>
+      <button class="bigbtn" id="tut-open-explain" type="button" hidden>See how junctions work</button>
+      <div id="tut-events-wrap" hidden>
+        <h3>Try an event</h3>
+        <div class="btnrow">
+          <button class="act" id="tut-rush" type="button">Rush hour</button>
+          <button class="act" id="tut-rain" type="button">Rain</button>
+          <button class="act" id="tut-break" type="button">Breakdown</button>
+          <button class="act" id="tut-close" type="button">Road closure</button>
+          <button class="act" id="tut-amb" type="button">Ambulance call</button>
+          <button class="act" id="tut-contract" type="button">Contract offer</button>
+        </div>
+      </div>
+      <button class="bigbtn ghost" id="tut-exit" type="button">Skip the tutorial</button>
+    </aside>
+
+    <!-- tutorial coach card and step-complete flash -->
+    <div id="tut-coach" class="plate" hidden aria-live="polite">
+      <div class="tc-top"><span id="tc-icon" class="tc-icon" aria-hidden="true"></span><span id="tc-step" class="tc-pill">Step 1 of 13</span><span id="tc-tool" class="tc-tool" hidden></span></div>
+      <h4 id="tc-title"></h4>
+      <p id="tc-body"></p>
+      <p class="tc-why"><b>Why it matters</b> <span id="tc-why"></span></p>
+      <div class="tc-dots" id="tc-dots"></div>
+    </div>
+    <div id="tut-flash" hidden><div class="tf-card"><span class="tf-tick">✓</span><div><small>Step complete</small><b id="tf-title"></b></div></div></div>
+
+    <!-- modals -->
+    <div class="modal" id="m-start">
+      <div class="card plate">
+        <h2>Junction</h2>
+        <p class="lead">Design the road network. Keep every parcel moving. Every delivery scores a point and pays cash — and the city never stops growing around you.</p>
+        <ul class="tips">
+          <li><b>Colour to colour.</b> Stores gather parcels; houses send cars to fetch them. Draw the roads that connect them, and watch the network do the rest.</li>
+          <li><b>A full traffic toolkit.</b> Give-way junctions, sensor-driven lights with custom ratios, roundabouts, turn signs, free one-way streets and express motorways — the right control turns gridlock into flow.</li>
+          <li><b>A city with momentum.</b> New stores and tiered-up stores bring new houses of their own colour, council grants arrive weekly, and road upkeep keeps sprawl honest.</li>
+          <li><b>Never quite the same run twice.</b> Rush hour, rain, breakdowns, road closures, ambulance calls and short-lived contract bonuses keep every city on its toes.</li>
+        </ul>
+        <h3>Difficulty</h3>
+        <div class="diffs" id="diff-picks"></div>
+        <div class="btnrow">
+          <button class="bigbtn" id="btn-start" type="button">Start a new city</button>
+          <button class="bigbtn ghost" id="btn-resume" type="button" hidden>Resume the last one</button>
+          <button class="bigbtn ghost" id="btn-tutorial" type="button">How to Play</button>
+        </div>
+        <div class="btnrow">
+          <button class="bigbtn ghost" id="btn-try-tutorial" type="button">Try the interactive tutorial</button>
+        </div>
+        <p class="mini" id="start-best"></p>
+        <p class="mini">Scroll to zoom. Right-drag, middle-drag or hold <kbd>Shift</kbd> to pan. Click a car for its route and ETA.</p>
+      </div>
+    </div>
+
+    <div class="modal" id="m-upgrade" hidden>
+      <div class="card plate wide">
+        <h2 id="up-title">Week 2</h2>
+        <p class="lead" id="up-sub">Pick one reward.</p>
+        <div class="picks" id="up-picks"></div>
+        <div class="btnrow"><button class="bigbtn ghost" id="btn-reroll" type="button">Shuffle the offer (once)</button></div>
+      </div>
+    </div>
+
+    <div class="modal" id="m-over" hidden>
+      <div class="card plate">
+        <h2>Gridlock</h2>
+        <p class="lead" id="over-why">A store ran out of patience.</p>
+        <div class="score-line num" id="over-score">0</div>
+        <p id="over-best" class="mini">parcels delivered</p>
+        <div class="overchart" id="over-chart-wrap" hidden><canvas id="over-chart" width="520" height="130" aria-label="Parcels a minute and traffic jam level over the whole run"></canvas><small><i class="g"></i>parcels a minute <i class="r"></i>traffic jammed <i class="w"></i>week starts</small></div>
+        <div class="overstats" id="over-stats"></div>
+        <div class="btnrow"><button class="bigbtn" id="btn-again" type="button">Start a new city</button></div>
+      </div>
+    </div>
+
+    <div class="modal" id="m-explain" hidden>
+      <div class="card plate wide">
+        <h2>Two ways to run a junction</h2>
+        <p class="lead">You just built a give-way junction — the free default. Here's what your other two options actually look like in motion, and when to reach for each.</p>
+        <div class="explaingrid">
+          <div class="explaincol">
+            <h3>Roundabout</h3>
+            <div class="anim anim-roundabout" aria-hidden="true">
+              <div class="anim-ring"></div>
+              <div class="anim-island"></div>
+              <div class="anim-car rc1"></div>
+              <div class="anim-car rc2"></div>
+              <div class="anim-car rc3"></div>
+            </div>
+            <p>Several cars circulate at once, and almost nobody has to stop completely — traffic just slots in and flows round. <b>Use it</b> where four or more busy roads genuinely meet, especially once a give-way there is visibly backing up. It costs more than a give-way and needs three or more roads to make sense.</p>
+          </div>
+          <div class="explaincol">
+            <h3>Traffic light</h3>
+            <div class="anim anim-light" aria-hidden="true">
+              <div class="anim-road-h"></div>
+              <div class="anim-road-v"></div>
+              <div class="anim-car lch"></div>
+              <div class="anim-car lcv"></div>
+              <div class="anim-dot dot-h"></div>
+              <div class="anim-dot dot-v"></div>
+            </div>
+            <p>Sensor-driven: whichever side has cars gets the green, and when both sides have cars they take turns. Click a placed light to set exactly how many cars each side gets per turn — 3:3 by default, or a lopsided ratio like 20:3 for a busy main road crossing a quiet side street. <b>Use it</b> once a junction gets busy from more than one direction at once — it's calmer and cheaper than a roundabout, just slower per car.</p>
+          </div>
+        </div>
+        <h3>Bridges &amp; motorways</h3>
+        <div class="explaingrid">
+          <div class="explaincol">
+            <div class="anim anim-bridge" aria-hidden="true">
+              <div class="anim-water"></div>
+              <div class="anim-road-h anim-road-thin"></div>
+              <div class="anim-car bc1"></div>
+            </div>
+            <p><b>Bridges</b> let ordinary road cross water — drag across a river the same way you'd drag anywhere else, and a bridge is laid automatically wherever the drag touches water. They just cost a little more per tile than plain road, and you'll need one in stock (or the cash for it) to lay it.</p>
+          </div>
+          <div class="explaincol">
+            <div class="anim anim-moto" aria-hidden="true">
+              <div class="anim-moto-line"></div>
+              <div class="anim-car mc1"></div>
+            </div>
+            <p><b>Motorways</b> are an express link between two distant road tiles, six times the speed of ordinary road. They're expensive and only connect two points directly — no on-ramps in between — so they're built for long hauls across a big, spread-out city, not for stitching together local streets.</p>
+          </div>
+        </div>
+        <h3>Signs</h3>
+        <p>Signs are read from the driver's seat, not the map: a blue arrow means that's the <em>only</em> move allowed from this tile; a red ring bans one specific move. The same Signs tool also has a <b>one-way</b> option — pick it, then click a plain two-way stretch (not a junction) to make it flow one direction only; click again to flip it, and once more for two-way. Making a tight corridor one-way is free and removes a whole class of conflict from it.</p>
+        <h3>Common questions</h3>
+        <div class="faq">
+          <details><summary>Why isn't my new house or store doing anything?</summary><p>It isn't connected yet. A house, store or bay only works once a road tile is laid on one of its four sides — drag a road into it, or drag out from it.</p></details>
+          <details><summary>Why did my city end?</summary><p>Either one store's parcels overflowed for too long, or the whole network gridlocked for a sustained stretch even with no single store overflowing. If you'd rather build with no losing condition at all, Zen difficulty removes it entirely.</p></details>
+          <details><summary>Give-way, light or roundabout — what's the real difference?</summary><p>A give-way is free and fine for light traffic. A light suits a junction that's busy from more than one side. A roundabout suits a junction that's busy from three or more sides at once — it costs more but almost never makes anyone stop outright.</p></details>
+          <details><summary>Why do prices keep going up?</summary><p>Road, signs, lights, roundabouts, lots, bays and motorways all rise 15% a week, compounding — so it pays to build key pieces early. Past a free allowance, existing road also costs a small amount of upkeep every week.</p></details>
+          <details><summary>What happens when a store "tiers up"?</summary><p>It randomly grows busier over time, in up to three steps — a thicker outline means it now sends out parcels faster and pays a little more per parcel, and two new houses of its colour move in nearby to match the extra demand.</p></details>
+          <details><summary>Can I undo a mistake?</summary><p>Yes — Ctrl+Z undoes, Ctrl+Y redoes. Both work back through everything from your last press-and-drag.</p></details>
+          <details><summary>Can I change the colours?</summary><p>Yes. Open Settings and pick a colour mode: red–green safe, blue–yellow safe, high contrast, or custom colours you choose one by one. You can also switch on a shape for each colour on houses and stores.</p></details>
+          <details><summary>What's a tow truck actually for?</summary><p>Hired at a store, it drives out to stuck or broken-down cars nearby, hooks them, hauls them clear and saves their parcels — handy once a city is busy enough that a single stuck car can back up a whole street.</p></details>
+          <details><summary>Is a bigger city always a better city?</summary><p>No — score comes from steady throughput, not size. A small, tightly controlled loop consistently out-earns a sprawling network that's constantly jammed.</p></details>
+          <details><summary>Is there a "correct" way to play?</summary><p>No. There's no correct way to play Junction — take any path you want.</p></details>
+        </div>
+        <div class="btnrow"><button class="bigbtn" id="explain-start" type="button">Start building</button></div>
+      </div>
+    </div>
+
+    <div class="modal" id="m-help" hidden>
+      <div class="card plate wide">
+        <h2>How to Play</h2>
+        <p class="lead">Everything you need to take a city from a single crossroads to a network that runs itself.</p>
+        <div class="helpgrid">
+          <div>
+            <h3>The goal</h3>
+            <p>Every parcel a car carries from a store to a matching-colour house scores a point and pays cash. Score comes from steady throughput, not sheer size — a small, well-controlled loop will consistently out-earn a sprawling network full of stop-start traffic.</p>
+            <h3>Laying road</h3>
+            <p>Drag to lay road. Roads only connect where you actually draw the link: two tiles sitting side by side stay separate until a drag runs between them, and dragging onto or through an existing road joins it. A slanted drag lays a true diagonal, corner to corner — diagonals can't cross each other. A house, store or bay attaches to whichever road tile you drag into its side and turns to face it.</p>
+            <h3>Traffic control — pick the right tool</h3>
+            <p>A junction is only as good as the control you give it. Junction hands you six ways to shape one, from free to expensive:</p>
+            <ul class="tips">
+              <li><b>Give-way (free, default).</b> The simplest junction: lets a batch of cars through from one side, then hands over to the next side with traffic waiting. Fine until it gets busy.</li>
+              <li><b>Traffic light.</b> Sensor-driven — a side with cars gets green, and when both sides have cars they take turns. Click a placed light to set exactly how many cars each side gets per turn: 3:3 by default, or any ratio you like, such as 20:3.</li>
+              <li><b>Roundabout.</b> Several cars circulate at once and almost nobody has to stop. The best fix for a genuinely busy meeting of four or more roads.</li>
+              <li><b>Turn signs.</b> Restrict what a driver may do at a tile — only left, no right, and so on — read from the driver's seat, not the map.</li>
+              <li><b>One-way roads.</b> Found inside the Signs tool. Turns a plain two-way stretch into one direction only, for free, removing a whole class of conflict from a tight corridor. Click again to flip it, and once more for two-way.</li>
+              <li><b>Motorway.</b> An express link between two distant road tiles at six times the speed of ordinary road — built for long hauls across the city, not local streets.</li>
+            </ul>
+            <p>Every give-way junction, light and roundabout can also be upgraded with cash for more throughput per level — click it and look for the upgrade panel.</p>
+            <h3>Houses, stores &amp; growth</h3>
+            <p>Houses send cars out to fetch parcels; stores are where the parcels pile up. New houses and stores appear on their own timers as a city runs — but store activity feeds growth too: every new store that opens brings a house of its own colour with it, and whenever a store tiers up (gets busier and needs cars more often, from week 2 on), two more houses of that colour move in to match. A thicker outline on a store means a higher tier.</p>
+          </div>
+          <div>
+            <h3>Vehicles</h3>
+            <p>Every vehicle shows its parcel slots, filling as it loads. Click one to upgrade it. <b>Carry size</b> moves it up a model (hatchback, estate, pickup, panel van, box truck), adding a slot each time but making it 10% slower. <b>Speed</b> fits a faster kit (sport, GT, racer) for +12% each, so you can win the speed back. <b>Loading</b> cuts time at the store. Click a house to <b>buy another car</b>: each costs more than the last, and the house itself grows from cottage to family home to villa.</p>
+            <h3>Stores</h3>
+            <p>As a store tiers up it rebuilds: corner shop, supermarket, depot, then distribution centre. Each paid upgrade adds a rooftop sign, then solar panels, then flags and gold trim, and makes every parcel pay more.</p>
+            <h3>Money</h3>
+            <p>A parcel pays $2 at the door; upgrade a store (<kbd>U</kbd>) and it pays more, and busier stores and rush hour pay extra. Spend it on road, signs, lights and the Shop. Click any junction to upgrade it — each level lets more cars through. Hire a tow truck (<kbd>Y</kbd>, or the Shop tab) and it drives out from its store to hook stuck or broken cars, tow them clear and save their parcels. A council grant arrives each week, and you also pick one free reward: cash, pieces, or a free upgrade level. Road, sign, light, roundabout, lot, bay and motorway prices rise 15% every week, so build early. Past a free allowance, every extra tile of road also costs a small amount of upkeep each week — the weekly toast breaks down the grant, any upkeep and the current price rise.</p>
+            <h3>Events</h3>
+            <p>Rush hour multiplies parcels. Rain slows every car. Breakdowns block a lane until the driver gets going; a tow truck clears anything stuck for too long. From week 4, a busy stretch of road is sometimes coned off for half a minute — traffic finds another way, more than one stretch can close at once in a long-running city, and the city never cuts a house or store off completely. From week 3, an ambulance sometimes races from a house to a store; lights turn green for it as it comes, and it pays a bonus for arriving in time or costs you if it's late. From week 2, any store can randomly grow busier over time in up to three tiers, and can also flash a short-lived <b>contract</b>: collect enough parcels from it before its clock runs out for a cash bonus — missing one costs nothing but the bonus itself. Rush hour and rain can land on the same week and overlap. Even a city with no single store overflowing can still fail if the whole network grinds to a standstill for long enough. The <b>Trouble spots</b> list in the City tab always shows where traffic is standing longest — click one to jump straight to it.</p>
+            <h3>Difficulty</h3>
+            <p>Relaxed and Standard play it straight; Frantic tightens patience and spawn rates for a real test. Zen removes the losing condition entirely — rare weather, gentler traffic and a slower camera — for learning the tools, or just building, with no pressure.</p>
+            <h3>Tactics — a few opening moves</h3>
+            <ul class="tips">
+              <li><b>Start small.</b> A tight loop with the right junction control consistently out-earns a sprawling maze of stop signs.</li>
+              <li><b>Upgrade before you expand.</b> A junction or store upgrade often buys more throughput per dollar than another block of road.</li>
+              <li><b>Match the control to the load.</b> Give-way for light traffic, a light once a junction gets busy both ways, a roundabout once it's genuinely busy.</li>
+              <li><b>Watch Trouble Spots.</b> It's always up to date and always names your three worst junctions right now.</li>
+              <li><b>Keep a tow truck on standby.</b> One hired car clears stuck or broken-down traffic before it backs up an entire street.</li>
+              <li><b>One-way a tight corridor.</b> It costs nothing and can turn a two-lane headache into one smooth flow.</li>
+            </ul>
+            <h3>Keys</h3>
+            <p class="keys"><kbd>1</kbd>–<kbd>9</kbd> tools · <kbd>P</kbd> pause · <kbd>E</kbd> erase · <kbd>U</kbd> upgrade a store · <kbd>Y</kbd> hire a tow truck · <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo · <kbd>Ctrl</kbd>+<kbd>Y</kbd> redo · <kbd>H</kbd> jam map · <kbd>F</kbd> follow the selected car · <kbd>G</kbd> grid · <kbd>M</kbd> sound · <kbd>T</kbd> theme · <kbd>C</kbd> snapshot · <kbd>0</kbd> fit · <kbd>+</kbd>/<kbd>−</kbd> speed (down to 0.5×) · <kbd>Esc</kbd> close</p>
+            <h3>Colour mode</h3>
+            <p>Settings has colour modes for red–green and blue–yellow colour blindness, a high-contrast set, and fully custom colours. You can also turn on a shape for each colour on houses and stores.</p>
+          </div>
+        </div>
+        <p class="closing-line">There's no correct way to play Junction — take any path you want.</p>
+        <div class="btnrow"><button class="bigbtn" id="help-close" type="button">Got it — let's build</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="game.js"></script>
+</body>
+</html>
