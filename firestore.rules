@@ -1,18 +1,91 @@
-rules_version='2'
+rules_version = '2';
 
+// Junction — who can read and write what.
+//   users/{uid}               a player's own profile (name, live code)          owner only
+//   users/{uid}/saves/{slot}  three cloud save slots                           owner only
+//   usernames/{nameLower}     names reserved by permanent accounts             readable by players, create-once
+//   leaderboard/{uid}         personal bests                                   everyone reads, owner writes
+//   live/{code}               live-view channel                                read by code only (no listing)
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      // This rule allows anyone with your database reference to view, edit,
-      // and delete all data in your database. It is useful for getting
-      // started, but it is configured to expire after 30 days because it
-      // leaves your app open to attackers. At that time, all client
-      // requests to your database will be denied.
-      //
-      // Make sure to write security rules for your app before that time, or
-      // else all client requests to your database will be denied until you
-      // update your rules.
-      allow read, write: if request.time < timestamp.date(2026, 10, 23);
+
+    function signedIn() { return request.auth != null; }
+    function isMe(uid) { return signedIn() && request.auth.uid == uid; }
+    // Google and email accounts carry an email claim; anonymous guests don't.
+    function registered() { return signedIn() && ('email' in request.auth.token); }
+    function validName(n) { return n is string && n.matches('^[A-Za-z0-9_-]{3,16}$'); }
+    function nameDoc(lower) { return /databases/$(database)/documents/usernames/$(lower); }
+
+    function validUser(uid) {
+      let d = request.resource.data;
+      let lower = d.nameLower;
+      return d.keys().hasOnly(['name', 'nameLower', 'star', 'liveCode', 'updatedAt'])
+        && validName(d.name)
+        && lower == d.name.lower()
+        && d.star == registered()
+        && (!('liveCode' in d) || d.liveCode == null || (d.liveCode is string && d.liveCode.matches('^[0-9]{6}$')))
+        // accounts must hold the reservation for their name; guests can't use a reserved name
+        && (registered()
+              ? (existsAfter(nameDoc(lower)) && getAfter(nameDoc(lower)).data.uid == uid)
+              : (!existsAfter(nameDoc(lower)) || getAfter(nameDoc(lower)).data.uid == uid))
+        // a permanent account's name never changes
+        && (resource == null || !resource.data.star || resource.data.nameLower == lower);
+    }
+
+    match /users/{uid} {
+      allow get: if isMe(uid);
+      allow create, update: if isMe(uid) && validUser(uid);
+
+      match /saves/{slot} {
+        allow get, list, delete: if isMe(uid);
+        allow create, update: if isMe(uid)
+          && slot in ['1', '2', '3']
+          && request.resource.data.keys().hasOnly(['data', 'score', 'week', 'diffKey', 'over', 'updatedAt'])
+          && (!('data' in request.resource.data)
+              || (request.resource.data.data is string && request.resource.data.data.size() < 1000000));
+      }
+    }
+
+    match /usernames/{lower} {
+      allow get: if signedIn();
+      allow create: if registered()
+        && lower.matches('^[a-z0-9_-]{3,16}$')
+        && request.resource.data.keys().hasOnly(['uid'])
+        && request.resource.data.uid == request.auth.uid;
+    }
+
+    function validBoard(uid) {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['name', 'star', 'parcels', 'parcelsDiff', 'weeks', 'weeksDiff', 'goalsSec', 'goalsDiff', 'updatedAt'])
+        && d.name == get(/databases/$(database)/documents/users/$(uid)).data.name
+        && d.star == registered()
+        && d.parcels is int && d.parcels >= 0 && d.parcels < 10000000
+        && d.weeks is int && d.weeks >= 0 && d.weeks < 100000
+        && (!('goalsSec' in d) || (d.goalsSec is int && d.goalsSec > 0));
+    }
+
+    match /leaderboard/{uid} {
+      allow read: if signedIn();
+      allow create, update: if isMe(uid) && validBoard(uid);
+      allow delete: if isMe(uid);
+    }
+
+    match /live/{code} {
+      // Only fetchable by exact code — nobody can list codes to find other players.
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn()
+        && code.matches('^[0-9]{6}$')
+        && request.resource.data.uid == request.auth.uid
+        && (!('state' in request.resource.data) || request.resource.data.state == null
+            || (request.resource.data.state is string && request.resource.data.state.size() < 1000000));
+      allow update: if signedIn() && (
+        // the owner updates their own channel
+        (resource.data.uid == request.auth.uid && request.resource.data.uid == request.auth.uid)
+        // a viewer may only stamp "someone is watching"
+        || (resource.data.uid != request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['watchT'])));
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
     }
   }
 }
