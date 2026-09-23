@@ -1505,8 +1505,25 @@ function addBuilding(type, colorIdx) {
    the "try an event" buttons in stage 3 call the same functions the
    scheduler would, on demand.
    --------------------------------------------------------------------- */
+/* Find a free tile for a tutorial building as close as possible to where the script wants it.
+   The player may already have laid road, lots or bays there, so never assume the spot is empty. */
+function tutFreeTile(dc, dr) {
+  const free = k => k >= 0 && !occupied(k) && !water[k];
+  for (let rad = 0; rad < 9; rad++)
+    for (let a = -rad; a <= rad; a++) for (let b = -rad; b <= rad; b++) {
+      if (Math.max(Math.abs(a), Math.abs(b)) !== rad) continue;
+      const c = dc + a, r = dr + b;
+      if (c < 1 || r < 1 || c > span - 2 || r > span - 2) continue;
+      const k = tutAt(c, r); if (!free(k)) continue;
+      // keep at least one side open (or already road) so a road can actually reach it
+      let reach = false;
+      for (const d of ORTH) { const n = nbr(k, d); if (n >= 0 && !water[n] && bAt[n] < 0 && parkAt[n] < 0 && depotAt[n] < 0) { reach = true; break; } }
+      if (reach) return k;
+    }
+  return tutAt(dc, dr);
+}
 function placeTutBuilding(type, colorIdx, dc, dr) {
-  const k = idx(org + dc, org + dr);
+  const k = tutFreeTile(dc, dr);
   const b = {k, type, color: colorIdx, pins: 0, claimed: 0, timer: 0, tier: 0, cars: [], carsN: 0, park: 0, lvl: 0, trucks: 0,
              docks: [], served: 0, acc: -1, face: 0, pref: -1, unreach: 0, born: clock, bornAnim: animT, contract: null,
              pinTimer: CFG.pinIntervalBase * 0.6 * DIFF.pin,
@@ -1525,57 +1542,165 @@ function tutFinishPlacement() {
   linkBuildings(); rebuildNet();
   for (const c of cars) { const p = parkedPose(c); c.x = p.x; c.y = p.y; c.ang = p.a; }
 }
+/* place one colour pair (nudged off anything the player already built) and ring both buildings */
+function tutSpawnPair(col, st, ho) {
+  const startIdx = buildings.length;
+  const si = placeTutBuilding('store', col, st[0], st[1]);
+  const hi = placeTutBuilding('house', col, ho[0], ho[1]);
+  tutAddCarsFrom(startIdx);
+  tutFinishPlacement();
+  for (const i of [si, hi]) popRing(tx(buildings[i].k), ty(buildings[i].k), COLORS[col].hex);
+}
 /* stage 0: just the red pair, nothing else — a blank canvas for the first road */
 function buildTutorialStage0() {
   placeTutBuilding('store', 0, 4, 8);
   placeTutBuilding('house', 0, 12, 8);
 }
-/* stage 1: an amber pair directly north/south of the red road, so the shortest
-   connecting drag runs straight through it and joins into a real intersection */
-function tutSpawnAmber() {
-  const startIdx = buildings.length;
-  placeTutBuilding('store', 2, 8, 3);
-  placeTutBuilding('house', 2, 8, 13);
-  tutAddCarsFrom(startIdx);
-  tutFinishPlacement();
-  popRing(tx(tutAt(8, 3)), ty(tutAt(8, 3)), COLORS[2].hex);
-  popRing(tx(tutAt(8, 13)), ty(tutAt(8, 13)), COLORS[2].hex);
-}
-/* stage 3: a blue pair whose straight connection crosses the amber road, giving a fresh
-   junction to turn into a light */
-function tutSpawnBlue() {
-  const startIdx = buildings.length;
-  placeTutBuilding('store', 1, 4, 5);
-  placeTutBuilding('house', 1, 13, 5);
-  tutAddCarsFrom(startIdx);
-  tutFinishPlacement();
-  popRing(tx(tutAt(4, 5)), ty(tutAt(4, 5)), COLORS[1].hex);
-  popRing(tx(tutAt(13, 5)), ty(tutAt(13, 5)), COLORS[1].hex);
-}
-/* stage 4: crosses the RED road this time (not amber), on a fresh axis, framed as a
-   busier merge point — a genuinely different case from the light, not a repeat of it */
-function tutSpawnGreen() {
-  const startIdx = buildings.length;
-  placeTutBuilding('store', 3, 6, 3);
-  placeTutBuilding('house', 3, 6, 13);
-  tutAddCarsFrom(startIdx);
-  tutFinishPlacement();
-  popRing(tx(tutAt(6, 3)), ty(tutAt(6, 3)), COLORS[3].hex);
-  popRing(tx(tutAt(6, 13)), ty(tutAt(6, 13)), COLORS[3].hex);
-}
-/* stage 6: a small pre-built loop, not an isolated dead-end — making part of it one-way
-   has a genuine, guaranteed-safe benefit: the loop always keeps an alternate way round, so
-   a car can still reach both ends, it just stops sharing a lane with oncoming traffic. This
-   also keeps the whole tutorial inside the original small area — no camera widening needed. */
+/* stage 1: an amber pair north/south of where the red road most likely runs, so the natural
+   connection meets it. Whether it actually does is checked, not assumed (see tutStatus). */
+function tutSpawnAmber() { tutSpawnPair(2, [8, 3], [8, 13]); }
+/* stage 3: a blue pair whose straight connection likely crosses the amber road */
+function tutSpawnBlue() { tutSpawnPair(1, [4, 5], [13, 5]); }
+/* stage 4: a green pair on a fresh axis, likely crossing the red road */
+function tutSpawnGreen() { tutSpawnPair(3, [6, 3], [6, 13]); }
+/* stage 6: a small pre-built loop with the teal pair on it — making part of it one-way keeps
+   an alternate way round. The 3x5 block is moved if the player has already built over it. */
+let tutLoopTiles = [];
+const TEAL_LOOP = [[0, 2], [0, 1], [1, 1], [2, 1], [2, 2], [2, 3], [1, 3], [0, 3], [0, 2]];
 function tutSpawnTeal() {
-  tutPath([[14, 8], [14, 7], [15, 7], [16, 7], [16, 8], [16, 9], [15, 9], [14, 9], [14, 8]]);
-  const startIdx = buildings.length;
-  placeTutBuilding('store', 5, 15, 6);
-  placeTutBuilding('house', 5, 15, 10);
-  tutAddCarsFrom(startIdx);
-  tutFinishPlacement();
-  popRing(tx(tutAt(15, 6)), ty(tutAt(15, 6)), COLORS[5].hex);
-  popRing(tx(tutAt(15, 10)), ty(tutAt(15, 10)), COLORS[5].hex);
+  const blockFree = (ox, oy) => {
+    if (ox < 1 || oy < 1 || ox + 2 > span - 2 || oy + 4 > span - 2) return false;
+    for (let a = 0; a < 3; a++) for (let b = 0; b < 5; b++) { const k = tutAt(ox + a, oy + b); if (occupied(k) || water[k]) return false; }
+    return true;
+  };
+  let ox = 14, oy = 6, found = blockFree(ox, oy);
+  for (let rad = 1; rad < 12 && !found; rad++)
+    for (let a = -rad; a <= rad && !found; a++) for (let b = -rad; b <= rad && !found; b++) {
+      if (Math.max(Math.abs(a), Math.abs(b)) !== rad) continue;
+      if (blockFree(14 + a, 6 + b)) { ox = 14 + a; oy = 6 + b; found = true; }
+    }
+  tutPath(TEAL_LOOP.map(([a, b]) => [ox + a, oy + b]));
+  tutLoopTiles = TEAL_LOOP.slice(0, -1).map(([a, b]) => tutAt(ox + a, oy + b));
+  tutSpawnPair(5, [ox + 1, oy], [ox + 1, oy + 4]);
+}
+
+/* ---- tutorial checks: look at what the player actually built instead of assuming they followed
+   the instructions. Every pair is tested with the same router the cars use, both ways round. */
+const TUT_PAIRS = [{col: 0, from: 0}, {col: 2, from: 1}, {col: 1, from: 3}, {col: 3, from: 4}, {col: 5, from: 6}];
+const cname = col => COLORS[col].name;
+const capFirst = t => t.charAt(0).toUpperCase() + t.slice(1);
+function tutPair(col) {
+  let s = null, h = null;
+  for (const b of buildings) { if (b.color !== col) continue; if (b.type === 'store' && !s) s = b; else if (b.type === 'house' && !h) h = b; }
+  return {s, h};
+}
+function tutRoute(col) {
+  const {s, h} = tutPair(col);
+  if (!s || !h) return {state: 'missing'};
+  if (h.acc < 0 && s.acc < 0) return {state: 'none', s, h};
+  if (h.acc < 0) return {state: 'house', s, h};
+  if (s.acc < 0) return {state: 'store', s, h};
+  const go = planRoute(null, h.acc, s.acc), back = planRoute(null, s.acc, h.acc);
+  if (!go || !back) return {state: (go || back) ? 'oneway' : 'apart', s, h};
+  const tiles = new Set([h.acc, s.acc]);
+  for (const e of go.concat(back)) { tiles.add(e.a); tiles.add(e.b); }
+  return {state: 'ok', tiles, s, h};
+}
+const tutPairAt = r => (r && r.s && r.h) ? [r.s.k, r.h.k] : [];
+const tutJunctionsOn = tiles => [...tiles].filter(k => nodes[k] && nodes[k].junction);
+function tutConnMsg(col, r) {
+  const n = cname(col);
+  const m = {
+    none: 'Nothing touches the ' + n + ' store or house yet. Start your drag right on one of them and end on the other.',
+    house: 'The road doesn\u2019t reach the ' + n + ' house yet \u2014 finish on a tile directly beside it (not diagonally).',
+    store: 'The road doesn\u2019t reach the ' + n + ' store yet \u2014 finish on a tile directly beside it (not diagonally).',
+    apart: 'Both ' + n + ' buildings touch road, but those roads aren\u2019t joined. Drag one onto the other so they share a tile.',
+    oneway: capFirst(n) + ' cars can get there but not back \u2014 a one-way or a sign is blocking the return trip.'
+  }[r.state] || ('The ' + n + ' pair isn\u2019t connected yet.');
+  return {ok: false, kind: r.state === 'none' ? 'info' : 'warn', msg: m, at: tutPairAt(r), line: true};
+}
+/* first pair already introduced that has lost its connection (skip = the colour this step is about) */
+function tutBroken(skip, R) {
+  for (const p of TUT_PAIRS) {
+    if (p.from > tutStage || p.col === skip) continue;
+    const r = R(p.col);
+    if (r.state !== 'ok' && r.state !== 'missing') return {col: p.col, r};
+  }
+  return null;
+}
+const tutBrokenMsg = b => ({ok: false, kind: 'warn', msg: 'The ' + cname(b.col) + ' house can\u2019t reach its store any more. Reconnect it before moving on.', at: tutPairAt(b.r), line: true});
+/* a junction step: the pair must be connected, cross another road, and have the control ON its route */
+function tutControlStep(col, kind, R) {
+  const r = R(col); if (r.state !== 'ok') return tutConnMsg(col, r);
+  const b = tutBroken(col, R); if (b) return tutBrokenMsg(b);
+  const n = cname(col), what = kind === 'light' ? 'light' : 'roundabout', toolName = kind === 'light' ? 'Light' : 'Roundabout';
+  const js = tutJunctionsOn(r.tiles);
+  if (!js.length) return {ok: false, kind: 'warn', msg: capFirst(n) + ' is connected, but its road never crosses another one \u2014 so there\u2019s no junction to control. Re-route it across another road.', at: tutPairAt(r), line: true};
+  if (js.some(k => nodes[k].type === kind)) return {ok: true, at: js.filter(k => nodes[k].type === kind)};
+  const loose = []; for (let k = 0; k < N; k++) if (special[k] === kind) loose.push(k);
+  if (loose.some(k => !(nodes[k] && nodes[k].junction))) return {ok: false, kind: 'warn', msg: 'A ' + what + ' only works where three or more roads meet. Erase that one and use a marked junction on the ' + n + ' road.', at: js.slice(0, 3)};
+  if (loose.length) return {ok: false, kind: 'warn', msg: 'That ' + what + ' is on a junction ' + n + ' cars don\u2019t drive through. Put one on a marked junction along the ' + n + ' road.', at: js.slice(0, 3)};
+  return {ok: false, kind: 'info', msg: capFirst(n) + ' is connected. Now pick the ' + toolName + ' tool and tap the marked junction on its road.', at: js.slice(0, 3)};
+}
+/* what the current step needs, judged from the map as it is right now */
+function tutStatus() {
+  const cache = {}, R = c => cache[c] || (cache[c] = tutRoute(c));
+  const st = tutStage;
+  if (st === 0) {
+    const r = R(0); if (r.state !== 'ok') return tutConnMsg(0, r);
+    const n = Math.min(2, stats.delivered);
+    return n >= 2 ? {ok: true} : {ok: false, kind: 'good', msg: 'Connected \u2713 \u2014 ' + n + ' of 2 parcels delivered. Watch a car make the trip.', at: tutPairAt(r)};
+  }
+  if (st === 1) {
+    const a = R(2); if (a.state !== 'ok') return tutConnMsg(2, a);
+    const b = tutBroken(2, R); if (b) return tutBrokenMsg(b);
+    const js = tutJunctionsOn(a.tiles);
+    if (!js.length) return {ok: false, kind: 'warn', msg: capFirst(cname(2)) + ' is connected, but its road never meets the ' + cname(0) + ' road. Make them share a tile \u2014 that shared tile becomes the intersection.', at: tutPairAt(a), line: true};
+    return {ok: true, at: js};
+  }
+  if (st === 2) return {ok: false};
+  if (st === 3) return tutControlStep(1, 'light', R);
+  if (st === 4) return tutControlStep(3, 'round', R);
+  if (st === 5) {
+    const placed = []; for (let k = 0; k < N; k++) if (sign[k] && road[k]) placed.push(k);
+    const js = nodeList.filter(nd => nd.junction).map(nd => nd.k);
+    if (!placed.length) return {ok: false, kind: 'info', msg: 'Pick the Signs tool, choose a sign, then tap one of the marked junctions.', at: js.slice(0, 3)};
+    const b = tutBroken(-1, R);
+    if (b) return {ok: false, kind: 'warn', msg: 'The ' + cname(b.col) + ' cars have no legal route any more. If that happened after your sign, erase it or pick a different sign.', at: placed.slice(0, 3)};
+    if (!placed.some(k => nodes[k] && nodes[k].junction)) return {ok: false, kind: 'warn', msg: 'Signs only matter where drivers have a choice of turn. Put one on a junction (marked).', at: js.slice(0, 3)};
+    return {ok: true};
+  }
+  if (st === 6) {
+    const ow = []; for (let k = 0; k < N; k++) if (road[k] && onewayDir[k] >= 0 && linkCount(k) === 2) ow.push(k);
+    const t = R(5);
+    if (!ow.length) {
+      if (t.state !== 'ok') return tutConnMsg(5, t);
+      const plain = tutLoopTiles.filter(k => road[k] && linkCount(k) === 2 && !(nodes[k] && nodes[k].junction));
+      return {ok: false, kind: 'info', msg: 'Pick Signs \u2192 One-way, then tap a marked stretch of the ' + cname(5) + ' loop.', at: plain.slice(1, 3)};
+    }
+    const b = tutBroken(-1, R);
+    if (b) return {ok: false, kind: 'warn', msg: 'The ' + cname(b.col) + ' cars have no way through any more. If your one-way did that, tap it again to flip its direction, or a third time to clear it.', at: ow.slice(0, 3)};
+    return {ok: true, at: ow};
+  }
+  if (st === 7) {
+    if (motorways.length) return {ok: true};
+    const b = tutBroken(-1, R); if (b) return tutBrokenMsg(b);
+    const red = R(0), loop = tutLoopTiles.filter(k => road[k]);
+    const from = red.state === 'ok' ? [...red.tiles] : nodeList.map(nd => nd.k);
+    const to = loop.length ? loop : nodeList.map(nd => nd.k);
+    let best = null, bd = Infinity;
+    for (const a of from) for (const c of to) { const d = Math.hypot(cx(a) - cx(c), cy(a) - cy(c)); if (d >= 4.5 && d < bd) { bd = d; best = [a, c]; } }
+    if (motoPick >= 0) return {ok: false, kind: 'info', msg: 'Now tap the far end \u2014 a road tile at least 4 tiles away.', at: best ? [best[1]] : []};
+    return {ok: false, kind: 'info', msg: 'Pick the Motorway tool, tap a tile on the ' + cname(0) + ' road, then one on the ' + cname(5) + ' loop (both marked).', at: best || [], line: !!best};
+  }
+  // steps 8+ are menus and upgrades: the old gates are fine, but still warn about broken pairs
+  let ok = false; try { ok = TUT_GATES[st](); } catch (e) {}
+  const red = tutPair(0), js = nodeList.filter(nd => nd.junction).map(nd => nd.k);
+  const at = st === 10 ? js.slice(0, 3) : (st === 8 || st === 9) ? (red.h ? [red.h.k] : []) : (red.s ? [red.s.k] : []);
+  if (ok) return {ok: true};
+  const b = tutBroken(-1, R); if (b) return Object.assign(tutBrokenMsg(b), {ok: false});
+  if (st === 10 && !js.length) return {ok: false, kind: 'warn', msg: 'There are no junctions on the map right now. Join two roads to make one, then upgrade it.', at: []};
+  return {ok: false, at};
 }
 /* free play after the guided steps: things worth trying that don't need a scripted scenario */
 const TUT_LESSONS = [
@@ -1588,29 +1713,29 @@ const TUT_STEPS = [
   {t: 'Connect the red store and house', done: 'Parcels are flowing.',
    active: 'Drag a road between them \u2014 starting right on either building works. Store \u2192 road \u2192 house \u2192 paid: that\u2019s the whole loop.'},
   {t: 'Connect the amber store and house', done: 'You built your first intersection.',
-   active: 'Drag from the amber store straight down to the amber house \u2014 it crosses the red road. Where a drag joins two roads, that tile becomes an intersection.'},
+   active: 'Connect the amber store to the amber house so its road crosses or joins the red road. Where two roads share a tile, that tile becomes an intersection.'},
   {t: 'See how junctions work', done: 'You know a give-way from a light from a roundabout.',
    active: 'What you just made is a give-way \u2014 the simplest, free control. Open the guide to see the others.'},
   {t: 'Turn a junction into a light', done: 'That crossing now runs on a timed cycle.',
-   active: 'Connect the blue store to the blue house \u2014 the path crosses the amber road. Then click that new junction with the Light tool.'},
+   active: 'Connect the blue store to the blue house across another road. Then tap a junction on the blue road with the Light tool.'},
   {t: 'Turn a junction into a roundabout', done: 'Several streams can merge without stopping.',
-   active: 'Connect the green pair \u2014 it crosses the red road where red\u2019s traffic already runs. Click that junction with the Roundabout tool.'},
+   active: 'Connect the green pair across another road, then tap a junction on the green road with the Roundabout tool.'},
   {t: 'Place a turn sign', done: 'Signs are read from the driver\u2019s seat.',
-   active: 'Pick the Signs tool, choose a sign, then click a road tile \u2014 at a junction it restricts one turn.'},
+   active: 'Pick the Signs tool, choose a sign, then tap a junction \u2014 it restricts one turn. Make sure every car still has a way through.'},
   {t: 'Make part of a loop one-way', done: 'Cars still reach both ends, without sharing a lane.',
-   active: 'The loop to the east has two ways round. With the Signs tool\u2019s One-way option, click one stretch of it. Nothing gets cut off.'},
+   active: 'The teal loop has two ways round. With the Signs tool\u2019s One-way option, tap one straight stretch of it. Check nobody gets cut off.'},
   {t: 'Build a motorway', done: 'An express link that skips every junction between.',
-   active: 'Pick the Motorway tool, click the red road just west of the red house, then the far side of the teal loop. Motorways are fast but only link two points.'},
+   active: 'Pick the Motorway tool, tap a tile on the red road, then one on the teal loop at least 4 tiles away. Motorways are fast but only link two points.'},
   {t: 'Buy a car for a house', done: 'More cars per house means more trips a minute.',
-   active: 'Click the red house and press Buy a car. Each extra car at the same house costs more than the last.'},
+   active: 'Tap any house (the red one is marked) and press Buy a car. Each extra car at the same house costs more than the last.'},
   {t: 'Upgrade a car', done: 'Each upgrade also changes how the vehicle looks.',
    active: 'Click any red car (or pick one from the house list). Carry size turns it into a bigger model with one more slot but 10% slower; Speed fits a faster kit.'},
   {t: 'Upgrade a junction', done: 'Upgraded junctions let more cars through per turn.',
-   active: 'Click a junction and press its upgrade button. The gold ring shows its level.'},
+   active: 'Tap any junction and press its upgrade button. The gold ring shows its level.'},
   {t: 'Upgrade a store', done: 'Every parcel from that store now pays more.',
-   active: 'Pick the Upgrade tool (U) and click the red store.'},
+   active: 'Pick the Upgrade tool (U) and tap any store.'},
   {t: 'Hire a tow truck', done: 'It will clear stuck and broken-down cars on its own.',
-   active: 'Pick the Hire tow tool (Y) and click the red store. The truck waits in its yard until something breaks down.'}
+   active: 'Pick the Hire tow tool (Y) and tap any store. The truck waits in its yard until something breaks down.'}
 ];
 /* per-step coaching: which tool to reach for, where on the map to look, whether to draw a guide line, and why it matters */
 const TUT_COACH = [
@@ -1645,7 +1770,7 @@ const TUT_GATES = [
 ];
 const TUT_ENTER = {1: () => tutSpawnAmber(), 3: () => tutSpawnBlue(), 4: () => tutSpawnGreen(), 6: () => tutSpawnTeal()};
 function tutGoto(n) {
-  tutStage = n;
+  tutStage = n; tutLive = null;
   const f = TUT_ENTER[n]; if (f) f();
   renderTutorialPanel();
 }
@@ -1676,7 +1801,8 @@ function renderTutorialCoach() {
   const ic = $('tc-icon'); if (ic) ic.innerHTML = icon(tl ? tl.icon : 'select', 22);
   setHTML($('tc-dots'), TUT_STEPS.map((_, i) => '<i class="' + (i < tutStage ? 'd' : i === tutStage ? 'a' : '') + '"></i>').join(''));
   if (co.tool) { const b = document.querySelector('.tool[data-id="' + co.tool + '"]'); if (b) b.classList.add('tut-glow'); }
-  if (changed) { card.classList.remove('swap'); void card.offsetWidth; card.classList.add('swap'); }
+  renderTutLive();
+  if (changed) { card.classList.remove('swap'); void card.offsetWidth; card.classList.add('swap'); card.classList.remove('full'); }
 }
 function tutFlash(title) {
   const f = $('tut-flash'); if (!f) return;
@@ -1688,15 +1814,19 @@ function tutFlash(title) {
    ring and a bobbing arrow over each place the current step points at */
 function drawTutorialBeacons() {
   if (!tutorialMode || tutStage >= TUT_COACH.length) return;
-  const co = TUT_COACH[tutStage], pts = co.at;
-  if (co.line && pts.length >= 2) {
-    const a = tutAt(pts[0][0], pts[0][1]), b = tutAt(pts[1][0], pts[1][1]);
+  const co = TUT_COACH[tutStage];
+  // prefer the spots the live check found on the real map; fall back to the scripted ones
+  const live = tutLive && tutLive.at && tutLive.at.length;
+  const ks = (live ? tutLive.at : co.at.map(p => tutAt(p[0], p[1]))).slice(0, 4);
+  const line = live ? !!tutLive.line : !!co.line;
+  if (line && ks.length >= 2) {
+    const a = ks[0], b = ks[1];
     ctx.save(); ctx.strokeStyle = 'rgba(255,200,40,.75)'; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
     ctx.setLineDash([5, 6]); ctx.lineDashOffset = REDUCED_MOTION ? 0 : -animT * 18;
     ctx.beginPath(); ctx.moveTo(tx(a), ty(a)); ctx.lineTo(tx(b), ty(b)); ctx.stroke(); ctx.restore();
   }
-  for (let i = 0; i < pts.length; i++) {
-    const k = tutAt(pts[i][0], pts[i][1]), x = tx(k), y = ty(k);
+  for (let i = 0; i < ks.length; i++) {
+    const k = ks[i], x = tx(k), y = ty(k);
     const ph = REDUCED_MOTION ? 0.4 : (animT * 0.9 + i * 0.33) % 1;
     ctx.strokeStyle = 'rgba(255,200,40,' + (0.85 * (1 - ph)).toFixed(3) + ')'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(x, y, 10 + ph * 16, 0, Math.PI * 2); ctx.stroke();
@@ -1738,9 +1868,10 @@ function renderTutorialPanel() {
 }
 function checkTutorial() {
   if (!tutorialMode) return;
-  if (tutStage < TUT_GATES.length) {
-    let ok = false; try { ok = TUT_GATES[tutStage](); } catch (e) {}
-    if (ok) {
+  if (tutStage < TUT_STEPS.length) {
+    let st = null; try { st = tutStatus(); } catch (e) { console.error(e); st = {ok: false}; }
+    tutLive = st; renderTutLive();
+    if (st.ok) {
       const done = TUT_STEPS[tutStage];
       tutGoto(tutStage + 1);
       toast(done.done, 'good');
@@ -1754,6 +1885,15 @@ function checkTutorial() {
     if (ok) { tutDone.add(l.id); changed = true; toast('Tutorial: ' + l.name + ' \u2713', 'good'); }
   }
   if (changed) renderTutorialPanel();
+}
+let tutLive = null, tutCheckT = 0;
+function renderTutLive() {
+  const el = $('tc-live'); if (!el) return;
+  const msg = tutLive && !tutLive.ok && tutLive.msg ? tutLive.msg : '';
+  if (el.textContent !== msg) el.textContent = msg;
+  el.hidden = !msg;
+  el.dataset.kind = (tutLive && tutLive.kind) || 'info';
+  const card = $('tut-coach'); if (card) card.classList.toggle('has-live', !!msg);
 }
 function tutOpenExplainer() { openModal('m-explain'); }
 function tutStartBuilding() {
@@ -1777,6 +1917,7 @@ function setTutorialUI(on) {
   const p = $('panel'), tp = $('tut-panel');
   if (p) p.style.display = on ? 'none' : '';
   if (tp) tp.hidden = !on;
+  const app = $('app'); if (app) app.classList.toggle('tut-on', !!on);
   if (!on) { const c = $('tut-coach'); if (c) c.hidden = true; document.querySelectorAll('.tool').forEach(b => b.classList.remove('tut-glow')); }
 }
 function startTutorial() {
@@ -1807,9 +1948,10 @@ function startTutorial() {
   tutFinishPlacement();
   camReset(true);
   closeInspector(); setTool('select'); refreshUI();
-  tutDone = new Set(); tutInspected = new Set(); tutLightTuned = false; tutShopOpened = false; tutEventTried = false;
+  tutLoopTiles = []; tutLive = null; tutDone = new Set(); tutInspected = new Set(); tutLightTuned = false; tutShopOpened = false; tutEventTried = false;
   let n0 = 0; for (let k = 0; k < N; k++) if (road[k]) n0++; tutRoadBaseline = n0;
   setTutorialUI(true);
+  setTutMin(compactUI(), true);
   renderTutorialPanel();
   toast(tcol('Welcome \u2014 connect the red store to the red house to get started.'), 'good');
 }
@@ -4152,15 +4294,25 @@ function setTool(t) {
   tool = t; motoPick = -1;
   refreshUI();
   const def = TOOLS.find(x => x.id === (isSignTool(t) ? 'signs' : t));
-  if (def) hint(def.hint, true);
+  if (!def) return;
+  if (compactUI()) {                                   // phones: a small label naming what was tapped, nothing more
+    const sg = isSignTool(t) ? SIGNS.find(x => x.id === t) : null;
+    hint(sg ? sg.label : def.label, false, true);
+  } else hint(def.hint, true);
+}
+/* phones and small touch screens get compact pop-ups */
+function compactUI() {
+  const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+  return window.innerWidth < 820 || (coarse && Math.min(window.innerWidth, window.innerHeight) < 820);
 }
 let hintTimer = 0, hintCount = 0;
-function hint(msg, sticky) {
+function hint(msg, sticky, label) {
   hintCount++;
   const h = $('hint'); if (!h) return;
-  h.textContent = msg; h.classList.add('on');
+  h.textContent = msg; h.classList.toggle('label', !!label); h.classList.add('on');
   clearTimeout(hintTimer);
-  hintTimer = setTimeout(() => h.classList.remove('on'), sticky ? 6500 : 3200);
+  const ms = compactUI() ? (label ? 1300 : 2600) : (sticky ? 6500 : 3200);
+  hintTimer = setTimeout(() => h.classList.remove('on'), ms);
 }
 const HUD_ICONS = {
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.5v.5"/>',
@@ -4177,7 +4329,8 @@ const HUD_ICONS = {
 const hudIcon = (k, sz) => '<svg class="hi" viewBox="0 0 24 24" width="' + (sz || 16) + '" height="' + (sz || 16) + '" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (HUD_ICONS[k] || HUD_ICONS.info) + '</svg>';
 function toast(msg, kind) {
   const box = $('toasts'); if (!box) return;
-  while (box.children && box.children.length > 3) box.removeChild(box.children[0]);
+  const small = compactUI();
+  while (box.children && box.children.length > (small ? 1 : 3)) box.removeChild(box.children[0]);
   const d = document.createElement('div');
   d.className = 'toast' + (kind ? ' ' + kind : '');
   const txt = document.createElement('span'); txt.textContent = kind === 'tip' ? String(msg).replace(/^Tip:\s*/, '').replace(/^./, c => c.toUpperCase()) : msg;
@@ -4185,7 +4338,7 @@ function toast(msg, kind) {
   if (kind === 'tip') { const k = document.createElement('b'); k.textContent = 'Tip'; d.append(k); }
   d.append(txt);
   box.append(d);
-  setTimeout(() => { d.classList.add('out'); setTimeout(() => { if (d.parentNode) d.parentNode.removeChild(d); }, 400); }, kind === 'tip' ? 6500 : 3400);
+  setTimeout(() => { d.classList.add('out'); setTimeout(() => { if (d.parentNode) d.parentNode.removeChild(d); }, 400); }, small ? (kind === 'tip' ? 4200 : 2400) : (kind === 'tip' ? 6500 : 3400));
 }
 
 /* ---------------------------------------------------------------- sound */
@@ -4775,7 +4928,7 @@ function bindInput() {
     if (k === ' ') { spaceHeld = true; e.preventDefault(); return; }
     if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
     if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
-    if (k === 'Escape') { closeInspector(); $('menu').hidden = true; if (!$('m-help').hidden) closeModal('m-help'); if (!$('m-explain').hidden) closeModal('m-explain'); setTool('select'); return; }
+    if (k === 'Escape') { closeInspector(); $('menu').hidden = true; if (!$('m-help').hidden) closeModal('m-help'); if (!$('m-explain').hidden) closeModal('m-explain'); if (!$('m-feedback').hidden) closeModal('m-feedback'); setTool('select'); return; }
     if (modalOpen) return;
     const n = parseInt(k, 10);
     if (n >= 1 && n <= 9) { const t = TOOLS[n - 1]; setTool(t.id === 'signs' ? (isSignTool(tool) ? tool : 'only-forward') : t.id); return; }
@@ -4813,6 +4966,15 @@ function bindInput() {
   $('btn-undo').addEventListener('click', undo);
   $('btn-redo').addEventListener('click', redo);
   $('btn-fit').addEventListener('click', () => camReset(false));
+  $('btn-full').addEventListener('click', toggleFullscreen);
+  document.addEventListener('fullscreenchange', syncFullscreen);
+  document.addEventListener('webkitfullscreenchange', syncFullscreen);
+  syncFullscreen();
+  $('btn-feedback').addEventListener('click', () => { $('menu').hidden = true; $('btn-menu').setAttribute('aria-expanded', 'false'); openFeedback(); });
+  $('btn-feedback-s').addEventListener('click', openFeedback);
+  bindFeedback();
+  $('tut-min').addEventListener('click', () => setTutMin(!$('tut-panel').classList.contains('min')));
+  $('tut-coach').addEventListener('click', () => { if (compactUI()) $('tut-coach').classList.toggle('full'); });
   $('btn-snap').addEventListener('click', snapshot);
   $('btn-export').addEventListener('click', () => { $('menu').hidden = true; exportCity(); });
   $('btn-import').addEventListener('click', () => $('file-import').click());
@@ -5074,6 +5236,86 @@ function importCity(text) {
   return true;
 }
 
+/* ------------------------------------------------------- full screen */
+const fsElement = () => document.fullscreenElement || document.webkitFullscreenElement || null;
+function isStandalone() {
+  return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+}
+function fsFallback() {
+  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  toast(ios ? 'For full screen on iPhone, tap Share \u2192 Add to Home Screen, then open Junction from there.' : 'Full screen isn\u2019t available in this browser.', 'warn');
+}
+function toggleFullscreen() {
+  const el = document.documentElement;
+  try {
+    if (fsElement()) {
+      const ex = document.exitFullscreen || document.webkitExitFullscreen;
+      if (ex) { const p = ex.call(document); if (p && p.catch) p.catch(() => {}); }
+      return;
+    }
+    if (el.requestFullscreen) { const p = el.requestFullscreen({navigationUI: 'hide'}); if (p && p.catch) p.catch(fsFallback); }
+    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+    else fsFallback();
+  } catch (e) { fsFallback(); }
+}
+function syncFullscreen() {
+  const b = $('btn-full'); if (!b) return;
+  const on = !!fsElement();
+  b.hidden = isStandalone();                        // a home-screen app is already full screen
+  b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  const label = on ? 'Exit full screen' : 'Full screen';
+  b.setAttribute('aria-label', label);
+  if (b.hasAttribute('title')) b.setAttribute('title', label); else b.dataset.tip = label;
+  setTimeout(layout, 80);
+}
+
+/* ---------------------------------------------------------- feedback */
+const FEEDBACK_TO = 'support.jamesnortinen@gmail.com';
+let fbKind = 'Bug';
+function openFeedback() {
+  $('fb-err').textContent = '';
+  openModal('m-feedback');
+  setTimeout(() => { const t = $('fb-text'); if (t && !compactUI()) t.focus(); }, 60);
+}
+function feedbackDetails() {
+  const lines = ['', '\u2014', 'Junction ' + (($('menu').querySelector('.ver') || {}).textContent || '').replace(/^Junction\s*/, ''),
+    'Screen: ' + window.innerWidth + '\u00d7' + window.innerHeight + ' @' + (window.devicePixelRatio || 1) + 'x' + (compactUI() ? ' (mobile layout)' : ''),
+    'Browser: ' + navigator.userAgent];
+  if (started) lines.push('Game: ' + (tutorialMode ? 'tutorial step ' + (tutStage + 1) : (DIFF.label || diffKey) + ', week ' + week + ', ' + score + ' parcels'));
+  return lines.join('\n');
+}
+function bindFeedback() {
+  document.querySelectorAll('#fb-kind button').forEach(b => b.addEventListener('click', () => {
+    fbKind = b.dataset.kindFb;
+    document.querySelectorAll('#fb-kind button').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
+  }));
+  $('fb-close').addEventListener('click', () => closeModal('m-feedback'));
+  $('fb-send').addEventListener('click', () => {
+    const msg = $('fb-text').value.trim();
+    if (msg.length < 3) { $('fb-err').textContent = 'Write a few words first.'; return; }
+    const body = msg + ($('fb-device').checked ? '\n' + feedbackDetails() : '');
+    const url = 'mailto:' + FEEDBACK_TO + '?subject=' + encodeURIComponent('Junction ' + fbKind.toLowerCase() + ' report') + '&body=' + encodeURIComponent(body);
+    const a = document.createElement('a'); a.href = url; a.rel = 'noopener'; a.style.display = 'none'; document.body.append(a); a.click(); a.remove();
+    $('fb-err').textContent = '';
+    setTimeout(() => { closeModal('m-feedback'); $('fb-text').value = ''; toast('Thanks! If no email app opened, use Copy address and email us directly.', 'good'); }, 400);
+  });
+  $('fb-copy').addEventListener('click', async () => {
+    let ok = false;
+    try { await navigator.clipboard.writeText(FEEDBACK_TO); ok = true; } catch (e) {
+      try { const t = document.createElement('textarea'); t.value = FEEDBACK_TO; document.body.append(t); t.select(); ok = document.execCommand('copy'); t.remove(); } catch (e2) {}
+    }
+    $('fb-err').textContent = ok ? 'Copied: ' + FEEDBACK_TO : FEEDBACK_TO;
+  });
+}
+
+/* tutorial panel collapsed to a slim bar (default on phones, so it doesn't cover the map) */
+function setTutMin(on, silent) {
+  const tp = $('tut-panel'), b = $('tut-min'); if (!tp) return;
+  tp.classList.toggle('min', !!on);
+  if (b) { b.textContent = on ? 'Show steps' : 'Hide'; b.setAttribute('aria-expanded', on ? 'false' : 'true'); }
+  if (!silent) layout();
+}
+
 /* --------------------------------------------------------------- layout */
 function layout() {
   const stage = $('stage'), r = stage.getBoundingClientRect();
@@ -5084,6 +5326,11 @@ function layout() {
   const topH = Math.round($('topbar').getBoundingClientRect().height) + 20;
   document.documentElement.style.setProperty('--top', topH + 'px');
   insets.l = mobile ? 0 : 92; insets.r = (!mobile && panelOn) ? 312 : 0; insets.t = topH; insets.b = mobile ? (panelOn ? Math.round(H * 0.44) + 100 : 100) : 40;
+  if (tutorialMode) {
+    const tp = $('tut-panel');
+    if (mobile) insets.b = tp && tp.classList.contains('min') ? 270 : Math.round(H * 0.52) + 100;
+    else insets.r = 312;
+  }
   if (cam.auto) camReset(true);
 }
 
@@ -5104,6 +5351,7 @@ function frame(now) {
     }
     if (n === 12) simAcc = 0;                 // drop a backlog after a long stall rather than freeze
   }
+  if (tutorialMode && started && !spectating) { tutCheckT += real; if (tutCheckT > 0.35) { tutCheckT = 0; checkTutorial(); } }
   rollHud();
   stepFX(real);
   camUpdate(real);
