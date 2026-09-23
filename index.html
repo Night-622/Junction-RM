@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Junction — keep the city moving</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -49,7 +52,8 @@
         <span class="csep" aria-hidden="true"></span>
         <button class="cbtn" id="btn-undo" type="button" title="Undo (Ctrl+Z)" aria-label="Undo"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/></svg></button>
         <button class="cbtn" id="btn-redo" type="button" title="Redo (Ctrl+Y)" aria-label="Redo"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 000 12h3"/></svg></button>
-        <button class="cbtn" id="btn-fit" type="button" title="Fit the city (0)" aria-label="Fit the city"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+        <button class="cbtn" id="btn-fit" type="button" title="Fit the city (0)" aria-label="Fit the city"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
+        <button class="cbtn" id="btn-full" type="button" title="Full screen" aria-label="Full screen" aria-pressed="false"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path class="fs-on" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/><path class="fs-off" d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg></button>
         <span class="csep" aria-hidden="true"></span>
         <button class="cbtn" id="btn-sound" type="button" aria-pressed="false" title="Sound (M)" aria-label="Sound"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9z"/><path class="wave" d="M16.5 8.5a5 5 0 010 7M19 6a8.5 8.5 0 010 12"/><path class="mute" d="M17 9l5 6M22 9l-5 6"/></svg></button>
         <button class="cbtn" id="btn-theme" type="button" title="Light or dark (T)" aria-label="Switch theme"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 010 16z" fill="currentColor"/></svg></button>
@@ -59,7 +63,7 @@
       </div>
 
       <div class="plate menu" id="menu" hidden role="dialog" aria-label="Settings">
-        <div class="mhead"><b>Settings</b><span class="ver">Junction v1.3</span></div>
+        <div class="mhead"><b>Settings</b><span class="ver">Junction v1.4</span></div>
         <section class="msec" id="online-sec" hidden>
           <h4>Account and online</h4>
           <div class="acctline" id="acct-line"></div>
@@ -99,6 +103,11 @@
             <button class="act danger" id="btn-restart" type="button">New city…</button>
           </div>
           <input type="file" id="file-import" accept=".json,application/json" hidden>
+        </section>
+        <section class="msec">
+          <h4>Feedback</h4>
+          <p class="mnote">Found a bug or have an idea? It goes straight to the developer.</p>
+          <button class="act" id="btn-feedback" type="button">Send feedback</button>
         </section>
       </div>
     </header>
@@ -172,10 +181,11 @@
       <div class="minibox"><div class="minihead"><span>Map</span><small>click to jump</small></div><canvas id="mini" width="220" height="220" aria-label="Minimap"></canvas></div>
     </aside>
 
-    <!-- tutorial panel: shown instead of the side panel while the interactive tutorial runs -->
+    <!-- tutorial panel: shown instead of the side panel while the tutorial runs -->
     <aside id="tut-panel" class="plate" aria-label="Tutorial" hidden>
       <div class="tut-head">
-        <span class="tut-kicker">Interactive tutorial</span>
+        <span class="tut-kicker">Tutorial</span>
+        <button class="tut-min-btn" id="tut-min" type="button" aria-expanded="true" aria-controls="tut-list">Hide</button>
         <h3>Your progress <span id="tut-count" class="num">Step 1 of 13</span></h3>
         <div class="tut-track"><i id="tut-bar"></i></div>
       </div>
@@ -200,6 +210,7 @@
       <div class="tc-top"><span id="tc-icon" class="tc-icon" aria-hidden="true"></span><span id="tc-step" class="tc-pill">Step 1 of 13</span><span id="tc-tool" class="tc-tool" hidden></span></div>
       <h4 id="tc-title"></h4>
       <p id="tc-body"></p>
+      <p class="tc-live" id="tc-live" hidden aria-live="polite"></p>
       <p class="tc-why"><b>Why it matters</b> <span id="tc-why"></span></p>
       <div class="tc-dots" id="tc-dots"></div>
     </div>
@@ -226,7 +237,8 @@
           <button class="bigbtn ghost" id="btn-tutorial" type="button">How to Play</button>
         </div>
         <div class="btnrow">
-          <button class="bigbtn ghost" id="btn-try-tutorial" type="button">Try the interactive tutorial</button>
+          <button class="bigbtn ghost" id="btn-try-tutorial" type="button">Tutorial</button>
+          <button class="bigbtn ghost" id="btn-feedback-s" type="button">Send feedback</button>
         </div>
         <div class="btnrow onlinerow" id="start-online" hidden>
           <button class="act" id="btn-board-s" type="button">Leaderboard</button>
@@ -389,6 +401,24 @@
           <details><summary>Is there a "correct" way to play?</summary><p>No. There's no correct way to play Junction — take any path you want.</p></details>
         </div>
         <div class="btnrow"><button class="bigbtn" id="explain-start" type="button">Start building</button></div>
+      </div>
+    </div>
+
+    <div class="modal" id="m-feedback" hidden>
+      <div class="card plate">
+        <h2>Send feedback</h2>
+        <p class="lead">Tell us what broke, what felt off, or what you'd love to see. This opens your email app with the message ready to send to <b>support.jamesnortinen@gmail.com</b>.</p>
+        <div class="seg fbkind" id="fb-kind" role="group" aria-label="Feedback type">
+          <button type="button" data-kind-fb="Bug" aria-pressed="true">Bug</button><button type="button" data-kind-fb="Idea" aria-pressed="false">Idea</button><button type="button" data-kind-fb="Other" aria-pressed="false">Other</button>
+        </div>
+        <label class="field"><span>Your message</span><textarea id="fb-text" rows="5" maxlength="1500" placeholder="What happened, and what did you expect?"></textarea></label>
+        <label class="tgl"><input type="checkbox" id="fb-device" checked><span>Include device and game details (helps with bugs)</span></label>
+        <p class="formerr" id="fb-err" role="alert"></p>
+        <div class="btnrow">
+          <button class="bigbtn" id="fb-send" type="button">Open email</button>
+          <button class="bigbtn ghost" id="fb-copy" type="button">Copy address</button>
+          <button class="bigbtn ghost" id="fb-close" type="button">Cancel</button>
+        </div>
       </div>
     </div>
 
