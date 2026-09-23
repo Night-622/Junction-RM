@@ -60,6 +60,22 @@
 
       <div class="plate menu" id="menu" hidden role="dialog" aria-label="Settings">
         <div class="mhead"><b>Settings</b><span class="ver">Junction v1.3</span></div>
+        <section class="msec" id="online-sec" hidden>
+          <h4>Account and online</h4>
+          <div class="acctline" id="acct-line"></div>
+          <div class="livecode">
+            <div><small>Your live code</small><b id="live-code" class="num">······</b></div>
+            <button class="act small" id="live-copy" type="button">Copy</button>
+            <button class="act small" id="live-refresh" type="button" hidden>New code</button>
+          </div>
+          <p class="mnote" id="live-note"></p>
+          <div class="mgrid">
+            <button class="act" id="btn-saves2" type="button">Save files</button>
+            <button class="act" id="btn-board" type="button">Leaderboard</button>
+            <button class="act" id="btn-watch" type="button">Watch a player</button>
+            <button class="act" id="btn-account" type="button">Account</button>
+          </div>
+        </section>
         <section class="msec">
           <h4>Display</h4>
           <label class="tgl"><input type="checkbox" id="opt-night" checked><span>Day and night</span></label>
@@ -101,6 +117,11 @@
 
     <div id="hint" role="status"></div>
     <div id="tip" role="tooltip" hidden></div>
+    <div class="specbar plate" id="spec-bar" hidden>
+      <span class="livedot" aria-hidden="true"></span>
+      <span id="spec-text">Watching</span>
+      <button class="act small" id="spec-exit" type="button">Stop watching</button>
+    </div>
     <div class="toasts" id="toasts" aria-live="polite"></div>
 
     <!-- inspector -->
@@ -187,6 +208,7 @@
     <!-- modals -->
     <div class="modal" id="m-start">
       <div class="card plate">
+        <div class="acct-strip" id="start-account" hidden></div>
         <h2>Junction</h2>
         <p class="lead">Design the road network. Keep every parcel moving. Every delivery scores a point and pays cash — and the city never stops growing around you.</p>
         <ul class="tips">
@@ -199,14 +221,87 @@
         <div class="diffs" id="diff-picks"></div>
         <div class="btnrow">
           <button class="bigbtn" id="btn-start" type="button">Start a new city</button>
-          <button class="bigbtn ghost" id="btn-resume" type="button" hidden>Resume the last one</button>
+          <button class="bigbtn ghost" id="btn-saves" type="button" hidden>Save files</button>
+          <button class="bigbtn ghost" id="btn-resume" type="button" hidden>Resume on this device</button>
           <button class="bigbtn ghost" id="btn-tutorial" type="button">How to Play</button>
         </div>
         <div class="btnrow">
           <button class="bigbtn ghost" id="btn-try-tutorial" type="button">Try the interactive tutorial</button>
         </div>
+        <div class="btnrow onlinerow" id="start-online" hidden>
+          <button class="act" id="btn-board-s" type="button">Leaderboard</button>
+          <button class="act" id="btn-watch-s" type="button">Watch a player</button>
+        </div>
         <p class="mini" id="start-best"></p>
         <p class="mini">Scroll to zoom. Right-drag, middle-drag or hold <kbd>Shift</kbd> to pan. Click a car for its route and ETA.</p>
+      </div>
+    </div>
+
+    <!-- online: username / account -->
+    <div class="modal" id="m-user" hidden>
+      <div class="card plate">
+        <h2 id="user-title">Pick a username</h2>
+        <p class="lead" id="user-lead">This is the name other players see on the leaderboard and when they watch your city.</p>
+        <label class="field"><span>Username</span><input id="user-name" type="text" maxlength="16" autocomplete="nickname" spellcheck="false" placeholder="3–16 letters, numbers, _ or -"></label>
+        <p class="formerr" id="user-err" role="alert"></p>
+        <div class="btnrow" id="user-guest-row">
+          <button class="bigbtn" id="user-guest" type="button">Play as a guest</button>
+          <button class="bigbtn ghost" id="user-cancel" type="button" hidden>Cancel</button>
+        </div>
+        <div class="acct-perm" id="user-perm">
+          <h3><span class="star" aria-hidden="true">★</span> Make it a permanent account</h3>
+          <p class="mini">Accounts keep your name for good, keep the same live code, carry your save files to any device, and get a star on the leaderboard. Guest progress stays on this browser only.</p>
+          <button class="bigbtn ghost gbtn" id="user-google" type="button"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="#4285F4" d="M22.5 12.3c0-.8-.1-1.5-.2-2.2H12v4.2h5.9a5 5 0 01-2.2 3.3v2.7h3.5c2.1-1.9 3.3-4.7 3.3-8z"/><path fill="#34A853" d="M12 23c3 0 5.4-1 7.2-2.7l-3.5-2.7c-1 .7-2.2 1-3.7 1-2.9 0-5.3-1.9-6.2-4.5H2.2v2.8A11 11 0 0012 23z"/><path fill="#FBBC05" d="M5.8 14.1a6.6 6.6 0 010-4.2V7.1H2.2a11 11 0 000 9.8z"/><path fill="#EA4335" d="M12 5.4c1.6 0 3.1.6 4.2 1.7l3.1-3.1A11 11 0 002.2 7.1l3.6 2.8C6.7 7.3 9.1 5.4 12 5.4z"/></svg>Continue with Google</button>
+          <div class="emailrow">
+            <input id="user-email" type="email" autocomplete="email" placeholder="Email">
+            <input id="user-pass" type="password" autocomplete="current-password" placeholder="Password (6+ characters)">
+          </div>
+          <div class="btnrow tight">
+            <button class="bigbtn ghost" id="user-create" type="button">Create account</button>
+            <button class="bigbtn ghost" id="user-signin" type="button">Sign in</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- online: save files -->
+    <div class="modal" id="m-saves" hidden>
+      <div class="card plate">
+        <h2 id="saves-title">Save files</h2>
+        <p class="lead" id="saves-lead">Three cloud save slots, kept with your account.</p>
+        <div class="slots" id="save-slots"><p class="mini">Loading…</p></div>
+        <p class="mini" id="saves-diff"></p>
+        <div class="btnrow"><button class="bigbtn ghost" id="saves-back" type="button">Back</button></div>
+      </div>
+    </div>
+
+    <!-- online: leaderboard -->
+    <div class="modal" id="m-board" hidden>
+      <div class="card plate wide">
+        <h2>Leaderboard</h2>
+        <div class="seg boardtabs" id="board-tabs" role="tablist">
+          <button type="button" data-board="parcels" aria-pressed="true">Most parcels</button>
+          <button type="button" data-board="weeks" aria-pressed="false">Longest survived</button>
+          <button type="button" data-board="goals" aria-pressed="false">Fastest all goals</button>
+        </div>
+        <p class="mini" id="board-note"></p>
+        <ol class="board" id="board-list"><li class="mini">Loading…</li></ol>
+        <p class="mini" id="board-me"></p>
+        <div class="btnrow"><button class="bigbtn ghost" id="board-close" type="button">Close</button></div>
+      </div>
+    </div>
+
+    <!-- online: watch a player -->
+    <div class="modal" id="m-watch" hidden>
+      <div class="card plate">
+        <h2>Watch a player</h2>
+        <p class="lead">Type the 6-digit live code another player shared with you (they'll find it in Settings) to watch their city as they play.</p>
+        <input class="codein" id="watch-code" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="000000" aria-label="Live code">
+        <p class="formerr" id="watch-err" role="alert"></p>
+        <div class="btnrow">
+          <button class="bigbtn" id="watch-go" type="button">Watch</button>
+          <button class="bigbtn ghost" id="watch-cancel" type="button">Cancel</button>
+        </div>
       </div>
     </div>
 
@@ -354,5 +449,6 @@
   </div>
 </div>
 <script src="game.js"></script>
+<script type="module" src="online.js"></script>
 </body>
 </html>

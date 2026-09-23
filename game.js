@@ -273,10 +273,20 @@ const COLOR_LIBRARY = [
   {group: 'Standard', cols: [['red', '#e0483e'], ['blue', '#2f7de1'], ['amber', '#f0a81c'], ['green', '#2fa66a'], ['violet', '#8a5bd6'], ['teal', '#16a2b8']]},
   {group: 'Classic', cols: [['crimson', '#c8102e'], ['orange', '#f57c1f'], ['yellow', '#f2c511'], ['lime', '#8cc63f'], ['forest', '#2e7d32'], ['cyan', '#00acc1'],
     ['sky blue', '#4aa3f0'], ['navy', '#25408f'], ['purple', '#7b2cbf'], ['magenta', '#d0268f'], ['pink', '#f06292'], ['brown', '#8d5a35'], ['grey', '#7d8790'], ['charcoal', '#3a4046']]},
-  {group: 'Creative', cols: [['coral', '#ff6f61'], ['peach', '#f4a582'], ['rust', '#b5471b'], ['mustard', '#cda21a'], ['gold', '#d4a017'], ['olive', '#7a8b2a'],
-    ['sage', '#8fa77a'], ['mint', '#4fd1a5'], ['seafoam', '#3fbfad'], ['ocean', '#0d7fa8'], ['cobalt', '#1f4fd1'], ['midnight', '#2a2f6b'], ['indigo', '#4b3bb5'],
-    ['lavender', '#a58bdb'], ['plum', '#8e3b6e'], ['raspberry', '#c2185b'], ['rose', '#e3799d'], ['bubblegum', '#ff7eb6'], ['cherry', '#9e0f2a'], ['chocolate', '#6b3e26'], ['slate', '#5b6f86']]}
-];
+  {group: 'Creative', more: true, cols: [
+    ['coral', '#ff8a75'], ['terracotta', '#c1592c'], ['rust', '#8a3a1a'], ['garnet', '#7a1830'], ['wine', '#5e1f38'],
+    ['tangerine', '#e88a0e'], ['apricot', '#f0b26a'], ['copper', '#b57a4a'], ['mahogany', '#6a2c20'], ['mustard', '#c99a1a'],
+    ['wheat', '#c9a24a'], ['avocado', '#7a8a2e'], ['moss', '#5f7a35'], ['pistachio', '#93c47d'], ['jade', '#2a9670'],
+    ['basil', '#2e5a24'], ['hunter green', '#215030'], ['kelly green', '#2e9e44'], ['mint', '#4fd1a5'], ['seafoam', '#3fbfad'],
+    ['cerulean', '#1a7ca6'], ['ocean', '#0d5f82'], ['royal blue', '#2440c4'], ['denim', '#3c5c8f'], ['powder blue', '#7fb0d6'],
+    ['periwinkle', '#8a94e6'], ['midnight', '#1c2050'], ['lavender', '#a58bdb'], ['lilac', '#c9a3e0'], ['orchid', '#b755c9'],
+    ['mauve', '#9b6b8f'], ['plum', '#8e3b6e'], ['amethyst', '#8b4fb0'], ['grape', '#5c2f8e'], ['eggplant', '#5a2f5e'],
+    ['rose', '#e3799d'], ['bubblegum', '#ff9ecb'], ['blush', '#e8a5b0'], ['raspberry', '#a0184f'], ['watermelon', '#f2495f'],
+    ['chocolate', '#54301c'], ['mocha', '#8a7060'], ['sand', '#c9a876'], ['khaki', '#7d7346'], ['olive drab', '#6b6b2a'],
+    ['slate', '#5b6f86'], ['hibiscus', '#c81c6e'], ['heather', '#8878a8'], ['laurel', '#4e7a4a'], ['sapphire', '#1f4fb5'],
+    ['peach fuzz', '#f2b78a'], ['nectarine', '#e88a4a'], ['lagoon', '#1a9a9a']
+  ]}
+]
 const LIB_NAME = {}; for (const g of COLOR_LIBRARY) for (const [n, h] of g.cols) LIB_NAME[h] = n;
 /* Colour modes. Each palette fills the same six slots, so saves and colour indices never change —
    only what the slots look like and what they're called. 'custom' uses the player's own picks. */
@@ -345,6 +355,11 @@ let buildings = [], cars = [], motorways = [], parks = [], depots = [];
 let inv, perks, score = 0, week = 1, weekTimer = 0, houseTimer = 0, storeTimer = 0;
 let money = 0, trucks = [];
 let running = true, speed = 1, over = false, clock = 0, best = 0, started = false;
+/* Spectating: this client is showing someone else's live city (see online.js). The layout comes from their
+   snapshots; locally we only animate traffic, so anything random or player-driven is switched off. */
+let spectating = false;
+/* A tiny event bus so online.js (cloud saves, leaderboard, live view) can follow the game without touching it. */
+const JEvents = {h: {}, on(n, f) { (this.h[n] = this.h[n] || []).push(f); }, emit(n, d) { for (const f of this.h[n] || []) { try { f(d); } catch (e) { console.error(e); } } }};
 let span = CFG.startSpan, org = 0, camSpan = span, camOrg = 0;
 let diffKey = 'standard', DIFF = DIFFS.standard;
 let keepLeft = true, laneSign = -1;
@@ -1991,6 +2006,7 @@ function undoEntry(u) {
 }
 /* one undo takes back everything from the last press-and-drag; each entry goes onto the redo stack */
 function undo() {
+  if (spectating) return;
   const top = undoStack[undoStack.length - 1];
   if (!top) { hint('Nothing to undo.'); return; }
   const g = top.g; let did = false;
@@ -2016,6 +2032,7 @@ function redoEntry(u) {
   return false;
 }
 function redo() {
+  if (spectating) return;
   const top = redoStack[redoStack.length - 1];
   if (!top) { hint('Nothing to redo.'); return; }
   const g = top.g, hc = hintCount; let did = false;
@@ -2699,7 +2716,7 @@ function maybeOfferContract() {
   return true;
 }
 function stepContracts(dt) {
-  if (week >= CFG.contractFromWeek) {
+  if (week >= CFG.contractFromWeek && !spectating) {
     contractTimer -= dt;
     if (contractTimer <= 0) contractTimer = maybeOfferContract() ? Math.max(30, CFG.contractEvery - week) * rnd(0.8, 1.3) : 10;
   }
@@ -2754,6 +2771,7 @@ const GOALS = [
   {id: 'haul',  name: 'Recovery run',        hint: 'Have your own tow truck rescue a car', hit: () => stats.hauls > 0, reward: {inv: {light: 1}}}
 ];
 function checkGoals() {
+  if (spectating) return;
   for (const g of GOALS) {
     if (goalsDone.has(g.id)) continue;
     let ok = false; try { ok = g.hit(); } catch (e) {}
@@ -2761,6 +2779,7 @@ function checkGoals() {
       goalsDone.add(g.id);
       if (g.reward) giveReward(g.reward);
       toast('Goal: ' + g.name + (g.reward ? ' · ' + rewardText(g.reward) : ''), 'good'); sfx('upgrade'); renderGoals(); refreshUI();
+      if (goalsDone.size === GOALS.length && !tutorialMode) JEvents.emit('allGoals', {clock, diffKey});
     }
   }
 }
@@ -2779,7 +2798,7 @@ function update(dt) {
     if (s.unreach > 0) s.unreach -= dt;
     // stores randomly grow busier over time: each gets a random countdown to its next chance to
     // step up a tier, so evolution is unpredictable in both timing and which store it hits
-    if (week >= CFG.storeEvolveStartWeek && s.tier < CFG.storeEvolveMaxTier) {
+    if (!spectating && week >= CFG.storeEvolveStartWeek && s.tier < CFG.storeEvolveMaxTier) {
       s.evolveTimer -= dt;
       if (s.evolveTimer <= 0) {
         s.evolveTimer = rnd(CFG.storeEvolveCheckMin, CFG.storeEvolveCheckMax);
@@ -2798,7 +2817,7 @@ function update(dt) {
       if (s.pins < storeCap(s) + 8) { s.pins++; }
     }
     if (s.pins > storeCap(s)) s.timer += dt; else s.timer = Math.max(0, s.timer - dt * CFG.overflowDrain);
-    if (s.timer >= overflowLimit() && !DIFF.noFail && !tutorialMode) { endGame('The ' + COLORS[s.color].name + ' store ran out of patience.'); return; }
+    if (s.timer >= overflowLimit() && !DIFF.noFail && !tutorialMode && !spectating) { endGame('The ' + COLORS[s.color].name + ' store ran out of patience.'); return; }
   }
   stepContracts(dt);
 
@@ -2806,13 +2825,14 @@ function update(dt) {
   if (dispatchTimer <= 0) { dispatchTimer = CFG.dispatchInterval; dispatch(); dispatchTrucks(); }
   stepTraffic(dt);
   // a citywide gridlock: even with no store overflowing, sustained near-total standstill also ends the run
-  if (week >= CFG.cityGridlockFromWeek && !DIFF.noFail && !tutorialMode) {
+  if (week >= CFG.cityGridlockFromWeek && !DIFF.noFail && !tutorialMode && !spectating) {
     const movingCars = cars.filter(c => c.state === 'driving' || c.state === 'crossing').length;
     if (movingCars >= CFG.cityGridlockMinCars && stats.jamPct > CFG.cityJamThreshold) cityStressClock += dt;
     else cityStressClock = Math.max(0, cityStressClock - dt * CFG.overflowDrain);
     if (cityStressClock >= CFG.cityGridlockSeconds) { endGame('The whole city has gridlocked — nothing is moving.'); return; }
   }
 
+  if (spectating) { specTick(dt); return; }
   // spawning
   houseTimer -= dt;
   if (houseTimer <= 0) {
@@ -2896,6 +2916,23 @@ function update(dt) {
   if (autosaveT <= 0) { autosaveT = CFG.autosaveSeconds; saveGame(); }
 }
 function rebuildNetSoft() { linkBuildings(); }
+/* The bits of update() a spectator still runs: timers count down smoothly between the host's snapshots,
+   but nothing spawns, closes, breaks down or ends — the next snapshot is the truth. */
+function specTick(dt) {
+  for (const [k, t] of closed) { if (t - dt <= 0 || !road[k]) closed.delete(k); else closed.set(k, t - dt); }
+  if (rerouteN > 0) processReroutes();
+  weekTimer = Math.max(0, weekTimer - dt);
+  camSpan += (span - camSpan) * Math.min(1, dt * CFG.cameraEase);
+  camOrg += (org - camOrg) * Math.min(1, dt * CFG.cameraEase);
+  statT -= dt;
+  if (statT <= 0) {
+    statT = 1;
+    const cutoff = clock - 60;
+    while (stats.lastDeliveries.length && stats.lastDeliveries[0] < cutoff) stats.lastDeliveries.shift();
+    stats.perMin = stats.lastDeliveries.length * (clock < 60 ? 60 / Math.max(10, clock) : 1);
+    stats.hist.push({jam: stats.jamPct, rate: stats.perMin}); if (stats.hist.length > 90) stats.hist.shift();
+  }
+}
 /* One point of the whole-run history. Capped at about 600 points: when full, every second point is dropped and the
    sampling interval doubles, so the chart always covers the entire run. */
 function sampleRun() {
@@ -2906,6 +2943,7 @@ function sampleRun() {
 }
 /* a new week: the map grows and the council pays a small grant */
 function weekStart(grew) {
+  if (!tutorialMode) JEvents.emit('week', {week, score, diffKey});
   stats.weekMarks.push(clock);
   const grant = Math.round((CFG.weeklyGrant + CFG.weeklyGrantRamp * week) * DIFF.grant);
   money += grant;
@@ -2937,12 +2975,14 @@ function bestFor(dk) {
   } catch (e) { return 0; }
 }
 function endGame(why) {
+  if (spectating) return;
   running = false; over = true;
   best = Math.max(best, score);
   sampleRun();
   try { localStorage.setItem(bestKey(diffKey), String(best)); localStorage.removeItem(SAVE_KEY); } catch (e) {}
   showGameOver(why);
   sfx('over');
+  if (!tutorialMode) JEvents.emit('over', {score, week, diffKey, clock});
 }
 
 /* ------------------------------------------------------------ saving */
@@ -2981,8 +3021,9 @@ function serialize() {
     oneway: (() => { const o = []; if (onewayDir) for (let k = 0; k < N; k++) if (onewayDir[k] >= 0) o.push([k, onewayDir[k]]); return o; })()
   };
 }
-function saveGame() {
-  if (over || !started || tutorialMode) return;
+function saveGame(urgent) {
+  if (over || !started || tutorialMode || spectating) return;
+  JEvents.emit('autosave', {urgent: !!urgent});
   try {
     const prev = localStorage.getItem(SAVE_KEY);
     if (prev) localStorage.setItem(SAVE_KEY + '-backup', prev);
@@ -4107,6 +4148,7 @@ function buildToolbars() {
   }
 }
 function setTool(t) {
+  if (spectating && t !== 'select') return;
   tool = t; motoPick = -1;
   refreshUI();
   const def = TOOLS.find(x => x.id === (isSignTool(t) ? 'signs' : t));
@@ -4607,7 +4649,7 @@ function selectAt(sx, sy) {
 /* -------------------------------------------------------------- modals */
 let modalOpen = false, rerollLeft = 1, lastGrew = false;
 function openModal(id) { $(id).hidden = false; modalOpen = true; }
-function closeModal(id) { $(id).hidden = true; modalOpen = ['m-start', 'm-upgrade', 'm-over', 'm-help', 'm-explain'].some(m => !$(m).hidden); }
+function closeModal(id) { $(id).hidden = true; modalOpen = !!document.querySelector('.modal:not([hidden])'); }
 function offerUpgrade(grew) {
   lastGrew = grew; rerollLeft = 1; running = false; openModal('m-upgrade'); renderUpgrade();
   refreshUI();
@@ -4817,7 +4859,10 @@ function bindInput() {
     b.addEventListener('click', () => { startDiff = k; dp.querySelectorAll('.diff').forEach(x => x.setAttribute('aria-pressed', x.dataset.id === k ? 'true' : 'false')); showStartBest(); });
     dp.append(b);
   }
-  $('btn-start').addEventListener('click', () => { closeModal('m-start'); resetGame(startDiff); running = true; refreshHud(); layout(); });
+  $('btn-start').addEventListener('click', () => {
+    if (window.JunctionOnline && window.JunctionOnline.ready) { window.JunctionOnline.openSaves('new'); return; }
+    closeModal('m-start'); resetGame(startDiff); running = true; refreshHud(); layout();
+  });
   $('btn-resume').addEventListener('click', () => { if (loadGame()) { closeModal('m-start'); running = true; refreshHud(); layout(); } else toast('No saved city found', 'warn'); });
   $('btn-try-tutorial').addEventListener('click', () => { closeModal('m-start'); startTutorial(); refreshHud(); layout(); });
   $('tut-exit').addEventListener('click', exitTutorial);
@@ -4831,10 +4876,10 @@ function bindInput() {
   $('tut-contract').addEventListener('click', tutTriggerContract);
   window.addEventListener('resize', layout);
   window.addEventListener('beforeunload', saveGame);
-  document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(true); });
 }
-function togglePlay() { if (over || modalOpen) return; running = !running; refreshUI(); }
-function cycleSpeed(d) { const s = CFG_SPEEDS; let i = s.indexOf(speed); i = (i + d + s.length) % s.length; speed = s[i]; refreshUI(); }
+function togglePlay() { if (over || modalOpen || spectating) return; running = !running; refreshUI(); }
+function cycleSpeed(d) { if (spectating) return; const s = CFG_SPEEDS; let i = s.indexOf(speed); i = (i + d + s.length) % s.length; speed = s[i]; refreshUI(); }
 const CFG_SPEEDS = [0.5, 1, 2, 3];
 function toggleMute() { muted = !muted; savePrefs(); refreshUI(); }
 /* settings that should outlive a reload */
@@ -4885,25 +4930,34 @@ function renderPaletteUI() {
   const lib = document.createElement('div'); lib.className = 'libgrid';
   const cur = COLORS[palSlot].hex.toLowerCase(), usedBy = {};
   COLORS.forEach((c, i) => { usedBy[c.hex.toLowerCase()] = i; });
+  const mkSwatch = (name, hex) => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'libsw'; b.style.background = hex;
+    const u = usedBy[hex];
+    b.dataset.tip = name.replace(/^./, ch => ch.toUpperCase());
+    if (u !== undefined && u !== palSlot) b.dataset.sub = 'In use as colour ' + (u + 1) + ' \u2014 picking it swaps the two';
+    b.setAttribute('aria-label', name + (hex === cur ? ', selected' : ''));
+    b.setAttribute('aria-pressed', hex === cur ? 'true' : 'false');
+    if (u !== undefined && u !== palSlot) { b.dataset.used = '1'; b.innerHTML = '<em>' + (u + 1) + '</em>'; }
+    b.addEventListener('click', () => pickLibColour(hex));
+    return b;
+  };
   for (const g of COLOR_LIBRARY) {
+    if (g.more && !libExpanded) continue;
     const h = document.createElement('h5'); h.textContent = g.group; lib.append(h);
     const row = document.createElement('div'); row.className = 'librow';
-    for (const [name, hex] of g.cols) {
-      const b = document.createElement('button'); b.type = 'button'; b.className = 'libsw'; b.style.background = hex;
-      const u = usedBy[hex];
-      b.dataset.tip = name.replace(/^./, ch => ch.toUpperCase());
-      if (u !== undefined && u !== palSlot) b.dataset.sub = 'In use as colour ' + (u + 1) + ' \u2014 picking it swaps the two';
-      b.setAttribute('aria-label', name + (hex === cur ? ', selected' : ''));
-      b.setAttribute('aria-pressed', hex === cur ? 'true' : 'false');
-      if (u !== undefined && u !== palSlot) { b.dataset.used = '1'; b.innerHTML = '<em>' + (u + 1) + '</em>'; }
-      b.addEventListener('click', () => pickLibColour(hex));
-      row.append(b);
-    }
+    for (const [name, hex] of g.cols) row.append(mkSwatch(name, hex));
     lib.append(row);
   }
   sw.append(lib);
+  const moreGroup = COLOR_LIBRARY.find(g => g.more);
+  if (moreGroup && !libExpanded) {
+    const mb = document.createElement('button'); mb.type = 'button'; mb.className = 'linkbtn libmore';
+    mb.textContent = 'See ' + moreGroup.cols.length + ' more \u2014 ' + moreGroup.group.toLowerCase() + ' colours';
+    mb.addEventListener('click', () => { libExpanded = true; renderPaletteUI(); });
+    sw.append(mb);
+  }
 }
-let palSlot = 0;
+let palSlot = 0, libExpanded = false;
 function pickLibColour(hex) {
   const cur = COLORS.map(c => c.hex.toLowerCase());
   if (colorMode !== 'custom') { customHex = cur.slice(); colorMode = 'custom'; }
@@ -5082,3 +5136,87 @@ if (typeof window !== 'undefined' && (location.hostname === 'localhost' || locat
   get span() { return span; }, idx, cx, cy, CFG, get perks() { return perks; }, get depots() { return depots; }, get parks() { return parks; }, get special() { return special; },
   addCar, refreshHud, renderInspector, offerUpgrade, renderShop, doBuy, offerOf, money: () => money, renderPerks, renderGoals, drawMini, endGame, get rush() { return rush; }, get rain() { return rain; }, get breakdownTimer() { return breakdownTimer; }, serialize, validSave, importCity, exportCity, saveFile, sampleRun, drawRunChart, upgradeJunction, spawnAmb, tryCloseRoad, closeTile, closureSafe, troubleSpots, get ambs() { return ambs; }, get closed() { return closed; }, checkGoals, GOALS, rewardText, bestFor, setScore(v) { score = v; }, setMoney(v) { money = v; }, get goalsDone() { return goalsDone; }, undo, redo, get redoStack() { return redoStack; }, get cam() { return cam; }, select(o) { sel = o; }, get sign() { return sign; }, set running(v) { running = v; }, get week() { return week; }, tow, applyTool, setTool, get motorways() { return motorways; }, linked, dispatch,
   stepTo, layRoad, get lnk() { return lnk; }, get tool() { return tool; }, nearestRoadTo, get undoStack() { return undoStack; }, get netVer() { return netVer; }, set undoGroup(v) { undoGroup = v; }, get pathCache() { return pathCache; }, buildPaths};
+/* ---------------------------------------------------------------- online bridge
+   online.js (a module, loaded after this file) drives cloud saves, the leaderboard and live viewing
+   through this small surface. The game still runs fine on its own if online.js never loads. */
+(function () {
+  const INV_FIX = d => { if (d && d.inv) for (const k of INV_KEYS) if (!isFinite(d.inv[k])) d.inv[k] = 0; return d; };
+  function applyMeta(meta) {
+    if (!meta) return;
+    running = !!meta.running;
+    if (CFG_SPEEDS.includes(meta.speed)) speed = meta.speed;
+    refreshUI();
+  }
+  function blockWhileSpectating(e) {
+    if (!spectating) return;
+    const t = e.target;
+    if (!t || !t.closest) return;
+    if (t.closest('#dock, #signs, #inspect .ibody button, #stores button, [data-kind], #tab-shop-pane button, .tabpane[data-tab="perks"] button, #btn-undo, #btn-redo, #btn-side, #btn-play, #speed-seg button, #up-picks button, #btn-reroll')) {
+      e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation && e.stopImmediatePropagation();
+    }
+  }
+  ['pointerdown', 'click'].forEach(ev => document.addEventListener(ev, blockWhileSpectating, true));
+
+  window.JunctionAPI = {
+    events: JEvents,
+    goalsTotal: GOALS.length,
+    get startDiff() { return startDiff; },
+    diffLabel(k) { return (DIFFS[k] && DIFFS[k].label) || k; },
+    serialize,
+    state() {
+      return {started, over, tutorialMode, spectating, running: running && !modalOpen, speed, score, week, diffKey, clock, goals: goalsDone.size,
+        atMenu: !$('m-start').hidden};
+    },
+    saveNow() { saveGame(true);
+    },
+    /* open a saved city (an object from serialize()) as the running game */
+    loadCity(d) {
+      if (!validSave(INV_FIX(d))) return false;
+      if (!loadGame(d)) return false;
+      document.querySelectorAll('.modal').forEach(m => { m.hidden = true; }); modalOpen = false;
+      running = true; refreshHud(); layout(); saveGame();
+      return true;
+    },
+    startCity(dk) {
+      document.querySelectorAll('.modal').forEach(m => { m.hidden = true; }); modalOpen = false;
+      resetGame(dk || startDiff); running = true; refreshHud(); layout();
+    },
+    showStart() {
+      if (spectating) this.spectate.exit(); else { running = false; }
+      showStartBest(); $('btn-resume').hidden = !hasSave(); openModal('m-start'); refreshUI();
+    },
+    toast, openModal, closeModal,
+    spectate: {
+      enter(d, meta, keepCam) {
+        const was = spectating, c0 = {x: cam.x, y: cam.y, z: cam.z, auto: cam.auto};
+        spectating = true; $('app').classList.add('spectating');
+        if (!validSave(INV_FIX(d)) || !loadGame(d)) { if (!was) this.exit(); return false; }
+        spectating = true;                                   // loadGame resets state; stay in view mode
+        document.querySelectorAll('.modal').forEach(m => { m.hidden = true; }); modalOpen = false;
+        $('menu').hidden = true; tool = 'select'; closeInspector();
+        if (keepCam) Object.assign(cam, c0);
+        applyMeta(meta); refreshHud(); layout(); renderGoals();
+        return true;
+      },
+      /* same layout as last time: just bring the numbers and timers up to date, keep the moving traffic */
+      patch(d, meta) {
+        if (!spectating) return;
+        score = d.score; week = d.week; weekTimer = d.weekTimer; money = d.money !== undefined ? d.money : money;
+        houseTimer = d.houseTimer; storeTimer = d.storeTimer; clock = Math.max(clock, d.clock);
+        if (d.inv) inv = INV_FIX(d).inv;
+        if (d.stats) Object.assign(stats, d.stats);
+        goalsDone = new Set(d.goals || []);
+        rush.t = Math.max(0, +d.rushT || 0); rain.t = Math.max(0, +d.rainT || 0);
+        closed = new Map((d.closures || []).filter(([k]) => road[k]).map(([k, t]) => [k, t]));
+        d.buildings.forEach((o, i) => { const b = buildings[i]; if (b) { b.pins = o.pins; b.timer = o.timer || 0; } });
+        applyMeta(meta); renderGoals();
+      },
+      exit() {
+        if (!spectating) return;
+        spectating = false; $('app').classList.remove('spectating');
+        resetGame('standard'); running = false; closeInspector();
+        showStartBest(); $('btn-resume').hidden = !hasSave(); openModal('m-start'); refreshUI(); layout();
+      }
+    }
+  };
+})();
