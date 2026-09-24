@@ -5269,20 +5269,31 @@ function syncFullscreen() {
   setTimeout(layout, 80);
 }
 
-/* ---------------------------------------------------------- feedback */
+/* ---------------------------------------------------------- feedback
+   Sent from the page itself (online.js): guests' notes land in Firestore under
+   feedback/{bugs|ideas|other}/entries, signed-in accounts are emailed to support by a Cloud Function. */
 const FEEDBACK_TO = 'support.jamesnortinen@gmail.com';
-let fbKind = 'Bug';
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+let fbKind = 'Bug', fbBusy = false;
 function openFeedback() {
   $('fb-err').textContent = '';
+  const on = window.JunctionOnline, who = on && on.feedbackIdentity ? on.feedbackIdentity() : null;
+  const acct = !!(who && who.account);
+  $('fb-reply-wrap').hidden = acct;
+  $('fb-as').hidden = !acct;
+  if (acct) {
+    const as = $('fb-as'); as.textContent = '';
+    as.append('Sending from ', Object.assign(document.createElement('b'), {textContent: who.email}), ' \u2014 replies go to that address.');
+  }
   openModal('m-feedback');
   setTimeout(() => { const t = $('fb-text'); if (t && !compactUI()) t.focus(); }, 60);
 }
 function feedbackDetails() {
-  const lines = ['', '\u2014', 'Junction ' + (($('menu').querySelector('.ver') || {}).textContent || '').replace(/^Junction\s*/, ''),
+  const lines = ['Junction ' + (($('menu').querySelector('.ver') || {}).textContent || '').replace(/^Junction\s*/, ''),
     'Screen: ' + window.innerWidth + '\u00d7' + window.innerHeight + ' @' + (window.devicePixelRatio || 1) + 'x' + (compactUI() ? ' (mobile layout)' : ''),
     'Browser: ' + navigator.userAgent];
   if (started) lines.push('Game: ' + (tutorialMode ? 'tutorial step ' + (tutStage + 1) : (DIFF.label || diffKey) + ', week ' + week + ', ' + score + ' parcels'));
-  return lines.join('\n');
+  return lines.join('\n').slice(0, 1900);
 }
 function bindFeedback() {
   document.querySelectorAll('#fb-kind button').forEach(b => b.addEventListener('click', () => {
@@ -5290,21 +5301,25 @@ function bindFeedback() {
     document.querySelectorAll('#fb-kind button').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
   }));
   $('fb-close').addEventListener('click', () => closeModal('m-feedback'));
-  $('fb-send').addEventListener('click', () => {
-    const msg = $('fb-text').value.trim();
-    if (msg.length < 3) { $('fb-err').textContent = 'Write a few words first.'; return; }
-    const body = msg + ($('fb-device').checked ? '\n' + feedbackDetails() : '');
-    const url = 'mailto:' + FEEDBACK_TO + '?subject=' + encodeURIComponent('Junction ' + fbKind.toLowerCase() + ' report') + '&body=' + encodeURIComponent(body);
-    const a = document.createElement('a'); a.href = url; a.rel = 'noopener'; a.style.display = 'none'; document.body.append(a); a.click(); a.remove();
-    $('fb-err').textContent = '';
-    setTimeout(() => { closeModal('m-feedback'); $('fb-text').value = ''; toast('Thanks! If no email app opened, use Copy address and email us directly.', 'good'); }, 400);
-  });
-  $('fb-copy').addEventListener('click', async () => {
-    let ok = false;
-    try { await navigator.clipboard.writeText(FEEDBACK_TO); ok = true; } catch (e) {
-      try { const t = document.createElement('textarea'); t.value = FEEDBACK_TO; document.body.append(t); t.select(); ok = document.execCommand('copy'); t.remove(); } catch (e2) {}
-    }
-    $('fb-err').textContent = ok ? 'Copied: ' + FEEDBACK_TO : FEEDBACK_TO;
+  $('fb-send').addEventListener('click', async () => {
+    if (fbBusy) return;
+    const err = $('fb-err'), btn = $('fb-send');
+    const message = $('fb-text').value.trim();
+    if (message.length < 3) { err.textContent = 'Write a few words first.'; return; }
+    const on = window.JunctionOnline;
+    if (!on || !on.sendFeedback || !on.feedbackReady) { err.textContent = 'Feedback needs a connection. Try again in a moment, or email ' + FEEDBACK_TO + '.'; return; }
+    const replyTo = $('fb-reply-wrap').hidden ? '' : $('fb-reply').value.trim();
+    if (replyTo && !EMAIL_RE.test(replyTo)) { err.textContent = 'That email address doesn\u2019t look right \u2014 fix it or leave it blank.'; return; }
+    fbBusy = true; btn.disabled = true; btn.textContent = 'Sending\u2026'; err.textContent = '';
+    try {
+      const via = await on.sendFeedback({kind: fbKind, message, details: $('fb-device').checked ? feedbackDetails() : '', replyTo});
+      closeModal('m-feedback'); $('fb-text').value = '';
+      toast(via === 'email' ? 'Thanks! Sent to support \u2014 we\u2019ll reply to your account email.'
+        : replyTo ? 'Thanks! Feedback sent \u2014 we\u2019ll reply to ' + replyTo + '.' : 'Thanks! Feedback sent.', 'good');
+    } catch (e) {
+      console.warn('Feedback failed:', e);
+      err.textContent = (e && e.userMessage) || 'Couldn\u2019t send that just now. Check your connection and try again.';
+    } finally { fbBusy = false; btn.disabled = false; btn.textContent = 'Send'; }
   });
 }
 
