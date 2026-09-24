@@ -34,6 +34,7 @@
         </div>
         <div class="stat" data-tip="Cars on the road" data-sub="Driving now, out of every car in the city"><small class="lbl"><svg class="si" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 16V11l2-5h10l2 5v5M5 16h14M5 16v2M19 16v2M5 11h14"/></svg>Cars out</small><b id="v-cars" class="num">0/0</b></div>
         <div class="stat" id="v-day" data-night="0" data-tip="Time of day"><small class="lbl"><svg class="si" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>Time</small><b id="v-clock" class="num">12:00</b></div>
+        <button class="minbtn" type="button" data-min="stats" aria-label="Shrink the stats bar" title="Shrink or grow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path class="mi-h" d="M6 12h12"/><path class="mi-v" d="M12 6v12"/></svg></button>
       </div>
 
       <div class="chips">
@@ -59,6 +60,7 @@
         <button class="cbtn" id="btn-theme" type="button" title="Light or dark (T)" aria-label="Switch theme"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 010 16z" fill="currentColor"/></svg></button>
         <button class="cbtn" id="btn-menu" type="button" title="Settings" aria-label="Settings" aria-expanded="false" aria-controls="menu"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg></button>
         <button class="cbtn" id="btn-help" type="button" title="How to play (?)" aria-label="How to play"><b>?</b></button>
+        <button class="minbtn" type="button" data-min="ctrl" aria-label="Shrink the controls" title="Shrink or grow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path class="mi-h" d="M6 12h12"/><path class="mi-v" d="M12 6v12"/></svg></button>
         <button class="cbtn" id="btn-panel" type="button" title="Show or hide the side panel" aria-label="Side panel"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg></button>
       </div>
 
@@ -79,6 +81,19 @@
             <button class="act" id="btn-watch" type="button">Watch a player</button>
             <button class="act" id="btn-account" type="button">Account</button>
           </div>
+        </section>
+        <section class="msec">
+          <h4>Layout</h4>
+          <div class="seg laypre" id="lay-pre" role="group" aria-label="Layout">
+            <button type="button" data-pre="full">Full</button>
+            <button type="button" data-pre="compact">Compact</button>
+            <button type="button" data-pre="minimal">Minimal</button>
+          </div>
+          <label class="tgl"><input type="checkbox" id="lay-stats"><span>Small stats bar</span></label>
+          <label class="tgl"><input type="checkbox" id="lay-ctrl"><span>Small controls</span></label>
+          <label class="tgl"><input type="checkbox" id="lay-dock"><span>Tools as icons only</span></label>
+          <label class="tgl"><input type="checkbox" id="lay-panel"><span>Side panel</span></label>
+          <p class="mnote" id="lay-note">Saved separately for phones and bigger screens. The <b>–</b> buttons on each bar do the same.</p>
         </section>
         <section class="msec">
           <h4>Display</h4>
@@ -129,6 +144,7 @@
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 15h18M5 15v-4M9 15v-4M15 15v-4M19 15v-4M3 19c3-2 6-2 9 0s6 2 9 0"/></svg>
         <b id="v-bridge">1</b>
       </div>
+      <button class="minbtn" type="button" data-min="dock" aria-label="Shrink the tools" title="Icons only or with names"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path class="mi-h" d="M6 12h12"/><path class="mi-v" d="M12 6v12"/></svg></button>
     </nav>
     <div class="plate signbar" id="signs" hidden></div>
 
