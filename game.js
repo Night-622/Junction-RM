@@ -36,7 +36,7 @@ const CONFIG = {
 
   // spawning
   houseIntervalBase:  80,  houseIntervalRamp: 1.1,  houseIntervalMin: 24,  houseJitter: 16,  firstHouseDelay: 28,
-  storeIntervalBase:  54,  storeIntervalRamp: 0.8,  storeIntervalMin: 30,  storeJitter: 8, firstStoreDelay: 12,
+  storeIntervalBase:  38,  storeIntervalRamp: 0.8,  storeIntervalMin: 30,  storeJitter: 8, firstStoreDelay: 12,
   newColourChance:    0.8,
   housesOnStoreSpawn: 1,       // houses of the same colour that appear when a new store opens
   housesOnStoreTierUp:2,       // houses of the same colour that appear when a store tiers up (gets busier)
@@ -1772,6 +1772,7 @@ const TUT_GATES = [
 const TUT_ENTER = {1: () => tutSpawnAmber(), 3: () => tutSpawnBlue(), 4: () => tutSpawnGreen(), 6: () => tutSpawnTeal()};
 function tutGoto(n) {
   tutStage = n; tutLive = null;
+  if (n >= TUT_STEPS.length) awardAch('tutorial');
   const f = TUT_ENTER[n]; if (f) f();
   renderTutorialPanel();
 }
@@ -2895,8 +2896,6 @@ const GOALS = [
   {id: 'p50',   name: 'The city is working', hint: 'Deliver 50 parcels',                hit: () => score >= 50,   reward: {cash: 25}},
   {id: 'p150',  name: 'Good business',       hint: 'Deliver 150 parcels',               hit: () => score >= 150,  reward: {inv: {light: 1}}},
   {id: 'p400',  name: 'Remarkable',          hint: 'Deliver 400 parcels',               hit: () => score >= 400,  reward: {inv: {moto: 1}}},
-  {id: 'w5',    name: 'Five weeks in',       hint: 'Reach week 5',                      hit: () => week >= 5,     reward: {inv: {road: 10}}},
-  {id: 'w10',   name: 'A proper town',       hint: 'Reach week 10',                     hit: () => week >= 10,    reward: {inv: {light: 1, round: 1}}},
   {id: 'bay',   name: 'Off the road',        hint: 'Have a car wait in a bay',          hit: () => cars.some(c => c.loc && c.loc.t === 'bay' && c.state === 'parked'), reward: {cash: 15}},
   {id: 'lot',   name: 'Room to park',        hint: 'Build a parking lot',               hit: () => parks.length > 0, reward: {cash: 15}},
   {id: 'moto',  name: 'Fast lane',           hint: 'Open a motorway',                   hit: () => motorways.length > 0, reward: {inv: {bridge: 1}}},
@@ -3165,9 +3164,11 @@ function saveLife() {
 function setLifeOwner(uid) {
   if (uid === lifeOwner) return;
   lifeTick(0); if (lifeDirty) saveLife();
-  const loose = lifeOwner ? null : life;
-  lifeOwner = uid || ''; life = readLife(lifeOwner);
+  const loose = lifeOwner ? null : life, looseAch = lifeOwner ? null : ach;
+  lifeOwner = uid || ''; life = readLife(lifeOwner); ach = readAch(lifeOwner);
   if (loose && !lifeEmpty(loose)) { mergeLife(loose, true); try { localStorage.removeItem(LIFE_KEY); } catch (e) {} }
+  if (looseAch && Object.keys(looseAch).length) { mergeAch(looseAch); try { localStorage.removeItem(ACH_KEY); } catch (e) {} }
+  JEvents.emit('ach', {});
   lifeSnap = null; saveLife();
 }
 /* add (sum) or take the higher value (max) of another copy, e.g. the cloud copy */
@@ -3190,6 +3191,84 @@ function lifeTick(realDt) {
   lifeMark(); if (playing || realDt === 0) lifeDirty = true;
 }
 window.addEventListener('pagehide', () => { lifeTick(0); if (lifeDirty) saveLife(); });
+
+/* ------------------------------------------------------------ achievements
+   Lifetime badges with no in-game reward — just bragging rights. Unlock every one and your
+   name gets three stars. Kept per player like the lifetime stats (and synced by online.js). */
+const cntSpecial = t => { let n = 0; for (const s of special) if (s === t) n++; return n; };
+const inMode = m => diffKey === m;
+const ACH = [
+  // weeks
+  {id: 'w5',  g: 'Weeks', name: 'Five weeks in',   hint: 'Reach week 5 in one city',  hit: () => week >= 5},
+  {id: 'w10', g: 'Weeks', name: 'A proper town',   hint: 'Reach week 10 in one city', hit: () => week >= 10},
+  {id: 'w15', g: 'Weeks', name: 'Built to last',   hint: 'Reach week 15 in one city', hit: () => week >= 15},
+  {id: 'w20', g: 'Weeks', name: 'Metropolis',      hint: 'Reach week 20 in one city', hit: () => week >= 20},
+  {id: 'w30', g: 'Weeks', name: 'Eternal city',    hint: 'Reach week 30 in one city', hit: () => week >= 30},
+  // parcels and money in one city
+  {id: 'p500',  g: 'One city', name: 'Parcel pusher',    hint: 'Deliver 500 parcels in one city',   hit: () => score >= 500},
+  {id: 'p1000', g: 'One city', name: 'Four figures',     hint: 'Deliver 1,000 parcels in one city', hit: () => score >= 1000},
+  {id: 'p2500', g: 'One city', name: 'Logistics legend', hint: 'Deliver 2,500 parcels in one city', hit: () => score >= 2500},
+  {id: 'e5k',   g: 'One city', name: 'Deep pockets',     hint: 'Earn $5,000 in one city',           hit: () => stats.earned >= 5000},
+  {id: 'e25k',  g: 'One city', name: 'Tycoon',           hint: 'Earn $25,000 in one city',          hit: () => stats.earned >= 25000},
+  {id: 'goals', g: 'One city', name: 'Completionist',    hint: 'Finish every goal in one city',     hit: () => goalsDone.size >= GOALS.length},
+  {id: 'speed', g: 'One city', name: 'Speedrunner',      hint: 'Finish every goal within 30 minutes of game time', hit: () => goalsDone.size >= GOALS.length && clock <= 1800},
+  // building
+  {id: 'cars30', g: 'Building', name: 'Rush hour regular', hint: 'Have 30 cars in one city',       hit: () => cars.length >= 30},
+  {id: 'moto3',  g: 'Building', name: 'Highway network',   hint: 'Have 3 motorways at once',       hit: () => motorways.length >= 3},
+  {id: 'round5', g: 'Building', name: 'Roundabout fan',    hint: 'Have 5 roundabouts at once',     hit: () => cntSpecial('round') >= 5},
+  {id: 'light8', g: 'Building', name: 'Signal box',        hint: 'Have 8 traffic lights at once',  hit: () => cntSpecial('light') >= 8},
+  {id: 'clock',  g: 'Building', name: 'Clockwork',         hint: 'Keep 25+ cars moving with no jams', hit: () => cars.filter(c => c.state === 'driving').length >= 25 && stats.jamPct < 0.05},
+  {id: 'tow10',  g: 'Building', name: 'Tow fleet',         hint: 'Rescue 10 cars with tow trucks in one city', hit: () => stats.tows >= 10},
+  {id: 'amb10',  g: 'Building', name: 'Blue lights',       hint: 'Get 10 ambulances there on time in one city', hit: () => (stats.ambOk || 0) >= 10},
+  // modes
+  {id: 'frantic10',  g: 'Modes', name: 'Nerves of steel', hint: 'Reach week 10 on Frantic',          hit: () => inMode('frantic') && week >= 10},
+  {id: 'frantic500', g: 'Modes', name: 'Under pressure',  hint: 'Deliver 500 parcels on Frantic',    hit: () => inMode('frantic') && score >= 500},
+  {id: 'chill15',    g: 'Modes', name: 'Easy does it',    hint: 'Reach week 15 on Relaxed',          hit: () => inMode('chill') && week >= 15},
+  {id: 'zen1h',      g: 'Modes', name: 'Zen master',      hint: 'Play one Zen city for an hour of game time', hit: () => inMode('zen') && clock >= 3600},
+  {id: 'allmodes',   g: 'Modes', name: 'Well rounded',    hint: 'Play a city on every mode',         life: L => Object.keys(DIFFS).every(m => L[m].cities > 0)},
+  // lifetime
+  {id: 'cities10',  g: 'Lifetime', name: 'Urban planner',  hint: 'Start 10 cities',                 life: L => lifeSum(L, 'cities') >= 10},
+  {id: 'cities50',  g: 'Lifetime', name: 'Serial builder', hint: 'Start 50 cities',                 life: L => lifeSum(L, 'cities') >= 50},
+  {id: 'parcels10k', g: 'Lifetime', name: 'Ten thousand',  hint: 'Deliver 10,000 parcels all time', life: L => lifeSum(L, 'parcels') >= 10000},
+  {id: 'parcels50k', g: 'Lifetime', name: 'Parcel empire', hint: 'Deliver 50,000 parcels all time', life: L => lifeSum(L, 'parcels') >= 50000},
+  {id: 'hours10',   g: 'Lifetime', name: 'Dedicated',      hint: 'Play for 10 hours',               life: L => lifeSum(L, 'playSec') >= 36000},
+  {id: 'earned100k', g: 'Lifetime', name: 'Millionaire in training', hint: 'Earn $100,000 all time', life: L => lifeSum(L, 'earned') >= 100000},
+  // community
+  {id: 'tutorial', g: 'Community', name: 'Graduate',      hint: 'Finish the tutorial'},
+  {id: 'account',  g: 'Community', name: 'Here to stay',  hint: 'Make a permanent account'},
+  {id: 'watcher',  g: 'Community', name: 'Spectator',     hint: 'Watch another player\u2019s city live'},
+  {id: 'feedback', g: 'Community', name: 'Helping hand',  hint: 'Send feedback to the developer'}
+];
+const ACH_KEY = 'junction-ach-v1';
+const lifeSum = (L, f) => Object.values(L).reduce((a, m) => a + (m[f] || 0), 0);
+let ach = readAch(lifeOwner);
+function readAch(owner) { try { return cleanAch(JSON.parse(localStorage.getItem(ACH_KEY + (owner ? ':' + owner : '')))); } catch (e) { return {}; } }
+function cleanAch(d) { const o = {}; if (d && typeof d === 'object') for (const a of ACH) if (+d[a.id] > 0) o[a.id] = +d[a.id]; return o; }
+function saveAch() { try { localStorage.setItem(ACH_KEY + (lifeOwner ? ':' + lifeOwner : ''), JSON.stringify(ach)); } catch (e) {} JEvents.emit('ach', {}); }
+const achDone = () => ACH.filter(a => ach[a.id]).length;
+function awardAch(id, quiet) {
+  const a = ACH.find(x => x.id === id); if (!a || ach[id]) return false;
+  ach[id] = Date.now(); saveAch();
+  if (!quiet) {
+    toast('Achievement unlocked: ' + a.name, 'good'); sfx('upgrade');
+    if (achDone() === ACH.length) setTimeout(() => toast('Every achievement unlocked \u2014 your name now has \u2605\u2605\u2605', 'good'), 1600);
+  }
+  return true;
+}
+function mergeAch(other) {
+  const o = cleanAch(other); let changed = false;
+  for (const id in o) if (!ach[id] || o[id] < ach[id]) { ach[id] = o[id]; changed = true; }
+  if (changed) saveAch();
+}
+function checkAch() {
+  if (!started || tutorialMode || spectating || !stats) return;
+  for (const a of ACH) {
+    if (ach[a.id]) continue;
+    let ok = false;
+    try { ok = a.life ? a.life(life) : a.hit ? (!over && a.hit()) : false; } catch (e) {}
+    if (ok) awardAch(a.id);
+  }
+}
 
 /* ------------------------------------------------------------ saving */
 const SAVE_KEY = 'junction2-save-v1';
@@ -3291,7 +3370,7 @@ function loadGameCore(data) {
     rebuildNet();
     if (d.juncLvl) for (const [k, l, sp] of d.juncLvl) if (nodes[k]) { nodes[k].lvl = clamp(l | 0, 0, CFG.junctionUpgradeMax); nodes[k].spent = +sp || 0; }
     for (const c of cars) { const p = parkedPose(c); c.x = p.x; c.y = p.y; c.ang = p.a; }
-    goalsDone = new Set(d.goals || []);
+    goalsDone = new Set((d.goals || []).filter(id => GOALS.some(g => g.id === id)));   // week goals moved to achievements
     Object.assign(stats, d.stats || {});
     rush = {t: Math.max(0, +d.rushT || 0)};
     const rt = Math.max(0, +d.rainT || 0); rain = {t: rt, amt: rt > 0 ? 1 : 0};
@@ -5414,7 +5493,7 @@ function bindFeedback() {
     fbBusy = true; btn.disabled = true; btn.textContent = 'Sending\u2026'; err.textContent = '';
     try {
       const via = await on.sendFeedback({kind: fbKind, message, details: $('fb-device').checked ? feedbackDetails() : '', replyTo});
-      closeModal('m-feedback'); $('fb-text').value = '';
+      closeModal('m-feedback'); $('fb-text').value = ''; awardAch('feedback');
       toast(via === 'email' ? 'Thanks! Sent to support \u2014 we\u2019ll reply to your account email.'
         : replyTo ? 'Thanks! Feedback sent \u2014 we\u2019ll reply to ' + replyTo + '.' : 'Thanks! Feedback sent.', 'good');
     } catch (e) {
@@ -5478,7 +5557,7 @@ function frame(now) {
   if (accMini > 0.25) { accMini = 0; drawMini(); }
   if (accIns > 0.25 && sel) { accIns = 0; renderInspector(); }
   accLife += real;
-  if (accLife > 1) { lifeTick(accLife); accLife = 0; }
+  if (accLife > 1) { lifeTick(accLife); accLife = 0; checkAch(); }
   accLifeSave += real;
   if (accLifeSave > 20) { accLifeSave = 0; if (lifeDirty) saveLife(); }
 }
@@ -5532,7 +5611,9 @@ if (typeof window !== 'undefined' && (location.hostname === 'localhost' || locat
     get startDiff() { return startDiff; },
     modes: () => Object.keys(DIFFS),
     life: () => { lifeTick(0); return JSON.parse(JSON.stringify(life)); },
-    setLifeOwner, mergeLife(d) { mergeLife(d, false); saveLife(); }, get tipsOn() { return tipsOn; },
+    setLifeOwner, mergeLife(d) { mergeLife(d, false); saveLife(); },
+    achList: () => ACH.map(a => ({id: a.id, g: a.g, name: a.name, hint: a.hint})),
+    ach: () => Object.assign({}, ach), achAll: () => achDone() === ACH.length, awardAch, mergeAch, get tipsOn() { return tipsOn; },
     diffLabel(k) { return (DIFFS[k] && DIFFS[k].label) || k; },
     serialize,
     state() {
