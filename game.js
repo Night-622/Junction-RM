@@ -5427,7 +5427,7 @@ if (typeof window !== 'undefined' && (location.hostname === 'localhost' || locat
     diffLabel(k) { return (DIFFS[k] && DIFFS[k].label) || k; },
     serialize,
     state() {
-      return {started, over, tutorialMode, spectating, running: running && !modalOpen, speed, score, week, diffKey, clock, goals: goalsDone.size,
+      return {started, over, tutorialMode, spectating, running: running && !modalOpen, speed, score, week, diffKey, clock, goals: goalsDone.size, earned: stats.earned,
         atMenu: !$('m-start').hidden};
     },
     saveNow() { saveGame(true);
