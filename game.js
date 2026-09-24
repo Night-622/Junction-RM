@@ -35,7 +35,7 @@ const CONFIG = {
   startStores:        1,
 
   // spawning
-  houseIntervalBase:  70,  houseIntervalRamp: 1.1,  houseIntervalMin: 24,  houseJitter: 16,  firstHouseDelay: 28,
+  houseIntervalBase:  80,  houseIntervalRamp: 1.1,  houseIntervalMin: 24,  houseJitter: 16,  firstHouseDelay: 28,
   storeIntervalBase:  54,  storeIntervalRamp: 0.8,  storeIntervalMin: 30,  storeJitter: 8, firstStoreDelay: 12,
   newColourChance:    0.8,
   housesOnStoreSpawn: 1,       // houses of the same colour that appear when a new store opens
