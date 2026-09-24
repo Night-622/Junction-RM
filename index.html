@@ -407,16 +407,17 @@
     <div class="modal" id="m-feedback" hidden>
       <div class="card plate">
         <h2>Send feedback</h2>
-        <p class="lead">Tell us what broke, what felt off, or what you'd love to see. This opens your email app with the message ready to send to <b>support.jamesnortinen@gmail.com</b>.</p>
+        <p class="lead">Tell us what broke, what felt off, or what you'd love to see. It sends straight from here — no email app needed.</p>
         <div class="seg fbkind" id="fb-kind" role="group" aria-label="Feedback type">
           <button type="button" data-kind-fb="Bug" aria-pressed="true">Bug</button><button type="button" data-kind-fb="Idea" aria-pressed="false">Idea</button><button type="button" data-kind-fb="Other" aria-pressed="false">Other</button>
         </div>
         <label class="field"><span>Your message</span><textarea id="fb-text" rows="5" maxlength="1500" placeholder="What happened, and what did you expect?"></textarea></label>
+        <label class="field" id="fb-reply-wrap"><span>Email for a reply <small>(optional)</small></span><input id="fb-reply" type="email" maxlength="254" autocomplete="email" spellcheck="false" placeholder="you@example.com"></label>
+        <p class="mini fbas" id="fb-as" hidden></p>
         <label class="tgl"><input type="checkbox" id="fb-device" checked><span>Include device and game details (helps with bugs)</span></label>
         <p class="formerr" id="fb-err" role="alert"></p>
         <div class="btnrow">
-          <button class="bigbtn" id="fb-send" type="button">Open email</button>
-          <button class="bigbtn ghost" id="fb-copy" type="button">Copy address</button>
+          <button class="bigbtn" id="fb-send" type="button">Send</button>
           <button class="bigbtn ghost" id="fb-close" type="button">Cancel</button>
         </div>
       </div>
