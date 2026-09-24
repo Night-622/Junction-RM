@@ -859,3 +859,90 @@ ol.board b{font-weight:800}
   #tut-panel.min .tut-head h3{justify-content:flex-start;gap:10px}
   #tut-coach.has-live:not(.full) #tc-body{display:none}
 }
+
+/* =====================================================================
+   LAYOUT: every bar can shrink (the – / + buttons, or Settings → Layout),
+   plus tighter spacing on short laptops and phones held sideways.
+   ===================================================================== */
+.minbtn{flex:none;align-self:center;width:26px;height:26px;margin-left:4px;border-radius:7px;display:grid;place-items:center;color:var(--soft);background:rgba(255,255,255,.06);cursor:pointer;border:0}
+.minbtn:hover{color:var(--ink);background:rgba(255,255,255,.12)}
+.minbtn svg{width:13px;height:13px}
+.minbtn .mi-v{display:none}
+#app.lay-stats-mini .minbtn[data-min="stats"] .mi-v,#app.lay-ctrl-mini .minbtn[data-min="ctrl"] .mi-v,#app.lay-dock-icons .minbtn[data-min="dock"] .mi-v{display:inline}
+#dock .minbtn{margin:2px 0 0}
+
+/* small stats: parcels, cash and time left in the week */
+#app.lay-stats-mini .stats{padding:4px 4px}
+#app.lay-stats-mini .stats .stat:not(.big):not(.money):not(.weekstat){display:none}
+#app.lay-stats-mini .stats .stat .lbl,#app.lay-stats-mini .stats .stat .sub,#app.lay-stats-mini .stats .meter,#app.lay-stats-mini #v-weekleft{display:none}
+#app.lay-stats-mini .stats .stat{padding:0 10px;min-width:0;justify-content:center}
+#app.lay-stats-mini .stats .stat b{font-size:16px}
+#app.lay-stats-mini .stats .stat.big b{font-size:19px}
+#app.lay-stats-mini .stats .weekstat,#app.lay-stats-mini .stats .jamstat{min-width:0}
+
+/* small controls: pause, speed, undo, settings and the panel switch */
+#app.lay-ctrl-mini .controls>:not(#btn-play):not(#speed-seg):not(#btn-undo):not(#btn-menu):not(#btn-panel):not(.minbtn){display:none}
+#app.lay-ctrl-mini .controls{padding:4px 6px}
+
+/* icon-only tools */
+#app.lay-dock-icons .tool span,#app.lay-dock-icons .tool kbd{display:none}
+#app.lay-dock-icons #dock{width:56px;padding:8px 5px}
+#app.lay-dock-icons .tool{padding:8px 0 6px}
+#app.lay-dock-icons .tool .n{top:-1px;right:-2px;transform:scale(.9)}
+
+.laypre{margin:2px 0 8px}
+.laypre button{flex:1}
+.laypre button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+
+/* short laptop screens: tighter everything */
+@media (min-width:821px) and (max-height:800px){
+  #topbar{top:8px}
+  .stats{padding:5px 5px}
+  .stat b{font-size:16.5px}
+  .stat.big b{font-size:21px}
+  .stat .sub{display:none}
+  .controls{padding:4px 6px}
+  .cbtn{height:30px;min-width:30px}
+  #dock{padding:8px 5px;gap:5px}
+  .tools{gap:3px}
+  .tool{padding:5px 0 3px}
+  #panel{padding:10px 10px 8px}
+  .minibox canvas{max-height:170px}
+}
+@media (min-width:821px) and (max-height:680px){
+  #panel{width:260px}
+  .minibox{display:none}
+}
+/* phones held sideways: short and wide */
+@media (min-width:600px) and (max-height:500px){
+  #topbar{top:6px;left:8px;right:8px;gap:6px}
+  .plate{border-radius:11px}
+  .stat .lbl{display:none}
+  .stats .meter{height:3px}
+  #dock{left:8px;max-height:calc(100% - var(--top) - 6px)}
+  #panel{width:250px;right:8px;bottom:8px}
+  .minibox{display:none}
+  #hint{bottom:8px;font-size:12px;padding:6px 10px}
+  .toasts{transform:scale(.9);transform-origin:top center}
+  .signbar{bottom:10px}
+}
+/* phones upright */
+@media (max-width:820px){
+  #app.lay-dock-icons .tool{min-width:48px;padding:7px 0 5px}
+  #app.lay-dock-icons #dock{width:auto;padding:6px 6px}
+  #dock .minbtn{margin:0 0 0 4px;align-self:center}
+  #app.lay-stats-mini .stats{flex:0 1 auto}
+}
+@media (max-width:560px){
+  #app.lay-ctrl-mini #speed-seg button[data-speed="0.5"]{display:none}
+  #app.lay-stats-mini .stats .stat{padding:0 8px}
+}
+/* the stats bar's shrink button stays in reach even when the full bar scrolls sideways on a phone */
+.stats .minbtn{position:sticky;right:0;box-shadow:-8px 0 8px var(--plate);background:var(--plate)}
+.stats .minbtn::before{content:"";position:absolute;inset:0;border-radius:7px;background:rgba(255,255,255,.06)}
+/* phones: the full stats bar becomes a tidy grid across the top instead of a strip that scrolls */
+@media (max-width:820px){
+  #app:not(.lay-stats-mini) #topbar .stats{flex:1 1 100%;display:grid;grid-template-columns:repeat(3,1fr);row-gap:6px;overflow:visible;position:relative;padding:8px 36px 8px 4px}
+  #app:not(.lay-stats-mini) #topbar .stats .stat{border-left:0;padding:0 8px;min-width:0}
+  #app:not(.lay-stats-mini) #topbar .stats .minbtn{position:absolute;top:8px;right:6px;box-shadow:none}
+}
