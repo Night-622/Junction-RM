@@ -20,7 +20,9 @@ import { getAnalytics, isSupported } from 'https://www.gstatic.com/firebasejs/12
 import {
   getAuth, onAuthStateChanged, signInAnonymously, signOut,
   GoogleAuthProvider, EmailAuthProvider, linkWithPopup, linkWithCredential,
-  signInWithPopup, signInWithCredential, signInWithEmailAndPassword, createUserWithEmailAndPassword
+  signInWithPopup, signInWithCredential, signInWithEmailAndPassword, createUserWithEmailAndPassword,
+  reauthenticateWithCredential, reauthenticateWithPopup, updatePassword, sendPasswordResetEmail,
+  sendEmailVerification, deleteUser
 } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js';
 import {
   getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs, query, orderBy, limit,
@@ -89,6 +91,9 @@ function friendlyAuthError(e) {
   if (c.includes('popup-blocked')) return 'Your browser blocked the sign-in window. Allow pop-ups and try again.';
   if (c.includes('operation-not-allowed')) return 'That sign-in method isn\u2019t switched on for this game yet.';
   if (c.includes('network')) return 'You look offline. Check your connection.';
+  if (c.includes('requires-recent-login')) return 'For safety, sign in again first (enter your password or reconnect Google).';
+  if (c.includes('too-many-requests')) return 'Too many tries. Wait a minute and try again.';
+  if (c.includes('provider-already-linked') || c.includes('credential-already-in-use')) return 'That sign-in is already linked to an account.';
   return (e && e.message) || 'Something went wrong.';
 }
 function openM(id) { API.openModal(id); }
@@ -102,9 +107,11 @@ onAuthStateChanged(auth, async user => {
     return;
   }
   if (O.user && O.user.uid !== user.uid) { O.slot = null; O.lastSaveStr = ''; O.best = emptyBest(); }
-  O.user = user; O.nameLost = false;
+  O.user = user; O.nameLost = false; O.lifeLoaded = false;
+  API.setLifeOwner(user.uid);
   try {
     await loadProfile();
+    loadLife();
     if (O.pendingName && isPerm() && !(O.profile && O.profile.name)) await claimName(O.pendingName);
     await keepGuestName();
   } catch (e) { console.warn(e); }
@@ -175,7 +182,7 @@ async function keepGuestName() {
 async function claimName(name) {
   if (!NAME_RE.test(name || '')) throw new Error('Type the username you want to keep.');
   const lower = name.toLowerCase(), uid = O.user.uid;
-  const oldLower = O.profile && !O.profile.star && O.profile.nameLower;
+  const oldLower = O.profile && O.profile.nameLower;
   await O.user.getIdToken(true);                  // make sure the token already says "permanent account"
   try {
     await runTransaction(db, async tx => {
@@ -183,7 +190,7 @@ async function claimName(name) {
       const old = oldLower && oldLower !== lower ? await tx.get(nameRef(oldLower)) : null;
       if (!nameFreeFor(u, uid)) throw new Error(TAKEN);
       if (!(u.exists() && u.data().uid === uid && permRes(u.data()))) tx.set(nameRef(lower), {uid, perm: true, at: serverTimestamp()});
-      if (old && old.exists() && old.data().uid === uid && !permRes(old.data())) tx.delete(old.ref);   // release the old guest name
+      if (old && old.exists() && old.data().uid === uid) tx.delete(old.ref);   // release the old name
       tx.set(doc(db, 'users', uid), {name, nameLower: lower, star: true, updatedAt: serverTimestamp()}, {merge: true});
     });
   } catch (e) { throw takenError(e); }
@@ -201,12 +208,13 @@ async function syncBoardName() {
 }
 
 /* ------------------------------------------------------------ user modal */
-function openUserModal() {
+function openUserModal(signIn) {
+  if (!signIn && O.profile && O.profile.name && !O.nameLost && !(isPerm() && !O.profile.star)) { openAcct(); return; }
   const perm = isPerm(), hasName = !!(O.profile && O.profile.name), claimed = perm && !!(O.profile && O.profile.star);
   $('user-title').textContent = claimed ? 'Your account' : perm ? 'Pick your permanent username' : hasName ? 'Account' : 'Pick a username';
   $('user-lead').innerHTML = claimed
-    ? 'Signed in as ' + nameHTML(myName(), true) + (O.user.email ? ' (' + esc(O.user.email) + ')' : '') + '. Your name is permanent.'
-    : perm ? 'Your account is ready \u2014 choose the name you\u2019ll keep for good. It gets a \u2605 on the leaderboard.'
+    ? 'Signed in as ' + nameHTML(myName(), true) + (O.user.email ? ' (' + esc(O.user.email) + ')' : '') + '.'
+    : perm ? 'Your account is ready \u2014 choose your username. It gets a \u2605 on the leaderboard, and you can change it later.'
     : 'This is the name other players see on the leaderboard and when they watch your city.';
   $('user-name').value = hasName ? myName() : '';
   $('user-name').disabled = claimed;
@@ -244,7 +252,7 @@ $('user-guest').addEventListener('click', () => busy(null, async () => {
   closeM('m-user'); renderAccount();
   API.toast('Playing as ' + n, 'good');
 }));
-$('user-cancel').addEventListener('click', () => closeM('m-user'));
+$('user-cancel').addEventListener('click', () => { closeM('m-user'); if (O.profile && O.profile.name && !O.nameLost) openAcct(); });
 $('user-name').addEventListener('keydown', e => { if (e.key === 'Enter') $('user-guest').click(); });
 
 /* Upgrading: a guest links Google or email to the same user id, so their saves come along.
@@ -302,16 +310,197 @@ function renderAccount() {
   const sa = $('start-account');
   sa.hidden = false;
   sa.innerHTML = '<span>Playing as <b>' + nameHTML(myName(), isPerm()) + '</b>' + (isPerm() ? '' : ' <small>(guest)</small>') + '</span>' +
-    '<button class="linkbtn" type="button" id="start-acct-btn">' + (isPerm() ? 'Account' : 'Change name or sign in') + '</button>';
+    '<button class="linkbtn" type="button" id="start-acct-btn">Account</button>';
   $('start-acct-btn').addEventListener('click', () => openUserModal());
+  if (!$('m-acct').hidden) renderAcct();
   $('btn-saves').hidden = false;
   $('start-online').hidden = false;
   $('online-sec').hidden = false;
   $('acct-line').innerHTML = '<b>' + nameHTML(myName(), isPerm()) + '</b><small>' + (isPerm() ? (O.user.email || 'Permanent account') : 'Guest on this browser') + '</small>';
-  $('btn-account').textContent = isPerm() ? 'Account' : 'Sign in or upgrade';
+  $('btn-account').textContent = 'Account';
   renderLiveCode();
 }
 $('btn-account').addEventListener('click', () => { $('menu').hidden = true; openUserModal(); });
+
+/* ============================================================ ACCOUNT SCREEN
+   Profile (rename, shortcuts, upgrade or sign out), lifetime Stats, and Security for accounts
+   (email, password, linked sign-ins, delete). */
+let acctPane = 'profile', statsMode = 'all';
+const providers = () => (O.user && O.user.providerData || []).map(p => p.providerId);
+function openAcct(pane) {
+  if (!O.ready || !O.user) return;
+  $('menu').hidden = true;
+  acctPane = pane || 'profile';
+  renderAcct();
+  openM('m-acct');
+}
+function renderAcct() {
+  const perm = isPerm(), name = myName(), pv = providers();
+  $('acct-av').textContent = name.charAt(0).toUpperCase();
+  $('acct-name').innerHTML = nameHTML(name, perm);
+  const since = O.user.metadata && O.user.metadata.creationTime ? new Date(O.user.metadata.creationTime).toLocaleDateString(undefined, {year: 'numeric', month: 'short', day: 'numeric'}) : '';
+  $('acct-sub').textContent = perm
+    ? (O.user.email || 'Permanent account') + ' \u00b7 ' + (pv.includes('google.com') ? 'Google' : 'Email') + (since ? ' \u00b7 joined ' + since : '')
+    : 'Guest on this browser' + (since ? ' \u00b7 since ' + since : '');
+  $('acct-tab-sec').hidden = !perm;
+  if (!perm && acctPane === 'security') acctPane = 'profile';
+  document.querySelectorAll('#acct-tabs button').forEach(b => b.setAttribute('aria-pressed', b.dataset.pane === acctPane ? 'true' : 'false'));
+  document.querySelectorAll('#m-acct .acct-pane').forEach(p => { p.hidden = p.dataset.pane !== acctPane; });
+  // profile
+  $('acct-newname').value = name;
+  $('acct-name-note').textContent = perm
+    ? 'Your name stays yours until you change it. Changing it frees the old one for someone else.'
+    : 'Guest names free up if you don\u2019t play for 30 days. Make an account to keep it for good.';
+  $('acct-err').textContent = '';
+  $('acct-guest-box').hidden = perm;
+  $('acct-perm-box').hidden = !perm;
+  // security
+  const pw = pv.includes('password'), gg = pv.includes('google.com');
+  $('sec-email').innerHTML = O.user.email ? esc(O.user.email) + (O.user.emailVerified ? ' <span class="okline">\u2713 verified</span>' : ' <small>(not verified)</small>') : 'No email on this account';
+  $('sec-verify').hidden = !(pw && O.user.email && !O.user.emailVerified);
+  $('sec-pass-box').hidden = !pw;
+  $('sec-addpass-box').hidden = pw || !O.user.email;
+  $('sec-providers').textContent = [gg ? 'Google' : '', pw ? 'Email and password' : ''].filter(Boolean).join(' \u00b7 ') || '\u2014';
+  $('sec-link-google').hidden = gg;
+  $('sec-del-pass').hidden = !pw;
+  ['sec-err', 'sec-ok'].forEach(id => { $(id).textContent = ''; });
+  ['sec-cur', 'sec-new', 'sec-addpass', 'sec-del-name', 'sec-del-pass'].forEach(id => { $(id).value = ''; });
+  // stats
+  renderStats();
+}
+$('acct-tabs').addEventListener('click', e => { const b = e.target.closest('button[data-pane]'); if (b) { acctPane = b.dataset.pane; renderAcct(); } });
+$('acct-close').addEventListener('click', () => closeM('m-acct'));
+async function acctBusy(errId, fn) {
+  const all = document.querySelectorAll('#m-acct button'); all.forEach(b => { b.disabled = true; });
+  $(errId).textContent = ''; if (errId === 'sec-err') $('sec-ok').textContent = '';
+  try { await fn(); } catch (e) { $(errId).textContent = e.code ? friendlyAuthError(e) : e.message; }
+  finally { all.forEach(b => { b.disabled = false; }); }
+}
+$('acct-rename').addEventListener('click', () => acctBusy('acct-err', async () => {
+  const n = $('acct-newname').value.trim();
+  if (!NAME_RE.test(n)) throw new Error('Usernames are 3\u201316 characters: letters, numbers, _ or -.');
+  if (n === myName()) throw new Error('That\u2019s already your name.');
+  if (isPerm()) await claimName(n); else await saveGuestName(n);
+  renderAccount(); renderAcct();
+  API.toast('You\u2019re now ' + n + (isPerm() ? ' \u2605' : ''), 'good');
+}));
+$('acct-newname').addEventListener('keydown', e => { if (e.key === 'Enter') $('acct-rename').click(); });
+$('acct-saves').addEventListener('click', () => { closeM('m-acct'); openSaves('load'); });
+$('acct-board').addEventListener('click', () => { closeM('m-acct'); openBoard(null, currentMode()); });
+$('acct-watch').addEventListener('click', () => { closeM('m-acct'); openWatch(); });
+$('acct-feedback').addEventListener('click', () => { closeM('m-acct'); $('btn-feedback').click(); });
+$('acct-upgrade').addEventListener('click', () => { closeM('m-acct'); openUserModal(true); });
+$('acct-signout').addEventListener('click', () => acctBusy('acct-err', async () => {
+  await pushLife(true);
+  await dropLive();
+  O.profile = null; O.slot = null; O.best = emptyBest();
+  closeM('m-acct'); await signOut(auth);             // onAuthStateChanged signs in a new guest and asks for a name
+}));
+
+/* ---- security (accounts only) */
+async function reauth(pass) {
+  const pv = providers();
+  if (pv.includes('password')) {
+    if (!pass) throw new Error('Enter your password first.');
+    await reauthenticateWithCredential(O.user, EmailAuthProvider.credential(O.user.email, pass));
+  } else if (pv.includes('google.com')) {
+    await reauthenticateWithPopup(O.user, new GoogleAuthProvider());
+  }
+}
+const secOk = msg => { $('sec-ok').textContent = msg; };
+$('sec-verify').addEventListener('click', () => acctBusy('sec-err', async () => {
+  await sendEmailVerification(O.user); secOk('Verification email sent to ' + O.user.email + '.');
+}));
+$('sec-change').addEventListener('click', () => acctBusy('sec-err', async () => {
+  const cur = $('sec-cur').value, nw = $('sec-new').value;
+  if (nw.length < 6) throw new Error('Pick a new password of at least 6 characters.');
+  await reauth(cur); await updatePassword(O.user, nw);
+  $('sec-cur').value = ''; $('sec-new').value = ''; secOk('Password changed.');
+}));
+$('sec-reset').addEventListener('click', () => acctBusy('sec-err', async () => {
+  await sendPasswordResetEmail(auth, O.user.email); secOk('Reset link sent to ' + O.user.email + '.');
+}));
+$('sec-addpass-btn').addEventListener('click', () => acctBusy('sec-err', async () => {
+  const pw = $('sec-addpass').value;
+  if (pw.length < 6) throw new Error('Pick a password of at least 6 characters.');
+  try { await linkWithCredential(O.user, EmailAuthProvider.credential(O.user.email, pw)); }
+  catch (e) { if (!String(e.code).includes('requires-recent-login')) throw e; await reauth(); await linkWithCredential(O.user, EmailAuthProvider.credential(O.user.email, pw)); }
+  await O.user.reload(); O.user = auth.currentUser; renderAcct(); secOk('Password added \u2014 you can now sign in with your email too.');
+}));
+$('sec-link-google').addEventListener('click', () => acctBusy('sec-err', async () => {
+  await linkWithPopup(O.user, new GoogleAuthProvider());
+  await O.user.reload(); O.user = auth.currentUser; renderAcct(); secOk('Google linked.');
+}));
+$('sec-delete').addEventListener('click', () => acctBusy('sec-err', async () => {
+  if ($('sec-del-name').value.trim().toLowerCase() !== myName().toLowerCase()) throw new Error('Type your username exactly to confirm.');
+  await reauth($('sec-del-pass').value);
+  const uid = O.user.uid, lower = O.profile && O.profile.nameLower;
+  await dropLive(true);
+  if (O.profile && O.profile.liveCode) await deleteDoc(doc(db, 'live', O.profile.liveCode)).catch(() => {});
+  await Promise.all([
+    ...SLOTS.map(n => deleteDoc(doc(db, 'users', uid, 'saves', n)).catch(() => {})),
+    ...MODES.map(m => deleteDoc(boardRef(m, uid)).catch(() => {})),
+    deleteDoc(lifeRef(uid)).catch(() => {}),
+    deleteDoc(doc(db, 'leaderboard', uid)).catch(() => {})
+  ]);
+  if (lower) await deleteDoc(nameRef(lower)).catch(() => {});
+  await deleteDoc(doc(db, 'users', uid)).catch(() => {});
+  try { localStorage.removeItem('junction-life-v1:' + uid); } catch (e) {}
+  O.profile = null; O.slot = null; O.best = emptyBest();
+  closeM('m-acct');
+  await deleteUser(O.user);                           // onAuthStateChanged then starts a fresh guest
+  API.toast('Your account has been deleted.');
+}));
+
+/* ---- lifetime stats: shown here, kept by game.js, mirrored to users/{uid}/stats/life */
+const lifeRef = uid => doc(db, 'users', uid, 'stats', 'life');
+async function loadLife() {
+  try {
+    const s = await getDoc(lifeRef(O.user.uid));
+    if (s.exists() && s.data().modes) API.mergeLife(s.data().modes);
+  } catch (e) { console.warn('Stats load failed', e); }
+  O.lifeLoaded = true;
+  pushLife(true);
+}
+let lifePushAt = 0;
+async function pushLife(force) {
+  if (!O.lifeLoaded || !O.user) return;
+  if (!force && Date.now() - lifePushAt < 60e3) return;
+  lifePushAt = Date.now();
+  try { await setDoc(lifeRef(O.user.uid), {modes: API.life(), updatedAt: serverTimestamp()}); } catch (e) { console.warn('Stats sync failed', e); }
+}
+API.events.on('life', () => pushLife(false));
+window.addEventListener('pagehide', () => { pushLife(true); });
+
+const num = v => Math.round(v).toLocaleString();
+const dec = v => (Math.round(v * 10) / 10).toLocaleString();
+function hmLong(sec) { sec = Math.round(sec); const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60); return h ? h + 'h ' + m + 'm' : m ? m + 'm' : (sec > 0 ? '<1m' : '0m'); }
+function renderStats() {
+  const L = API.life(), modes = API.modes();
+  $('stats-modes').innerHTML = ['all'].concat(modes).map(m => '<button type="button" data-mode="' + m + '" aria-pressed="' + (m === statsMode) + '">' + (m === 'all' ? 'All modes' : esc(API.diffLabel(m))) + '</button>').join('');
+  const pick = statsMode === 'all' ? modes : [statsMode];
+  const T = {};
+  for (const m of pick) for (const k in L[m]) T[k] = /^best/.test(k) ? Math.max(T[k] || 0, L[m][k]) : (T[k] || 0) + L[m][k];
+  const c = T.cities || 0, per = v => c ? v / c : 0, zen = statsMode === 'zen';
+  const sec = (title, rows) => '<div class="sg-h">' + title + '</div>' + rows.map(([a, b]) => '<div><b>' + b + '</b><span>' + a + '</span></div>').join('');
+  $('stats-grid').innerHTML = !c && !T.playSec ? '<p class="mini">No cities played ' + (statsMode === 'all' ? 'yet' : 'on ' + esc(API.diffLabel(statsMode)) + ' yet') + ' \u2014 your stats fill in as you play.</p>' :
+    sec('Cities', [['cities started', num(c)], zen ? ['cities with every goal', num(T.allGoals)] : ['cities finished', num(T.ended)], ['time played', hmLong(T.playSec)],
+      ['average time per city', hmLong(per(T.playSec))], ['goals completed', num(T.goals)], ['average goals per city', dec(per(T.goals))]]) +
+    sec('Parcels', [['all-time parcels', num(T.parcels)], ['average parcels per city', num(per(T.parcels))], ['most in one city', num(T.bestParcels)],
+      ['parcels a minute (overall)', dec(T.playSec > 0 ? T.parcels / (T.playSec / 60) : 0)], ['trips made', num(T.trips)], ['average trips per city', num(per(T.trips))]]) +
+    sec('Weeks', [['weeks reached (total)', num(T.weeks)], ['average week reached', dec(per(T.weeks))], ['furthest week', num(T.bestWeek)]]) +
+    sec('Money', [['all-time earned', '$' + num(T.earned)], ['average earned per city', '$' + num(per(T.earned))], ['most earned in one city', '$' + num(T.bestEarned)],
+      ['all-time spent', '$' + num(T.spent)], ['average spent per city', '$' + num(per(T.spent))], ['tow truck rescues', num(T.tows)]]) +
+    sec('Trouble', [['breakdowns', num(T.breakdowns)], ['average breakdowns per city', dec(per(T.breakdowns))]].concat(zen ? [] : [['cities with every goal', num(T.allGoals)]]));
+  // time spent on each mode
+  if (statsMode === 'all') {
+    const mx = Math.max(1, ...modes.map(m => L[m].playSec));
+    $('stats-bars').innerHTML = '<div class="sg-h" style="font-size:12px;font-weight:800;color:var(--soft);text-transform:uppercase;letter-spacing:.06em">Time on each mode</div>' +
+      modes.map(m => '<div class="mb"><span>' + esc(API.diffLabel(m)) + '</span><i style="width:' + Math.round(L[m].playSec / mx * 100) + '%"></i><b>' + hmLong(L[m].playSec) + '</b></div>').join('');
+  } else $('stats-bars').innerHTML = '';
+  $('stats-note').textContent = (isPerm() ? 'Kept with your account on every device.' : 'Kept on this browser \u2014 make an account to keep them everywhere.') + ' The tutorial doesn\u2019t count.';
+}
+$('stats-modes').addEventListener('click', e => { const b = e.target.closest('button[data-mode]'); if (b) { statsMode = b.dataset.mode; renderStats(); } });
 
 /* ============================================================ SAVE FILES */
 let savesMode = 'load';
