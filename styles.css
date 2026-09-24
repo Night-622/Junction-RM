@@ -722,6 +722,9 @@ ol.board b{font-weight:800}
 .field textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(255,201,51,.18)}
 .fbkind{margin:12px 0 0;display:inline-flex}
 #m-feedback .tgl{margin:10px 0 2px}
+#m-feedback .field small{font-weight:600;opacity:.7}
+#fb-reply-wrap[hidden],.fbas[hidden]{display:none}
+.fbas{margin:12px 0 0;padding:8px 10px;border-radius:9px;background:rgba(127,127,127,.12);line-height:1.4}
 
 /* ---- tutorial: live feedback line on the coach card */
 .tc-live{margin:6px 0 6px!important;padding:7px 10px;border-radius:9px;font-size:12.5px!important;font-weight:600;line-height:1.4;
