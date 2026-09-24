@@ -796,6 +796,21 @@ ol.board b{font-weight:800}
 .modebars .mb{display:grid;grid-template-columns:78px 1fr 64px;gap:8px;align-items:center;font-size:12.5px}
 .modebars .mb i{display:block;height:8px;border-radius:99px;background:var(--accent);min-width:2px}
 .modebars .mb b{text-align:right;font-variant-numeric:tabular-nums}
+/* achievements */
+.achtop{display:flex;align-items:center;gap:12px;margin:12px 0 4px}
+.achtop b{white-space:nowrap;font-variant-numeric:tabular-nums}
+.achtop .tut-track{flex:1}
+.achlist{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:4px 0 6px}
+.achlist .sg-h{grid-column:1/-1;padding:8px 0 0;font-size:12px;font-weight:800;color:var(--soft);text-transform:uppercase;letter-spacing:.06em}
+.ach{display:flex;gap:10px;align-items:flex-start;padding:9px 10px;border-radius:9px;background:rgba(127,127,127,.08);opacity:.62}
+.ach.got{opacity:1;background:rgba(255,201,51,.12);box-shadow:inset 0 0 0 1px rgba(255,201,51,.45)}
+.ach i{font-style:normal;font-size:16px;line-height:1.2;color:var(--soft)}
+.ach.got i{color:#ffc933}
+.ach b{display:block;font-size:13.5px}
+.ach span{display:block;font-size:11.5px;color:var(--soft);line-height:1.35}
+.star.star3{color:#ffc933;letter-spacing:-1px;text-shadow:0 0 6px rgba(255,201,51,.45)}
+#acct-tabs button{font-size:12.5px}
+@media (max-width:560px){.achlist{grid-template-columns:1fr}}
 @media (max-width:560px){.statgrid{grid-template-columns:repeat(2,1fr)}.acct-grid{grid-template-columns:1fr 1fr}}
 
 /* ---- phones: small pop-ups that never cover the map */
