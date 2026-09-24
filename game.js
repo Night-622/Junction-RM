@@ -36,7 +36,7 @@ const CONFIG = {
 
   // spawning
   houseIntervalBase:  80,  houseIntervalRamp: 1.1,  houseIntervalMin: 24,  houseJitter: 16,  firstHouseDelay: 28,
-  storeIntervalBase:  38,  storeIntervalRamp: 0.8,  storeIntervalMin: 30,  storeJitter: 8, firstStoreDelay: 12,
+  storeIntervalBase:  36,  storeIntervalRamp: 0.8,  storeIntervalMin: 30,  storeJitter: 8, firstStoreDelay: 12,
   newColourChance:    0.8,
   housesOnStoreSpawn: 1,       // houses of the same colour that appear when a new store opens
   housesOnStoreTierUp:2,       // houses of the same colour that appear when a store tiers up (gets busier)
@@ -563,6 +563,7 @@ function makeEdge(key, a, b, d, fast, L) {
 }
 
 function rebuildNet() {
+  for (const c of cars) c.noRouteT = 0;                    // the roads changed: every car may have a way now
   netVer++;
   const oldNodes = nodes;
   nodes = new Array(N).fill(null);
@@ -670,6 +671,7 @@ let dDist = new Float32Array(2048), dPrev = new Int32Array(2048), dStamp = new I
 let lastCost = 0;
 function edgeCost(e, avoid) {
   if (closed.size && closed.has(e.b)) return Infinity;      // nobody plans a route through coned-off road
+  if (e.fast && routeFuel < 1) return Infinity;              // a stock fuel tank can't use motorways
   const sp = CFG.carSpeed * (e.fast ? CFG.motorwayScale : 1);
   let c = e.L / sp;
   const nd = nodes[e.b];
@@ -736,8 +738,25 @@ function planRoute(startEdge, fromK, toK, avoid) {
 const CAR_UP = {
   cap:  {name: 'Carry size', max: 4, cost: [25, 45, 75, 110], what: '+1 parcel slot, 10% slower'},
   spd:  {name: 'Speed',      max: 3, cost: [30, 55, 90],      what: '+12% top speed'},
-  load: {name: 'Loading',    max: 2, cost: [20, 40],          what: 'loads 20% faster'}
+  load: {name: 'Loading',    max: 2, cost: [20, 40],          what: 'loads 20% faster'},
+  fuel: {name: 'Fuel tank',  max: 2, cost: [35, 70],          what: 'drives further'}
 };
+/* FUEL. A stock tank covers 16 road tiles each way and can't use motorways. A bigger tank covers 32
+   and opens motorways; the long-range tank goes any distance. Houses only send a car on a trip it can make. */
+const FUEL_RANGE = [16, 32, Infinity];
+const fuelRange = c => FUEL_RANGE[Math.min(FUEL_RANGE.length - 1, carUp(c, 'fuel'))];
+const fuelText = l => l >= 2 ? 'any distance, motorways too' : l >= 1 ? 'up to 32 road tiles, motorways too' : 'up to 16 road tiles, no motorways';
+const routeTiles = r => r ? Math.round(r.reduce((a, e) => a + e.L, 0) / CELL) : 0;
+let routeFuel = 9;                                           // fuel level of the car being planned for (9 = no limits)
+/* plan for one car. strict: respect its fuel (used when choosing trips). Otherwise a car already out
+   is never stranded: if its fuel rules out every way, it may take any way home. */
+function planFor(c, startEdge, fromK, toK, avoid, strict) {
+  routeFuel = c && !c.isTruck ? carUp(c, 'fuel') : 9;
+  let r = planRoute(startEdge, fromK, toK, avoid);
+  routeFuel = 9;
+  if (!r && !strict) r = planRoute(startEdge, fromK, toK, avoid);
+  return r;
+}
 /* Carry size picks the body; speed picks the kit fitted to it. Vans bought from the Shop start as a panel van. */
 const BODY = [
   {name: 'Hatchback', L: 12,   W: 6.6},
@@ -752,16 +771,16 @@ const modelName = c => (carUp(c, 'spd') ? KIT[carUp(c, 'spd')] + ' ' : '') + BOD
 function syncCarLen(c) { if (!c.isTruck) c.len = BODY[bodyOf(c)].L; }
 function makeVan(c) { if (!c) return; c.van = true; syncCarLen(c); }
 const carUp = (c, t) => (c && c.up && c.up[t]) || 0;
-const carUpTotal = c => carUp(c, 'cap') + carUp(c, 'spd') + carUp(c, 'load');
+const carUpTotal = c => carUp(c, 'cap') + carUp(c, 'spd') + carUp(c, 'load') + carUp(c, 'fuel');
 function carUpCost(c, t) { const l = carUp(c, t); return l >= CAR_UP[t].max ? null : CAR_UP[t].cost[l]; }
 function upgradeCar(id, t) {
   const c = cars.find(x => x.id === id); if (!c || !CAR_UP[t]) return false;
   const p = carUpCost(c, t);
   if (p === null) { hint('That upgrade is already maxed out.'); return false; }
   if (money < p) { hint(CAR_UP[t].name + ' costs ' + fmt$(p) + '. ' + shortBy(p)); return false; }
-  spend(p); c.up[t]++;
+  spend(p); c.up[t] = (c.up[t] || 0) + 1; c.noRouteT = 0;
   syncCarLen(c);
-  popRing(c.x, c.y, '#ffc933'); popText(c.x, c.y - 14, t === 'load' ? 'Loading ' + c.up.load : modelName(c).replace(/^./, m => m.toUpperCase()), '#ffc933');
+  popRing(c.x, c.y, '#ffc933'); popText(c.x, c.y - 14, t === 'load' ? 'Loading ' + c.up.load : t === 'fuel' ? (c.up.fuel >= 2 ? 'Long-range tank' : 'Bigger tank') : modelName(c).replace(/^./, m => m.toUpperCase()), '#ffc933');
   sfx('upgrade'); bump('v-money'); refreshUI(); renderInspector();
   return true;
 }
@@ -867,7 +886,7 @@ function addCar(bi) {
     job: null, store: -1, bay: -1, want: 0, load: 0, taken: false, timer: 0,
     stopT: 0, stopAcc: 0, blockedT: 0, replanT: rnd(1, CFG.replanSeconds), replanCool: 0, planFail: 0,
     brake: false, broken: 0, xf: null, xfEdge: null, cr: null, idle: 0, trips: 0, carried: 0, tripStart: 0, hazard: 0,
-    cash: 0, claim: null, towedBy: null, up: {cap: 0, spd: 0, load: 0}};
+    cash: 0, claim: null, towedBy: null, noRouteT: 0, up: {cap: 0, spd: 0, load: 0, fuel: 0}};
   h.cars.push(c); cars.push(c); h.carsN = h.cars.length;
   const p = parkedPose(c); c.x = p.x; c.y = p.y; c.ang = p.a;
   return c;
@@ -1232,7 +1251,7 @@ function replan(c, avoid) {
   const dest = destNodeOf(c);
   if (dest < 0) { giveUp(c); return false; }
   solveBudget--;
-  const r = planRoute(c.edge, null, dest, avoid);
+  const r = planFor(c, c.edge, null, dest, avoid);
   if (r) { c.route = r; c.ri = 0; c.destNode = dest; c.planFail = 0; return true; }
   return false;
 }
@@ -1244,7 +1263,7 @@ function giveUp(c) {
   c.job = 'return'; c.want = 0; c.taken = false;
   if (c.state === 'driving' && c.edge) {
     const dest = buildings[c.home].acc;
-    const r = dest >= 0 ? planRoute(c.edge, null, dest) : null;
+    const r = dest >= 0 ? planFor(c, c.edge, null, dest) : null;
     if (r) { c.route = r; c.ri = 0; c.destNode = dest; c.planFail = 0; return; }
   }
   tow(c, true);
@@ -1308,7 +1327,7 @@ function finishLoading(c) {
   const h = buildings[c.home];
   if (solveBudget <= 0) return;
   solveBudget--;
-  const r = (s.acc >= 0 && h.acc >= 0) ? planRoute(null, s.acc, h.acc) : null;
+  const r = (s.acc >= 0 && h.acc >= 0) ? planFor(c, null, s.acc, h.acc) : null;
   if (!r) { c.planFail++; if (c.planFail > 6) tow(c, false); return; }
   c.job = 'return'; c.route = r; c.ri = 0; c.destNode = h.acc; c.planFail = 0;
   c.state = 'exiting'; c.xf = null;
@@ -1321,7 +1340,7 @@ function stepExiting(c, dt) {
     if (f.dead || f.a !== nodeOfParked(c)) {              // the roads changed under us
       if (c.isTruck) { truckReset(c); return; }
       const dest = destNodeOf(c), from = nodeOfParked(c);
-      const r = (dest >= 0 && from >= 0 && solveBudget > 0) ? (solveBudget--, planRoute(null, from, dest)) : null;
+      const r = (dest >= 0 && from >= 0 && solveBudget > 0) ? (solveBudget--, planFor(c, null, from, dest)) : null;
       if (r) { c.route = r; c.ri = 0; } else if (solveBudget > 0) { if (c.job === 'fetch') cancelJob(c); else tow(c, true); }
       return;
     }
@@ -1703,10 +1722,10 @@ function tutStatus() {
   // steps 8+ are menus and upgrades: the old gates are fine, but still warn about broken pairs
   let ok = false; try { ok = TUT_GATES[st](); } catch (e) {}
   const red = tutPair(0), js = nodeList.filter(nd => nd.junction).map(nd => nd.k);
-  const at = st === 10 ? js.slice(0, 3) : (st === 8 || st === 9) ? (red.h ? [red.h.k] : []) : (red.s ? [red.s.k] : []);
+  const at = st === 11 ? js.slice(0, 3) : (st === 8 || st === 9 || st === 10) ? (red.h ? [red.h.k] : []) : (red.s ? [red.s.k] : []);
   if (ok) return {ok: true};
   const b = tutBroken(-1, R); if (b) return Object.assign(tutBrokenMsg(b), {ok: false});
-  if (st === 10 && !js.length) return {ok: false, kind: 'warn', msg: 'There are no junctions on the map right now. Join two roads to make one, then upgrade it.', at: []};
+  if (st === 11 && !js.length) return {ok: false, kind: 'warn', msg: 'There are no junctions on the map right now. Join two roads to make one, then upgrade it.', at: []};
   return {ok: false, at};
 }
 /* free play after the guided steps: things worth trying that don't need a scripted scenario */
@@ -1732,11 +1751,13 @@ const TUT_STEPS = [
   {t: 'Make part of a loop one-way', done: 'Cars still reach both ends, without sharing a lane.',
    active: 'The teal loop has two ways round. With the Signs tool\u2019s One-way option, tap one straight stretch of it. Check nobody gets cut off.'},
   {t: 'Build a motorway', done: 'An express link that skips every junction between.',
-   active: 'Pick the Motorway tool, tap a tile on the red road, then one on the teal loop at least 4 tiles away. Motorways are fast but only link two points.'},
+   active: 'Pick the Motorway tool, tap a tile on the red road, then one on the teal loop at least 4 tiles away. Motorways are fast but only link two points \u2014 and only cars with a bigger fuel tank can use them. You\u2019ll fit one in a moment.'},
   {t: 'Buy a car for a house', done: 'More cars per house means more trips a minute.',
    active: 'Tap any house (the red one is marked) and press Buy a car. Each extra car at the same house costs more than the last.'},
   {t: 'Upgrade a car', done: 'Each upgrade also changes how the vehicle looks.',
    active: 'Click any red car (or pick one from the house list). Carry size turns it into a bigger model with one more slot but 10% slower; Speed fits a faster kit.'},
+  {t: 'Fit a bigger fuel tank', done: 'That car can now take the motorway and go further.',
+   active: 'Click any red car and buy a Fuel tank. A stock tank only covers 16 road tiles each way and can\u2019t use motorways, so nothing drives on the motorway you built until a car has one. If a far-away house stops sending cars, this is why.'},
   {t: 'Upgrade a junction', done: 'Upgraded junctions let more cars through per turn.',
    active: 'Tap any junction and press its upgrade button. The gold ring shows its level.'},
   {t: 'Upgrade a store', done: 'Every parcel from that store now pays more.',
@@ -1756,6 +1777,7 @@ const TUT_COACH = [
   {tool: 'moto', at: [[10, 8], [16, 8]], line: true, why: 'Long hauls clog local streets. A motorway pulls that traffic off them entirely.'},
   {tool: 'select', at: [[12, 8]], why: 'More cars mean more trips, but also more traffic. Buy where a store is waiting on you.'},
   {tool: 'select', at: [[12, 8]], why: 'Upgrading one busy car is often cheaper than buying a new one.'},
+  {tool: 'select', at: [[12, 8]], why: 'Range decides which houses can serve a store. Long trips and motorways need a bigger tank.'},
   {tool: 'select', at: [[8, 8]], why: 'A well-controlled junction at a higher level beats two extra roads around it.'},
   {tool: 'upgrade', at: [[4, 8]], why: 'Same traffic, more money: store upgrades are pure profit.'},
   {tool: 'tow', at: [[4, 8]], why: 'One broken car can back up a whole street. A tow truck clears it before you notice.'}
@@ -1771,6 +1793,7 @@ const TUT_GATES = [
   () => motorways.length > 0,
   () => buildings.some(b => (b.extra || 0) > 0),
   () => cars.some(c => carUpTotal(c) > 0),
+  () => cars.some(c => carUp(c, 'fuel') > 0),
   () => nodeList.some(nd => nd.lvl > 0),
   () => buildings.some(b => b.type === 'store' && b.lvl > 0),
   () => trucks.length > 0
@@ -2316,14 +2339,24 @@ function dispatch() {
         const a = nodeOfParked(p), b = nodeOfParked(q);
         return Math.hypot(cx(a) - sx, cy(a) - sy) - Math.hypot(cx(b) - sx, cy(b) - sy);
       });
-      let best = null, bestCost = Infinity;
-      for (const c of idle.slice(0, 3)) {
-        if (solveBudget <= 0) break;
+      // Try cars nearest first, skipping any that can't make the trip (no road, or not enough fuel)
+      // instead of giving up after the three closest. Cars that fail sit out a few seconds.
+      let best = null, bestCost = Infinity, good = 0, allTried = true;
+      for (const c of idle) {
+        if (c.noRouteT > clock) continue;
+        if (good >= 3 || solveBudget <= 0) { allTried = false; break; }
         solveBudget--;
-        const r = planRoute(null, nodeOfParked(c), s.acc);
-        if (r && lastCost < bestCost) { bestCost = lastCost; best = {c, r}; }
+        const r = planFor(c, null, nodeOfParked(c), s.acc, null, true), cost = lastCost;
+        if (!r) {
+          c.noRouteT = clock + 4;
+          if (carUp(c, 'fuel') < 1 && motorways.length && planRoute(null, nodeOfParked(c), s.acc)) { s.fuelShort = clock; tipOnce('fuel'); }
+          continue;
+        }
+        if (routeTiles(r) > fuelRange(c)) { c.noRouteT = clock + 4; s.fuelShort = clock; tipOnce('fuel'); continue; }
+        good++;
+        if (cost < bestCost) { bestCost = cost; best = {c, r}; }
       }
-      if (!best) { s.unreach = 1.5; break; }
+      if (!best) { if (allTried) s.unreach = 1.5; break; }
       const want = Math.min(carCap(best.c), avail);
       assignFetch(best.c, s, best.r, want);
       avail -= want;
@@ -2354,8 +2387,8 @@ function repositionIdle() {
     });
     if (bestBay < 0) { c.idle = 0; continue; }
     solveBudget--;
-    const r = planRoute(null, from, depots[bestBay].acc);
-    if (!r) { c.idle = 0; continue; }
+    const r = planFor(c, null, from, depots[bestBay].acc, null, true);
+    if (!r || routeTiles(r) > fuelRange(c)) { c.idle = 0; continue; }
     depots[bestBay].res++;
     c.job = 'reposition'; c.bay = bestBay; c.route = r; c.ri = 0; c.destNode = depots[bestBay].acc; c.state = 'exiting'; c.xf = null;
     moved++;
@@ -2551,9 +2584,11 @@ function truckDropTarget(t) {
   if (t.hook && t.hook.car && t.hook.car.claim === t) t.hook.car.claim = null;
   t.tgt = null; t.hook = null;
 }
-/* a route that ends on the very lane the stuck car is standing in */
-function routeToTarget(t, fromEdge) {
-  const c = t.tgt, e = c && c.edge;
+/* a route that ends on the very lane the stuck car is standing in - or, when that lane can't be
+   reached from behind (a car heading for the store on a plain street, say), on the lane beside it */
+const twinOf = e => e && edges.find(f => f.a === e.b && f.b === e.a && !f.dead && !f.fast);
+const isTwin = (a, b) => !!a && !!b && a.a === b.b && a.b === b.a;
+function routeOnto(t, fromEdge, e) {
   if (!e || e.dead) return null;
   if (fromEdge === e) return [e];
   const s = buildings[t.store];
@@ -2562,6 +2597,11 @@ function routeToTarget(t, fromEdge) {
   const last = base[base.length - 1], nd = nodes[e.a];
   if (last && (!nd || !exitsFor(nd, last).includes(e))) return null;
   return base.concat([e]);
+}
+function routeToTarget(t, fromEdge) {
+  const c = t.tgt, e = c && c.edge;
+  if (!e || e.dead) return null;
+  return routeOnto(t, fromEdge, e) || routeOnto(t, fromEdge, twinOf(e));
 }
 /* every half second: idle trucks pick the nearest car that needs rescuing */
 function dispatchTrucks() {
@@ -2676,12 +2716,14 @@ function truckDrive(t, dt) {
   if (t.job === 'seek') {
     if (t.hook) {
       const c = t.hook.car;
-      if (!cars.includes(c) || c.state !== 'driving' || c.edge !== t.edge) { if (c.claim === t) c.claim = null; t.hook = null; return; }
+      if (!cars.includes(c) || c.state !== 'driving' || (c.edge !== t.edge && !isTwin(c.edge, t.edge))) { if (c.claim === t) c.claim = null; t.hook = null; return; }
       t.hook.t += dt;
       if (t.hook.t >= t.hook.dur) hookCar(t, c);
       return;
     }
     if (!truckTargetOk(t)) { truckHeadHome(t); return; }
+    // alongside the car on the other lane: pull up and hook it across
+    if (isTwin(t.edge, t.tgt.edge) && Math.hypot(t.x - t.tgt.x, t.y - t.tgt.y) < 26) { hookCar(t, t.tgt); return; }
     const e = t.edge, i = e ? e.cars.indexOf(t) : -1, L = i > 0 ? e.cars[i - 1] : null;
     if (L && !L.isTruck && !L.hook && (!L.claim || L.claim === t) && towHookable(L) && (L.s - t.s) - (L.len + t.len) / 2 < 10 && t.v < 5) {
       if (t.tgt && t.tgt !== L && t.tgt.claim === t) t.tgt.claim = null;
@@ -2692,7 +2734,7 @@ function truckDrive(t, dt) {
   t.replanT -= dt;
   if (t.replanT <= 0) {
     t.replanT = 1.5;
-    if (t.job === 'seek' && t.tgt && t.tgt.edge && t.route && t.route[t.route.length - 1] !== t.tgt.edge && solveBudget > 0) truckReplan(t);
+    if (t.job === 'seek' && t.tgt && t.tgt.edge && t.route && t.route[t.route.length - 1] !== t.tgt.edge && !isTwin(t.route[t.route.length - 1], t.tgt.edge) && solveBudget > 0) truckReplan(t);
   }
 }
 
@@ -3310,7 +3352,7 @@ function serialize() {
     sign: sign.map((s, k) => s ? [k, s] : null).filter(Boolean),
     special: special.map((s, k) => s ? [k, s] : null).filter(Boolean),
     lights: [...lightQ].filter(([k]) => special[k] === 'light').map(([k, q]) => [k, q[0], q[1]]),
-    buildings: buildings.map(b => ({pref: b.pref, k: b.k, type: b.type, color: b.color, pins: b.pins, tier: b.tier, timer: b.timer, lvl: b.lvl, trucks: b.trucks, vans: b.cars.map(c => c.van ? 1 : 0), extra: b.extra || 0, ups: b.cars.map(c => [carUp(c, 'cap'), carUp(c, 'spd'), carUp(c, 'load')])})), carsBought,
+    buildings: buildings.map(b => ({pref: b.pref, k: b.k, type: b.type, color: b.color, pins: b.pins, tier: b.tier, timer: b.timer, lvl: b.lvl, trucks: b.trucks, vans: b.cars.map(c => c.van ? 1 : 0), extra: b.extra || 0, ups: b.cars.map(c => [carUp(c, 'cap'), carUp(c, 'spd'), carUp(c, 'load'), carUp(c, 'fuel')])})), carsBought, fuelV: 1,
     parks: parks.map(p => ({k: p.k, b: p.b})), depots: depots.map(d => d.k), dprefs: depots.map(d => d.pref),
     juncLvl: nodeList.filter(nd => nd.lvl > 0).map(nd => [nd.k, nd.lvl, nd.spent]),
     motorways: motorways.map(m => ({a: m.a, b: m.b, len: m.len})), goals: [...goalsDone],
@@ -3380,7 +3422,8 @@ function loadGameCore(data) {
       o.vans.forEach((v, j) => {
         const c = addCar(i); c.van = !!v;
         const u = o.ups && o.ups[j];
-        if (u) { c.up = {cap: clamp(u[0] | 0, 0, CAR_UP.cap.max), spd: clamp(u[1] | 0, 0, CAR_UP.spd.max), load: clamp(u[2] | 0, 0, CAR_UP.load.max)}; }
+        if (u) { c.up = {cap: clamp(u[0] | 0, 0, CAR_UP.cap.max), spd: clamp(u[1] | 0, 0, CAR_UP.spd.max), load: clamp(u[2] | 0, 0, CAR_UP.load.max), fuel: clamp(u[3] | 0, 0, CAR_UP.fuel.max)}; }
+        if (!d.fuelV) { c.up = c.up || {}; c.up.fuel = CAR_UP.fuel.max; }   // cities saved before fuel existed keep working as they were
         syncCarLen(c);
       });
     });
@@ -4622,8 +4665,9 @@ const TIPS = {
   contract: 'Tip: contract! Collect enough parcels from that store before its dial runs out.',
   tier: 'Tip: a store got busier. Two new houses of its colour have moved in nearby.',
   breakdown: 'Tip: a broken-down car blocks its lane. A tow truck clears it automatically.',
-  upgrade: 'Tip: click any car to upgrade its cargo, engine or loading \u2014 or a house to buy another car.',
-  offscreen: 'Tip: red arrows on the screen edge point at stores overflowing out of view.'
+  upgrade: 'Tip: click any car to upgrade its cargo, engine, loading or fuel tank \u2014 or a house to buy another car.',
+  offscreen: 'Tip: red arrows on the screen edge point at stores overflowing out of view.',
+  fuel: 'Tip: a house can\u2019t send a car that far. A stock fuel tank covers 16 road tiles and no motorways \u2014 click a car and fit a bigger Fuel tank.'
 };
 const TIPS_KEY = 'junction-tips-seen';
 let tipsOn = true;                  // pop-up tips; they can always be read in the City tab
@@ -4929,10 +4973,11 @@ function renderInspector() {
             '<div class="vslots" title="Parcel slots">' + Array.from({length: cap}, (_, i) => '<i class="' + (i < c.load ? 'full' : i < c.load + (c.job === 'fetch' ? c.want : 0) ? 'claim' : '') + '"></i>').join('') + '</div>' +
             '<div class="vsub"><b>' + c.load + '</b> of ' + cap + ' slots full' + (c.job === 'fetch' ? ' \u00b7 collecting ' + c.want : '') + '</div></div>';
     html += '<p class="line"><b>' + carStatus(c) + '</b></p>';
+    html += '<p class="line muted">Fuel: ' + fuelText(carUp(c, 'fuel')) + '</p>';
     html += '<h5 class="ihead2">Upgrades for this vehicle</h5><div class="uprows">';
-    for (const t of ['cap', 'spd', 'load']) {
+    for (const t of ['cap', 'spd', 'load', 'fuel']) {
       const u = CAR_UP[t], l = carUp(c, t);
-      const nextName = l >= u.max ? 'Fully upgraded' : t === 'cap' ? 'Next: ' + BODY[Math.min(BODY.length - 1, Math.max(bodyOf(c), l + 1))].name + ' \u2014 ' + u.what : t === 'spd' ? 'Next: ' + KIT[l + 1] + ' kit \u2014 ' + u.what : u.what;
+      const nextName = l >= u.max ? (t === 'fuel' ? 'Long-range: ' + fuelText(l) : 'Fully upgraded') : t === 'fuel' ? 'Now: ' + fuelText(l) + '. Next: ' + fuelText(l + 1) : t === 'cap' ? 'Next: ' + BODY[Math.min(BODY.length - 1, Math.max(bodyOf(c), l + 1))].name + ' \u2014 ' + u.what : t === 'spd' ? 'Next: ' + KIT[l + 1] + ' kit \u2014 ' + u.what : u.what;
       html += '<div class="uprow"><div><b>' + u.name + '</b><small>' + nextName + '</small><span class="pips">' + Array.from({length: u.max}, (_, i) => '<i class="' + (i < l ? 'on' : '') + '"></i>').join('') + '</span></div>' + buyBtn('carup', c.id + ':' + t, '') + '</div>';
     }
     html += '</div>';
@@ -4948,6 +4993,7 @@ function renderInspector() {
     if (b.type === 'store') {
       const cap = storeCap(b), frac = clamp(b.timer / overflowLimit(), 0, 1);
       html += '<p class="line">Parcels waiting <b>' + b.pins + '</b> of ' + cap + ' bays · ' + b.claimed + ' claimed</p>';
+      if (b.fuelShort && clock - b.fuelShort < 8) html += '<p class="line warn">Some ' + COLORS[b.color].name.toLowerCase() + ' cars can\u2019t reach here on their fuel. A stock tank covers 16 road tiles and no motorways \u2014 click a car and fit a bigger Fuel tank.</p>';
       html += '<span class="bar"><i style="width:' + (frac * 100).toFixed(0) + '%;background:var(--bad)"></i></span>';
       html += '<p class="line muted">Loading docks ' + b.docks.length + '/' + dockCap(b) + ' · handed out ' + b.served + '</p>';
       html += '<p class="line">Pays <b>' + fmtP(payPerParcel(b)) + '</b> a parcel · level ' + b.lvl + ' of ' + CFG.storeUpgradeMax + ' · tow trucks ' + b.trucks + '/' + CFG.towTrucksPerStore + '</p>';
