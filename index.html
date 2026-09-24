@@ -292,6 +292,7 @@
         <div class="seg boardtabs" id="acct-tabs" role="group" aria-label="Account sections">
           <button type="button" data-pane="profile" aria-pressed="true">Profile</button>
           <button type="button" data-pane="stats" aria-pressed="false">Stats</button>
+          <button type="button" data-pane="ach" aria-pressed="false">Achievements</button>
           <button type="button" data-pane="security" aria-pressed="false" id="acct-tab-sec">Security</button>
         </div>
 
@@ -325,6 +326,12 @@
           <div class="statgrid" id="stats-grid"></div>
           <div class="modebars" id="stats-bars"></div>
           <p class="mini" id="stats-note"></p>
+        </div>
+
+        <div class="acct-pane" data-pane="ach" hidden>
+          <div class="achtop"><b id="ach-count">0 of 0</b><div class="tut-track"><i id="ach-bar"></i></div></div>
+          <p class="mini" id="ach-note"></p>
+          <div class="achlist" id="ach-list"></div>
         </div>
 
         <div class="acct-pane" data-pane="security" hidden>
