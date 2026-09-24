@@ -5274,6 +5274,11 @@ const FEEDBACK_TO = 'support.jamesnortinen@gmail.com';
 let fbKind = 'Bug';
 function openFeedback() {
   $('fb-err').textContent = '';
+  // account holders are emailed from their account address, so they don't need the reply box
+  const acct = window.JunctionOnline && window.JunctionOnline.account, note = $('fb-acct');
+  $('fb-reply-wrap').hidden = !!acct;
+  note.hidden = !acct;
+  if (acct) note.textContent = 'Signed in as ' + acct.name + (acct.email ? ' \u2014 replies will go to ' + acct.email + '.' : '.');
   openModal('m-feedback');
   setTimeout(() => { const t = $('fb-text'); if (t && !compactUI()) t.focus(); }, 60);
 }
@@ -5290,22 +5295,54 @@ function bindFeedback() {
     document.querySelectorAll('#fb-kind button').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
   }));
   $('fb-close').addEventListener('click', () => closeModal('m-feedback'));
-  $('fb-send').addEventListener('click', () => {
-    const msg = $('fb-text').value.trim();
-    if (msg.length < 3) { $('fb-err').textContent = 'Write a few words first.'; return; }
-    const body = msg + ($('fb-device').checked ? '\n' + feedbackDetails() : '');
-    const url = 'mailto:' + FEEDBACK_TO + '?subject=' + encodeURIComponent('Junction ' + fbKind.toLowerCase() + ' report') + '&body=' + encodeURIComponent(body);
-    const a = document.createElement('a'); a.href = url; a.rel = 'noopener'; a.style.display = 'none'; document.body.append(a); a.click(); a.remove();
-    $('fb-err').textContent = '';
-    setTimeout(() => { closeModal('m-feedback'); $('fb-text').value = ''; toast('Thanks! If no email app opened, use Copy address and email us directly.', 'good'); }, 400);
+  $('fb-send').addEventListener('click', async () => {
+    const btn = $('fb-send'), err = $('fb-err');
+    const acct = window.JunctionOnline && window.JunctionOnline.account;
+    const msg = $('fb-text').value.trim(), reply = acct ? (acct.email || '') : $('fb-reply').value.trim();
+    if (msg.length < 3) { err.textContent = 'Write a few words first.'; return; }
+    if (reply && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(reply)) { err.textContent = 'That email doesn\u2019t look right \u2014 fix it or leave it blank.'; return; }
+    btn.disabled = true; btn.textContent = 'Sending\u2026'; err.textContent = '';
+    try {
+      await submitFeedback({kind: fbKind, message: msg, replyTo: reply, details: $('fb-device').checked ? feedbackDetails() : ''});
+      closeModal('m-feedback'); $('fb-text').value = ''; $('fb-reply').value = '';
+      toast('Thanks \u2014 your feedback was sent.', 'good');
+    } catch (e) {
+      console.warn('feedback failed', e);
+      err.textContent = 'Couldn\u2019t send right now \u2014 check your connection and try again. Your message is still here.';
+    } finally { btn.disabled = false; btn.textContent = 'Send'; }
   });
-  $('fb-copy').addEventListener('click', async () => {
-    let ok = false;
-    try { await navigator.clipboard.writeText(FEEDBACK_TO); ok = true; } catch (e) {
-      try { const t = document.createElement('textarea'); t.value = FEEDBACK_TO; document.body.append(t); t.select(); ok = document.execCommand('copy'); t.remove(); } catch (e2) {}
-    }
-    $('fb-err').textContent = ok ? 'Copied: ' + FEEDBACK_TO : FEEDBACK_TO;
-  });
+}
+/* Where feedback goes — all from the browser, no email app needed:
+   - Guests: saved to Firestore (collection "feedback"); read it in the Firebase console.
+   - Players signed in with a Google or email account: emailed to FEEDBACK_TO through Web3Forms,
+     with their account address as the reply-to, so you can answer from your inbox.
+   If the preferred route fails (no key yet, a network blocks it, online features didn't load),
+   it falls back to the other one, so nothing is lost.
+   To switch email on: go to https://web3forms.com, enter FEEDBACK_TO, and paste the access key
+   they email you below. The key is safe to publish — it can only send mail TO that address. */
+const WEB3FORMS_KEY = '9dd7a203-eb7a-436c-90e5-4a2fadbddadd';
+const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
+function emailFeedback(f, acct) {
+  const who = acct ? acct.name + ' (account' + (acct.email ? ', ' + acct.email : '') + ')' : 'Guest';
+  return fetch('https://api.web3forms.com/submit', {
+    method: 'POST', headers: {'Content-Type': 'application/json', Accept: 'application/json'},
+    body: JSON.stringify({access_key: WEB3FORMS_KEY, subject: 'Junction ' + f.kind.toLowerCase() + ' report from ' + (acct ? acct.name : 'a guest'),
+      from_name: 'Junction feedback', replyto: f.replyTo || undefined,
+      message: f.message + '\n\nFrom: ' + who + (f.replyTo ? '\nReply to: ' + f.replyTo : '') + (f.details ? '\n' + f.details : '')})
+  }).then(r => r.json()).then(j => { if (!j.success) throw new Error(j.message || 'web3forms'); });
+}
+async function submitFeedback(f) {
+  const on = window.JunctionOnline, acct = on && on.account;
+  const toStore = () => withTimeout(on.sendFeedback(f), 12000);
+  const toEmail = () => withTimeout(emailFeedback(f, acct), 12000);
+  const canStore = !!(on && on.sendFeedback), canEmail = !!WEB3FORMS_KEY;
+  const order = acct ? [canEmail && toEmail, canStore && toStore] : [canStore && toStore, canEmail && toEmail];
+  let last = new Error('No way to send feedback (online features unavailable)');
+  for (const job of order) {
+    if (!job) continue;
+    try { await job(); return; } catch (e) { last = e; console.warn('feedback route failed, trying the other', e); }
+  }
+  throw last;
 }
 
 /* tutorial panel collapsed to a slim bar (default on phones, so it doesn't cover the map) */
