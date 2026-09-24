@@ -56,8 +56,8 @@ const CONFIG = {
   // store evolution: stores randomly grow busier over time, demanding cars more often
   storeEvolveMaxTier:  3,       // a store can step up through this many tiers
   storeEvolveStartWeek:2,       // no evolving before this week
-  storeEvolveChance:   0.35,    // chance, at each random check, that an eligible store steps up a tier
-  storeEvolveCheckMin: 40,      // seconds between a store's evolve checks (random each time)
+  storeEvolveChance:   0.25,    // chance, at each random check, that an eligible store steps up a tier
+  storeEvolveCheckMin: 60,      // seconds between a store's evolve checks (random each time)
   storeEvolveCheckMax: 85,
   storeEvolvePinStep:  0.8,     // each tier multiplies the pin interval by this (parcels appear faster, more often)
   storeEvolveBonus:    1,       // extra dollars per parcel, per tier
