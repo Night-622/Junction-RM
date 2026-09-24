@@ -291,11 +291,8 @@
     <div class="modal" id="m-board" hidden>
       <div class="card plate wide">
         <h2>Leaderboard</h2>
-        <div class="seg boardtabs" id="board-tabs" role="tablist">
-          <button type="button" data-board="parcels" aria-pressed="true">Most parcels</button>
-          <button type="button" data-board="weeks" aria-pressed="false">Longest survived</button>
-          <button type="button" data-board="goals" aria-pressed="false">Fastest all goals</button>
-        </div>
+        <div class="seg boardtabs boardmodes" id="board-modes" role="group" aria-label="Mode"></div>
+        <div class="seg boardtabs" id="board-tabs" role="group" aria-label="Board"></div>
         <p class="mini" id="board-note"></p>
         <ol class="board" id="board-list"><li class="mini">Loading…</li></ol>
         <p class="mini" id="board-me"></p>
