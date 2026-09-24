@@ -85,6 +85,14 @@
           <label class="tgl"><input type="checkbox" id="opt-night" checked><span>Day and night</span></label>
           <label class="tgl"><input type="checkbox" id="opt-grid"><span>Tile grid</span><kbd>G</kbd></label>
           <label class="tgl"><input type="checkbox" id="opt-fx" checked><span>Pop-ups and rings</span></label>
+          <div class="notesrow"><span>Notifications while playing</span>
+            <div class="seg" id="opt-notes" role="group" aria-label="Notifications while playing">
+              <button type="button" data-notes="all" aria-pressed="true">All</button>
+              <button type="button" data-notes="warn" aria-pressed="false">Warnings</button>
+              <button type="button" data-notes="off" aria-pressed="false">Off</button>
+            </div>
+          </div>
+          <p class="mnote" id="notes-note"></p>
         </section>
         <section class="msec">
           <h4>Colour mode</h4>
