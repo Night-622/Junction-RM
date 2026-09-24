@@ -35,12 +35,16 @@ const CONFIG = {
   startStores:        1,
 
   // spawning
-  houseIntervalBase:  240, houseIntervalRamp: 0.6,  houseIntervalMin: 120, houseJitter: 40,  firstHouseDelay: 60,
-  storeIntervalBase:  36,  storeIntervalRamp: 0.8,  storeIntervalMin: 26,  storeJitter: 8, firstStoreDelay: 12,
+  houseIntervalBase:  80,  houseIntervalRamp: 0.6,  houseIntervalMin: 34,  houseJitter: 16,  firstHouseDelay: 28,
+  storeIntervalBase:  46,  storeIntervalRamp: 0.7,  storeIntervalMin: 28,  storeJitter: 10, firstStoreDelay: 12,
   newColourChance:    0.8,
   housesOnStoreSpawn: 1,       // houses of the same colour that appear when a new store opens
-  housesOnStoreTierUp:1,       // houses of the same colour that appear when a store tiers up (gets busier)
-  tierUpHouseChance:  0,     // chance a tier-up brings any houses at all
+  // Houses ONLY appear with a new store (above) or when a store fills up (below). There is no timed house spawning
+  // and tiering up brings no houses. When a store's parcels reach its capacity (8/8, 10/10...) one house of its
+  // colour moves in, and one more follows after overflowHouseDelay seconds. That store can trigger again once
+  // its parcels have dropped to overflowRearm x capacity or below.
+  overflowHouseDelay: 20,      // seconds until the second house after a store fills up (it only ever comes once)
+  overflowRearm:      0.5,     // a store re-arms once its parcels are at or below this fraction of capacity
 
   // demand
   pinIntervalBase:    12,  pinIntervalRamp:   0.3,  pinIntervalMin:   7.5, pinJitter: 4,
@@ -3001,12 +3005,7 @@ function update(dt) {
         s.evolveTimer = rnd(CFG.storeEvolveCheckMin, CFG.storeEvolveCheckMax);
         if (Math.random() < CFG.storeEvolveChance) {
           s.tier++;
-          let moved = 0;
-          if (Math.random() < CFG.tierUpHouseChance) {
-            for (let i = 0; i < CFG.housesOnStoreTierUp; i++) if (addBuilding('house', s.color)) moved++;
-          }
-          toast('The ' + COLORS[s.color].name + ' store is busier now (tier ' + s.tier + ')' +
-            (moved ? ' — ' + moved + ' new ' + COLORS[s.color].name + (moved === 1 ? ' house' : ' houses') + ' moved in' : ''), 'warn');
+          toast('The ' + COLORS[s.color].name + ' store is busier now (tier ' + s.tier + ') \u2014 parcels arrive faster', 'warn');
           popRing(tx(s.k), ty(s.k), COLORS[s.color].hex); sfx('upgrade');
         }
       }
@@ -3016,6 +3015,13 @@ function update(dt) {
       const base = ramp(CFG.pinIntervalBase, CFG.pinIntervalRamp, CFG.pinIntervalMin) * DIFF.pin;
       s.pinTimer = base * Math.pow(CFG.storeEvolvePinStep, s.tier) / (rush.t > 0 ? CFG.rushRate : 1) + Math.random() * CFG.pinJitter;
       if (s.pins < storeCap(s) + 8) { s.pins++; }
+    }
+    // a full store (8/8, 10/10...) brings one house of its colour now and one more a little later
+    if (!spectating && !tutorialMode) {
+      const capNow = storeCap(s);
+      if (!s.overSpent && s.pins >= capNow) { s.overSpent = true; s.followT = CFG.overflowHouseDelay; spawnOverflowHouse(s); }
+      else if (s.overSpent && s.pins <= capNow * CFG.overflowRearm) s.overSpent = false;
+      if (s.followT > 0) { s.followT -= dt; if (s.followT <= 0) { s.followT = 0; spawnOverflowHouse(s); } }
     }
     if (s.pins > storeCap(s)) s.timer += dt; else s.timer = Math.max(0, s.timer - dt * CFG.overflowDrain);
     if (s.timer >= overflowLimit() && !DIFF.noFail && !tutorialMode && !spectating) { endGame('The ' + COLORS[s.color].name + ' store ran out of patience.'); return; }
@@ -3035,12 +3041,7 @@ function update(dt) {
 
   if (spectating) { specTick(dt); return; }
   // spawning
-  houseTimer -= dt;
-  if (houseTimer <= 0) {
-    houseTimer = ramp(CFG.houseIntervalBase, CFG.houseIntervalRamp, CFG.houseIntervalMin) * DIFF.spawn + Math.random() * CFG.houseJitter;
-    const col = houseColour();
-    if (col !== null) { const h = addBuilding('house', col); if (h) { rebuildNetSoft(); toast('A new ' + COLORS[h.color].name + ' house appeared'); } }
-  }
+  // (no timed house spawning any more: houses arrive with new stores or when a store fills up)
   storeTimer -= dt;
   if (storeTimer <= 0) {
     storeTimer = ramp(CFG.storeIntervalBase, CFG.storeIntervalRamp, CFG.storeIntervalMin) * DIFF.spawn + Math.random() * CFG.storeJitter;
@@ -3117,6 +3118,13 @@ function update(dt) {
   if (autosaveT <= 0) { autosaveT = CFG.autosaveSeconds; saveGame(); }
 }
 function rebuildNetSoft() { linkBuildings(); }
+function spawnOverflowHouse(s) {
+  const h = addBuilding('house', s.color);
+  if (!h) return false;
+  toast('The ' + COLORS[s.color].name + ' store is full \u2014 a new ' + COLORS[s.color].name + ' house moved in', 'warn');
+  sfx('upgrade');
+  return true;
+}
 /* The bits of update() a spectator still runs: timers count down smoothly between the host's snapshots,
    but nothing spawns, closes, breaks down or ends — the next snapshot is the truth. */
 function specTick(dt) {
@@ -3357,7 +3365,7 @@ function serialize() {
     sign: sign.map((s, k) => s ? [k, s] : null).filter(Boolean),
     special: special.map((s, k) => s ? [k, s] : null).filter(Boolean),
     lights: [...lightQ].filter(([k]) => special[k] === 'light').map(([k, q]) => [k, q[0], q[1]]),
-    buildings: buildings.map(b => ({pref: b.pref, k: b.k, type: b.type, color: b.color, pins: b.pins, tier: b.tier, timer: b.timer, lvl: b.lvl, trucks: b.trucks, vans: b.cars.map(c => c.van ? 1 : 0), extra: b.extra || 0, ups: b.cars.map(c => [carUp(c, 'cap'), carUp(c, 'spd'), carUp(c, 'load'), carUp(c, 'fuel')])})), carsBought, fuelV: 1,
+    buildings: buildings.map(b => ({pref: b.pref, k: b.k, type: b.type, color: b.color, pins: b.pins, tier: b.tier, timer: b.timer, lvl: b.lvl, trucks: b.trucks, vans: b.cars.map(c => c.van ? 1 : 0), extra: b.extra || 0, ov: b.overSpent ? 1 : 0, ovT: +(b.followT || 0).toFixed(1), ups: b.cars.map(c => [carUp(c, 'cap'), carUp(c, 'spd'), carUp(c, 'load'), carUp(c, 'fuel')])})), carsBought, fuelV: 1,
     parks: parks.map(p => ({k: p.k, b: p.b})), depots: depots.map(d => d.k), dprefs: depots.map(d => d.pref),
     juncLvl: nodeList.filter(nd => nd.lvl > 0).map(nd => [nd.k, nd.lvl, nd.spent]),
     motorways: motorways.map(m => ({a: m.a, b: m.b, len: m.len})), goals: [...goalsDone],
@@ -3413,6 +3421,7 @@ function loadGameCore(data) {
       const b = {k: o.k, type: o.type, color: o.color, pins: o.pins, claimed: 0, timer: o.timer || 0,
                  tier: o.tier !== undefined ? o.tier : (o.big ? 1 : 0), cars: [], carsN: 0, park: 0, contract: null,
                  docks: [], served: 0, acc: -1, face: 0, pref: o.pref === undefined ? -1 : o.pref, unreach: 0, born: 0, pinTimer: rnd(3, 9), lvl: o.lvl || 0, trucks: 0,
+                 overSpent: o.ov === undefined ? true : !!o.ov, followT: +o.ovT || 0,
                  evolveTimer: rnd(CFG.storeEvolveCheckMin, CFG.storeEvolveCheckMax)};
       bAt[b.k] = buildings.length; buildings.push(b);
     });
@@ -4665,10 +4674,10 @@ function rollHud() {
 /* 2.6: one short tip, once ever, at the moment it becomes relevant (never during the tutorial) */
 const TIPS = {
   junction: 'Tip: three or more roads meeting make a give-way junction. Click one to see its options.',
-  overflow: 'Tip: a store is overflowing. Connect more houses of its colour, buy cars, or add a lot.',
+  overflow: 'Tip: a store is overflowing. Connect its new houses, buy cars, or add a lot.',
   rain: 'Tip: rain slows every car for a while. Nothing to fix \u2014 ride it out.',
   contract: 'Tip: contract! Collect enough parcels from that store before its dial runs out.',
-  tier: 'Tip: a store got busier. New houses of its colour may move in nearby.',
+  tier: 'Tip: a store got busier, so its parcels arrive faster.',
   breakdown: 'Tip: a broken-down car blocks its lane. A tow truck clears it automatically.',
   upgrade: 'Tip: click any car to upgrade its cargo, engine, loading or fuel tank \u2014 or a house to buy another car.',
   offscreen: 'Tip: red arrows on the screen edge point at stores overflowing out of view.',
