@@ -37,9 +37,9 @@ const CONFIG = {
   // spawning
   houseIntervalBase:  58,  houseIntervalRamp: 1.1,  houseIntervalMin: 24,  houseJitter: 8,  firstHouseDelay: 28,
   storeIntervalBase:  54,  storeIntervalRamp: 0.8,  storeIntervalMin: 30,  storeJitter: 16, firstStoreDelay: 12,
-  newColourChance:    0.6,
+  newColourChance:    0.8,
   housesOnStoreSpawn: 1,       // houses of the same colour that appear when a new store opens
-  housesOnStoreTierUp:2,       // houses of the same colour that appear when a store tiers up (gets busier)
+  housesOnStoreTierUp:1,       // houses of the same colour that appear when a store tiers up (gets busier)
 
   // demand
   pinIntervalBase:    12,  pinIntervalRamp:   0.3,  pinIntervalMin:   7.5, pinJitter: 4,
