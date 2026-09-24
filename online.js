@@ -80,7 +80,11 @@ function ago(ts) {
   return Math.floor(s / 86400) + ' d ago';
 }
 function mmss(sec) { sec = Math.round(sec); return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0'); }
-function nameHTML(name, star) { return esc(name) + (star ? ' <span class="star" title="Permanent account">★</span>' : ''); }
+function nameHTML(name, star, ach3) {
+  if (ach3) return esc(name) + ' <span class="star star3" title="Unlocked every achievement">\u2605\u2605\u2605</span>';
+  return esc(name) + (star ? ' <span class="star" title="Permanent account">\u2605</span>' : '');
+}
+const myAch3 = () => !!(API.achAll && API.achAll());
 function friendlyAuthError(e) {
   const c = (e && e.code) || '';
   if (c.includes('email-already-in-use')) return 'That email already has an account. Use Sign in instead.';
@@ -116,6 +120,8 @@ onAuthStateChanged(auth, async user => {
     await keepGuestName();
   } catch (e) { console.warn(e); }
   O.ready = true;
+  lastAch3 = myAch3();
+  if (isPerm()) API.awardAch('account');
   renderAccount();
   loadBest();
   await setupLive();
@@ -200,11 +206,11 @@ async function claimName(name) {
   syncBoardName();
 }
 async function syncBoardName() {
-  const uid = O.user.uid, name = myName(), star = isPerm();
+  const uid = O.user.uid, name = myName(), star = isPerm(), ach3 = myAch3();
   await Promise.all(MODES.map(async m => {
-    try { const r = boardRef(m, uid), s = await getDoc(r); if (s.exists()) await updateDoc(r, {name, star}); } catch (e) { /* no entry on this board */ }
+    try { const r = boardRef(m, uid), s = await getDoc(r); if (s.exists()) await updateDoc(r, {name, star, ach3}); } catch (e) { /* no entry on this board */ }
   }));
-  if (O.liveCode) updateDoc(doc(db, 'live', O.liveCode), {name, star}).catch(() => {});
+  if (O.liveCode) updateDoc(doc(db, 'live', O.liveCode), {name, star, ach3}).catch(() => {});
 }
 
 /* ------------------------------------------------------------ user modal */
@@ -213,7 +219,7 @@ function openUserModal(signIn) {
   const perm = isPerm(), hasName = !!(O.profile && O.profile.name), claimed = perm && !!(O.profile && O.profile.star);
   $('user-title').textContent = claimed ? 'Your account' : perm ? 'Pick your permanent username' : hasName ? 'Account' : 'Pick a username';
   $('user-lead').innerHTML = claimed
-    ? 'Signed in as ' + nameHTML(myName(), true) + (O.user.email ? ' (' + esc(O.user.email) + ')' : '') + '.'
+    ? 'Signed in as ' + nameHTML(myName(), true, myAch3()) + (O.user.email ? ' (' + esc(O.user.email) + ')' : '') + '.'
     : perm ? 'Your account is ready \u2014 choose your username. It gets a \u2605 on the leaderboard, and you can change it later.'
     : 'This is the name other players see on the leaderboard and when they watch your city.';
   $('user-name').value = hasName ? myName() : '';
@@ -309,14 +315,14 @@ $('user-signin').addEventListener('click', () => busy(null, async () => {
 function renderAccount() {
   const sa = $('start-account');
   sa.hidden = false;
-  sa.innerHTML = '<span>Playing as <b>' + nameHTML(myName(), isPerm()) + '</b>' + (isPerm() ? '' : ' <small>(guest)</small>') + '</span>' +
+  sa.innerHTML = '<span>Playing as <b>' + nameHTML(myName(), isPerm(), myAch3()) + '</b>' + (isPerm() ? '' : ' <small>(guest)</small>') + '</span>' +
     '<button class="linkbtn" type="button" id="start-acct-btn">Account</button>';
   $('start-acct-btn').addEventListener('click', () => openUserModal());
   if (!$('m-acct').hidden) renderAcct();
   $('btn-saves').hidden = false;
   $('start-online').hidden = false;
   $('online-sec').hidden = false;
-  $('acct-line').innerHTML = '<b>' + nameHTML(myName(), isPerm()) + '</b><small>' + (isPerm() ? (O.user.email || 'Permanent account') : 'Guest on this browser') + '</small>';
+  $('acct-line').innerHTML = '<b>' + nameHTML(myName(), isPerm(), myAch3()) + '</b><small>' + (isPerm() ? (O.user.email || 'Permanent account') : 'Guest on this browser') + '</small>';
   $('btn-account').textContent = 'Account';
   renderLiveCode();
 }
@@ -337,7 +343,7 @@ function openAcct(pane) {
 function renderAcct() {
   const perm = isPerm(), name = myName(), pv = providers();
   $('acct-av').textContent = name.charAt(0).toUpperCase();
-  $('acct-name').innerHTML = nameHTML(name, perm);
+  $('acct-name').innerHTML = nameHTML(name, perm, myAch3());
   const since = O.user.metadata && O.user.metadata.creationTime ? new Date(O.user.metadata.creationTime).toLocaleDateString(undefined, {year: 'numeric', month: 'short', day: 'numeric'}) : '';
   $('acct-sub').textContent = perm
     ? (O.user.email || 'Permanent account') + ' \u00b7 ' + (pv.includes('google.com') ? 'Google' : 'Email') + (since ? ' \u00b7 joined ' + since : '')
@@ -365,8 +371,22 @@ function renderAcct() {
   $('sec-del-pass').hidden = !pw;
   ['sec-err', 'sec-ok'].forEach(id => { $(id).textContent = ''; });
   ['sec-cur', 'sec-new', 'sec-addpass', 'sec-del-name', 'sec-del-pass'].forEach(id => { $(id).value = ''; });
-  // stats
+  // stats + achievements
   renderStats();
+  renderAch();
+}
+function renderAch() {
+  const list = API.achList(), got = API.ach(), done = list.filter(a => got[a.id]).length;
+  $('ach-count').textContent = done + ' of ' + list.length;
+  $('ach-bar').style.width = Math.round(done / list.length * 100) + '%';
+  $('ach-note').innerHTML = done === list.length ? 'Every achievement unlocked \u2014 your name shows <span class="star star3">\u2605\u2605\u2605</span> everywhere.'
+    : 'No rewards \u2014 just bragging rights. Unlock all ' + list.length + ' and your name gets <span class="star star3">\u2605\u2605\u2605</span> on the leaderboard and live view.';
+  const groups = [...new Set(list.map(a => a.g))];
+  $('ach-list').innerHTML = groups.map(g => '<div class="sg-h">' + esc(g) + '</div>' + list.filter(a => a.g === g).map(a => {
+    const t = got[a.id];
+    return '<div class="ach' + (t ? ' got' : '') + '"><i aria-hidden="true">' + (t ? '\u2605' : '\u25cb') + '</i><div><b>' + esc(a.name) + '</b><span>' + esc(a.hint) +
+      (t ? ' \u00b7 ' + new Date(t).toLocaleDateString(undefined, {day: 'numeric', month: 'short', year: 'numeric'}) : '') + '</span></div></div>';
+  }).join('')).join('');
 }
 $('acct-tabs').addEventListener('click', e => { const b = e.target.closest('button[data-pane]'); if (b) { acctPane = b.dataset.pane; renderAcct(); } });
 $('acct-close').addEventListener('click', () => closeM('m-acct'));
@@ -458,6 +478,7 @@ async function loadLife() {
   try {
     const s = await getDoc(lifeRef(O.user.uid));
     if (s.exists() && s.data().modes) API.mergeLife(s.data().modes);
+    if (s.exists() && s.data().ach) API.mergeAch(s.data().ach);
   } catch (e) { console.warn('Stats load failed', e); }
   O.lifeLoaded = true;
   pushLife(true);
@@ -467,9 +488,17 @@ async function pushLife(force) {
   if (!O.lifeLoaded || !O.user) return;
   if (!force && Date.now() - lifePushAt < 60e3) return;
   lifePushAt = Date.now();
-  try { await setDoc(lifeRef(O.user.uid), {modes: API.life(), updatedAt: serverTimestamp()}); } catch (e) { console.warn('Stats sync failed', e); }
+  try { await setDoc(lifeRef(O.user.uid), {modes: API.life(), ach: API.ach(), updatedAt: serverTimestamp()}); } catch (e) { console.warn('Stats sync failed', e); }
 }
 API.events.on('life', () => pushLife(false));
+let lastAch3 = null;
+API.events.on('ach', () => {
+  pushLife(true);
+  const a3 = myAch3();
+  if (O.ready && O.profile && lastAch3 !== null && a3 !== lastAch3) { syncBoardName(); renderAccount(); }
+  lastAch3 = a3;
+  if (!$('m-acct').hidden) renderAcct();
+});
 window.addEventListener('pagehide', () => { pushLife(true); });
 
 const num = v => Math.round(v).toLocaleString();
@@ -641,7 +670,7 @@ async function submitBest(mode, vals, quiet) {
   if (!Object.keys(up).length) return;
   Object.assign(best, up);
   try {
-    await setDoc(boardRef(mode, O.user.uid), Object.assign({name: myName(), star: isPerm(), updatedAt: serverTimestamp()}, up), {merge: true});
+    await setDoc(boardRef(mode, O.user.uid), Object.assign({name: myName(), star: isPerm(), ach3: myAch3(), updatedAt: serverTimestamp()}, up), {merge: true});
     if (up.goalsSec && !quiet) API.toast('New ' + API.diffLabel(mode) + ' best: every goal in ' + mmss(up.goalsSec), 'good');
   } catch (e) { console.warn('Leaderboard update failed', e); }
 }
@@ -682,7 +711,7 @@ async function openBoard(tab, mode) {
     snap.forEach(s => {
       const d = s.data(); if (!(d[boardTab] > 0)) return;
       const me = O.user && s.id === O.user.uid; if (me) meIn = true;
-      rows.push('<li class="' + (me ? 'me' : '') + '"><span class="rank">' + (rows.length + 1) + '</span><span class="who">' + nameHTML(d.name || '?', d.star) +
+      rows.push('<li class="' + (me ? 'me' : '') + '"><span class="rank">' + (rows.length + 1) + '</span><span class="who">' + nameHTML(d.name || '?', d.star, d.ach3) +
         '</span><b class="num">' + B.fmt(d[boardTab]) + '</b></li>');
     });
     $('board-list').innerHTML = rows.join('') || '<li class="mini">No entries yet \u2014 be the first.</li>';
@@ -713,7 +742,7 @@ async function setupLive(forceNew) {
     try {
       const ref = doc(db, 'live', c), s = await getDoc(ref);
       if (s.exists() && s.data().uid !== O.user.uid) { code = null; continue; }
-      await setDoc(ref, {uid: O.user.uid, name: myName(), star: isPerm(), playing: false, state: null, meta: null, stateAt: null, updatedAt: serverTimestamp(), expireAt: new Date(Date.now() + 864e5)});
+      await setDoc(ref, {uid: O.user.uid, name: myName(), star: isPerm(), ach3: myAch3(), playing: false, state: null, meta: null, stateAt: null, updatedAt: serverTimestamp(), expireAt: new Date(Date.now() + 864e5)});
       code = c; break;
     } catch (e) { console.warn('live code', e); code = null; }
   }
@@ -819,27 +848,27 @@ function startWatching(code, first) {
     API.saveNow(); cloudSave(true);
     API.toast('Your city is saved' + (O.slot ? ' in slot ' + O.slot : '') + ' \u2014 open it again from Save files.', 'tip');
   }
-  const S = O.spec = {code, name: first.name, star: first.star, key: '', unsub: null, ping: null, loaded: false, lastStateAt: 0};
+  const S = O.spec = {code, name: first.name, star: first.star, ach3: first.ach3, key: '', unsub: null, ping: null, loaded: false, lastStateAt: 0};
   const bar = $('spec-bar'); bar.hidden = false;
-  setSpecText('Connecting to ' + nameHTML(first.name, first.star) + '\u2026');
+  setSpecText('Connecting to ' + nameHTML(first.name, first.star, first.ach3) + '\u2026');
   const ping = () => updateDoc(doc(db, 'live', code), {watchT: serverTimestamp()}).catch(() => {});
   ping(); S.ping = setInterval(ping, WATCH_PING);
   S.unsub = onSnapshot(doc(db, 'live', code), snap => {
     if (O.spec !== S) return;
-    if (!snap.exists()) { setSpecText(nameHTML(S.name, S.star) + ' has left.'); return; }
-    const d = snap.data(); S.name = d.name; S.star = d.star;
+    if (!snap.exists()) { setSpecText(nameHTML(S.name, S.star, S.ach3) + ' has left.'); return; }
+    const d = snap.data(); S.name = d.name; S.star = d.star; S.ach3 = d.ach3;
     const online = d.updatedAt && d.updatedAt.toMillis && Date.now() - d.updatedAt.toMillis() < 3 * LIVE_HEARTBEAT;
     if (!d.playing || !d.state) {
-      setSpecText(nameHTML(d.name, d.star) + (d.meta && d.meta.over ? '\u2019s city just ended.' : online ? ' is on the menu \u2014 waiting for them to play\u2026' : ' isn\u2019t online right now.'));
+      setSpecText(nameHTML(d.name, d.star, d.ach3) + (d.meta && d.meta.over ? '\u2019s city just ended.' : online ? ' is on the menu \u2014 waiting for them to play\u2026' : ' isn\u2019t online right now.'));
       return;
     }
     let city = null; try { city = JSON.parse(d.state); } catch (e) { return; }
     const key = layoutKey(city);
     if (!S.loaded || key !== S.key) {
-      if (!API.spectate.enter(city, d.meta, S.loaded)) { setSpecText('Couldn\u2019t show ' + nameHTML(d.name, d.star) + '\u2019s city.'); return; }
-      S.loaded = true; S.key = key;
+      if (!API.spectate.enter(city, d.meta, S.loaded)) { setSpecText('Couldn\u2019t show ' + nameHTML(d.name, d.star, d.ach3) + '\u2019s city.'); return; }
+      S.loaded = true; S.key = key; API.awardAch('watcher');
     } else API.spectate.patch(city, d.meta);
-    setSpecText('Watching <b>' + nameHTML(d.name, d.star) + '</b> live' + (d.meta && !d.meta.running ? ' \u00b7 paused' : '') + ' \u00b7 view only');
+    setSpecText('Watching <b>' + nameHTML(d.name, d.star, d.ach3) + '</b> live' + (d.meta && !d.meta.running ? ' \u00b7 paused' : '') + ' \u00b7 view only');
   }, e => setSpecText('Lost connection: ' + esc(e.message)));
 }
 function setSpecText(html) { $('spec-text').innerHTML = html; }
