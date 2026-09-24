@@ -161,6 +161,12 @@
         <div class="trouble" id="trouble"></div>
         <h3>Stores</h3>
         <div class="stores" id="stores"></div>
+        <h3>Tips</h3>
+        <label class="tgl"><input type="checkbox" id="opt-tips" checked><span>Pop up tips as things happen</span></label>
+        <details class="tipsbox"><summary>Read every tip</summary>
+          <ul class="tipslist" id="tips-list"></ul>
+          <button class="linkbtn" id="tips-reset" type="button">Show tips again from the start</button>
+        </details>
       </div>
       <div class="tabpane" data-tab="shop" id="tab-shop-pane" hidden>
         <h3>Hire and buy</h3>
@@ -262,7 +268,7 @@
         </div>
         <div class="acct-perm" id="user-perm">
           <h3><span class="star" aria-hidden="true">★</span> Make it a permanent account</h3>
-          <p class="mini">Accounts keep your name for good, keep the same live code, carry your save files to any device, and get a star on the leaderboard. Guest progress stays on this browser only.</p>
+          <p class="mini">Accounts keep your name (you can still change it), keep the same live code, carry your save files and stats to any device, and get a star on the leaderboard. Guest progress stays on this browser only.</p>
           <button class="bigbtn ghost gbtn" id="user-google" type="button"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="#4285F4" d="M22.5 12.3c0-.8-.1-1.5-.2-2.2H12v4.2h5.9a5 5 0 01-2.2 3.3v2.7h3.5c2.1-1.9 3.3-4.7 3.3-8z"/><path fill="#34A853" d="M12 23c3 0 5.4-1 7.2-2.7l-3.5-2.7c-1 .7-2.2 1-3.7 1-2.9 0-5.3-1.9-6.2-4.5H2.2v2.8A11 11 0 0012 23z"/><path fill="#FBBC05" d="M5.8 14.1a6.6 6.6 0 010-4.2V7.1H2.2a11 11 0 000 9.8z"/><path fill="#EA4335" d="M12 5.4c1.6 0 3.1.6 4.2 1.7l3.1-3.1A11 11 0 002.2 7.1l3.6 2.8C6.7 7.3 9.1 5.4 12 5.4z"/></svg>Continue with Google</button>
           <div class="emailrow">
             <input id="user-email" type="email" autocomplete="email" placeholder="Email">
@@ -273,6 +279,91 @@
             <button class="bigbtn ghost" id="user-signin" type="button">Sign in</button>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- online: account (profile, stats, security) -->
+    <div class="modal" id="m-acct" hidden>
+      <div class="card plate wide acctcard">
+        <div class="acct-head">
+          <div class="acct-av" id="acct-av" aria-hidden="true"></div>
+          <div class="acct-id"><h2 id="acct-name">Account</h2><p class="mini" id="acct-sub"></p></div>
+        </div>
+        <div class="seg boardtabs" id="acct-tabs" role="group" aria-label="Account sections">
+          <button type="button" data-pane="profile" aria-pressed="true">Profile</button>
+          <button type="button" data-pane="stats" aria-pressed="false">Stats</button>
+          <button type="button" data-pane="security" aria-pressed="false" id="acct-tab-sec">Security</button>
+        </div>
+
+        <div class="acct-pane" data-pane="profile">
+          <h3>Username</h3>
+          <div class="acct-row">
+            <input id="acct-newname" type="text" maxlength="16" autocomplete="nickname" spellcheck="false" placeholder="3–16 letters, numbers, _ or -">
+            <button class="bigbtn" id="acct-rename" type="button">Change</button>
+          </div>
+          <p class="mini" id="acct-name-note"></p>
+          <p class="formerr" id="acct-err" role="alert"></p>
+          <h3>Online</h3>
+          <div class="acct-grid">
+            <button class="act" id="acct-saves" type="button">Save files</button>
+            <button class="act" id="acct-board" type="button">Leaderboard</button>
+            <button class="act" id="acct-watch" type="button">Watch a player</button>
+            <button class="act" id="acct-feedback" type="button">Send feedback</button>
+          </div>
+          <div class="acct-box" id="acct-guest-box">
+            <h3><span class="star" aria-hidden="true">★</span> Make it a permanent account</h3>
+            <p class="mini">Keep your name, stats and save files on any device, keep the same live code, and get a star on the leaderboard. Right now your progress lives on this browser only.</p>
+            <button class="bigbtn" id="acct-upgrade" type="button">Sign in or create an account</button>
+          </div>
+          <div class="acct-box" id="acct-perm-box">
+            <button class="bigbtn ghost" id="acct-signout" type="button">Sign out</button>
+          </div>
+        </div>
+
+        <div class="acct-pane" data-pane="stats" hidden>
+          <div class="seg boardtabs boardmodes" id="stats-modes" role="group" aria-label="Mode"></div>
+          <div class="statgrid" id="stats-grid"></div>
+          <div class="modebars" id="stats-bars"></div>
+          <p class="mini" id="stats-note"></p>
+        </div>
+
+        <div class="acct-pane" data-pane="security" hidden>
+          <h3>Email</h3>
+          <p class="sec-line" id="sec-email"></p>
+          <button class="act" id="sec-verify" type="button" hidden>Send verification email</button>
+          <div id="sec-pass-box">
+            <h3>Password</h3>
+            <div class="emailrow">
+              <input id="sec-cur" type="password" autocomplete="current-password" placeholder="Current password">
+              <input id="sec-new" type="password" autocomplete="new-password" placeholder="New password (6+ characters)">
+            </div>
+            <div class="btnrow tight">
+              <button class="bigbtn ghost" id="sec-change" type="button">Change password</button>
+              <button class="linkbtn" id="sec-reset" type="button">Email me a reset link</button>
+            </div>
+          </div>
+          <div id="sec-addpass-box">
+            <h3>Add a password</h3>
+            <p class="mini">Sign in with your email and a password as well as Google.</p>
+            <div class="acct-row"><input id="sec-addpass" type="password" autocomplete="new-password" placeholder="New password (6+ characters)"><button class="bigbtn ghost" id="sec-addpass-btn" type="button">Add</button></div>
+          </div>
+          <h3>Sign-in methods</h3>
+          <p class="sec-line" id="sec-providers"></p>
+          <button class="bigbtn ghost gbtn" id="sec-link-google" type="button" hidden>Link Google</button>
+          <div class="acct-danger">
+            <h3>Delete account</h3>
+            <p class="mini">Removes your username, save files, leaderboard entries and stats for good. This can't be undone.</p>
+            <div class="emailrow">
+              <input id="sec-del-name" type="text" spellcheck="false" autocomplete="off" placeholder="Type your username to confirm">
+              <input id="sec-del-pass" type="password" autocomplete="current-password" placeholder="Your password">
+            </div>
+            <button class="bigbtn danger" id="sec-delete" type="button">Delete my account</button>
+          </div>
+          <p class="formerr" id="sec-err" role="alert"></p>
+          <p class="mini okline" id="sec-ok" aria-live="polite"></p>
+        </div>
+
+        <div class="btnrow"><button class="bigbtn ghost" id="acct-close" type="button">Close</button></div>
       </div>
     </div>
 
