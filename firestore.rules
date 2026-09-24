@@ -6,6 +6,7 @@ rules_version = '2';
 //   usernames/{nameLower}     names reserved by permanent accounts             readable by players, create-once
 //   leaderboard/{uid}         personal bests                                   everyone reads, owner writes
 //   live/{code}               live-view channel                                read by code only (no listing)
+//   feedback/{cat}/entries    guest feedback (bugs / ideas / other)            create only; read in the console
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -86,6 +87,25 @@ service cloud.firestore {
         || (resource.data.uid != request.auth.uid
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['watchT'])));
       allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    // Guests' feedback. Players can add a note but nobody can read, edit or delete
+    // them from the game — you read them in the Firebase console.
+    function validFeedback() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['uid', 'name', 'message', 'details', 'replyTo', 'createdAt'])
+        && d.uid == request.auth.uid
+        && d.message is string && d.message.size() >= 3 && d.message.size() <= 1500
+        && (!('details' in d) || (d.details is string && d.details.size() <= 2000))
+        && (!('name' in d) || validName(d.name))
+        && (!('replyTo' in d) || (d.replyTo is string && d.replyTo.size() <= 254
+              && d.replyTo.matches('^[^@\\s]+@[^@\\s]+[.][^@\\s]+$')))
+        && d.createdAt == request.time;
+    }
+
+    match /feedback/{category}/entries/{id} {
+      allow create: if signedIn() && category in ['bugs', 'ideas', 'other'] && validFeedback();
+      allow read, update, delete: if false;
     }
   }
 }
