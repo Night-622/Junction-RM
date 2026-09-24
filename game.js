@@ -152,7 +152,7 @@ const CONFIG = {
   towCooldown:        3,        // a truck rests this long between jobs
   towSeekBlocked:     5,        // send a truck to a car blocked this long...
   towSeekStopped:     14,       // ...or standing still this long...
-  towSeekBroken:      2.2,      // ...or broken down with at least this long left
+  towSeekBroken:      0.4,      // ...or broken down (a claimed car stays broken until the truck gets there)
   towHookBlocked:     3,        // the truck hooks whatever stuck car is right in front of it
   towHookStopped:     8,
   towHookBroken:      1.2,
@@ -837,7 +837,13 @@ function baySpots(d) {
 function parkedPose(c) {
   const L = c.loc;
   if (L.t === 'yard') {
-    const s = buildings[L.i], p = rot(tx(s.k), ty(s.k), s.face || 0, 0, 10.5);
+    const s = buildings[L.i];
+    if (c.isTruck && !c.isAmb) {                     // tow trucks wait inside their store, side by side
+      const mine = trucks.filter(x => x.store === L.i), i = Math.max(0, mine.indexOf(c));
+      const p = rot(tx(s.k), ty(s.k), s.face || 0, mine.length > 1 ? (i ? 5.2 : -5.2) : 0, -1.5);
+      return {x: p.x, y: p.y, a: (s.face || 0) + Math.PI / 2};
+    }
+    const p = rot(tx(s.k), ty(s.k), s.face || 0, 0, 10.5);
     return {x: p.x, y: p.y, a: (s.face || 0) + Math.PI / 2};
   }
   if (L.t === 'home') {
@@ -1055,7 +1061,7 @@ function moveEdge(e, dt) {
     c.x = e.ax + e.ux * c.s + e.nx * o; c.y = e.ay + e.uy * c.s + e.ny * o;
     const ta = Math.atan2(e.uy, e.ux);
     c.ang = Math.abs(angDiff(c.ang, ta)) < 0.02 ? ta : c.ang + angDiff(c.ang, ta) * Math.min(1, dt * 12);
-    if (c.broken > 0) { c.broken -= dt; c.hazard += dt; if (c.broken <= 0) { c.broken = 0; c.hazard = 0; } }
+    if (c.broken > 0) { if (!(c.claim && c.claim.isTruck)) c.broken -= dt; c.hazard += dt; if (c.broken <= 0) { c.broken = 0; c.hazard = 0; } }   // waits for a tow truck that's on its way
   }
   e.qRaw = q;
   e.q += (q - e.q) * Math.min(1, dt * 1.6);
@@ -1128,7 +1134,7 @@ function canGo(nd, c, dt) {
   if (roomOn(f, c.len, c)) { c.blockedT = Math.max(0, c.blockedT - dt * 2); return f; }
   c.blockedT += dt;
   if (c.blockedT > 1.4 && c.replanCool <= 0 && solveBudget > 0) { c.replanCool = 3; replan(c, f); }
-  if (c.blockedT > CFG.gridlockSeconds) tow(c, false);
+  if (c.blockedT > CFG.gridlockSeconds && !(c.claim && c.claim.isTruck)) tow(c, false);
   return null;
 }
 function headOf(nd, e) {
@@ -1353,7 +1359,7 @@ function stepTraffic(dt) {
       const ok = destOk(c);
       if (ok === 1) startEnter(c);
       else if (ok < 0) { if (c.replanCool <= 0 && solveBudget > 0) { c.replanCool = 1; if (!replan(c)) { c.planFail++; if (c.planFail > 3) giveUp(c); } } }
-      else { c.blockedT += dt; if (c.blockedT > CFG.gridlockSeconds) tow(c, false); }
+      else { c.blockedT += dt; if (c.blockedT > CFG.gridlockSeconds && !(c.claim && c.claim.isTruck)) tow(c, false); }
       continue;
     }
     const nd = nodes[e.b];
@@ -2504,7 +2510,12 @@ function makeTruck(si) {
     replanT: rnd(1, CFG.replanSeconds), replanCool: 0, planFail: 0, brake: false, broken: 0, xf: null, xfEdge: null, cr: null,
     idle: 0, trips: 0, carried: 0, tripStart: 0, hazard: 0, tgt: null, hook: null, hauling: null, cool: 2};
   trucks.push(t);
+  poseYard(si);
   return t;
+}
+/* line up the trucks waiting inside a store */
+function poseYard(si) {
+  for (const x of trucks) if (x.store === si && x.state === 'garage') { const p = parkedPose(x); x.x = p.x; x.y = p.y; x.ang = p.a; }
 }
 /* the store that most needs a truck: room for one, fewest already, most stressed */
 function bestTruckStore() {
@@ -2615,6 +2626,7 @@ function truckArrive(t) {
   const h = t.hauling; t.hauling = null;
   if (h) recoverCar(h, t);
   t.job = null; t.route = null; t.tgt = null; t.hook = null; t.state = 'garage'; t.cool = CFG.towCooldown;
+  t.loc = {t: 'yard', i: t.store}; poseYard(t.store);
 }
 /* a hauled car reaches the yard: its parcels are delivered and it goes home */
 function recoverCar(c, t) {
@@ -2899,7 +2911,7 @@ const GOALS = [
   {id: 'bay',   name: 'Off the road',        hint: 'Have a car wait in a bay',          hit: () => cars.some(c => c.loc && c.loc.t === 'bay' && c.state === 'parked'), reward: {cash: 15}},
   {id: 'lot',   name: 'Room to park',        hint: 'Build a parking lot',               hit: () => parks.length > 0, reward: {cash: 15}},
   {id: 'moto',  name: 'Fast lane',           hint: 'Open a motorway',                   hit: () => motorways.length > 0, reward: {inv: {bridge: 1}}},
-  {id: 'van',   name: 'Van life',            hint: 'Put a van on the road',             hit: () => cars.some(c => c.van), reward: {cash: 15}},
+  {id: 'maxcar', name: 'Fully loaded',       hint: 'Max every upgrade on one car',       hit: () => cars.some(c => !c.isTruck && Object.keys(CAR_UP).every(t => carUp(c, t) >= CAR_UP[t].max)), reward: {cash: 60}},
   {id: 'round', name: 'Round and round',     hint: 'Build a roundabout',                hit: () => special.some(s => s === 'round'), reward: {inv: {sign: 2}}},
   {id: 'diag',  name: 'Straight to the point', hint: 'Lay a diagonal road link',        hit: () => edges.some(e => (e.d & 1) && !e.fast), reward: {inv: {road: 6}}},
   {id: 'six',   name: 'Six-car garage',      hint: 'Own 6 cars at one house',           hit: () => buildings.some(b => b.carsN >= 6), reward: {inv: {park: 1}}},
@@ -2964,7 +2976,7 @@ function update(dt) {
   stepContracts(dt);
 
   dispatchTimer -= dt;
-  if (dispatchTimer <= 0) { dispatchTimer = CFG.dispatchInterval; dispatch(); dispatchTrucks(); }
+  if (dispatchTimer <= 0) { dispatchTimer = CFG.dispatchInterval; dispatchTrucks(); dispatch(); }   // trucks plan first so busy frames can't starve them
   stepTraffic(dt);
   // a citywide gridlock: even with no store overflowing, sustained near-total standstill also ends the run
   if (week >= CFG.cityGridlockFromWeek && !DIFF.noFail && !tutorialMode && !spectating) {
@@ -3145,8 +3157,9 @@ function endGame(why) {
    Totals per mode across every city, kept in localStorage per player (online.js tells us who
    that is and mirrors it to the cloud). Averages are worked out from these when shown. */
 const LIFE_KEY = 'junction-life-v1';
-const LIFE_FIELDS = ['cities', 'ended', 'parcels', 'weeks', 'earned', 'spent', 'trips', 'tows', 'breakdowns', 'goals', 'allGoals', 'playSec', 'bestParcels', 'bestWeek', 'bestEarned'];
+const LIFE_FIELDS = ['cities', 'ended', 'parcels', 'weeks', 'earned', 'spent', 'trips', 'tows', 'breakdowns', 'goals', 'allGoals', 'playSec', 'bestParcels', 'bestWeek', 'bestEarned', 'bodies', 'kits'];
 const LIFE_MAX = new Set(['bestParcels', 'bestWeek', 'bestEarned']);
+const LIFE_BITS = new Set(['bodies', 'kits']);          // which car bodies / speed kits have ever been driven (bit sets)
 let lifeOwner = '', life = readLife(''), lifeSnap = null, lifeNewCity = false, lifeDirty = false;
 function blankLife() { const o = {}; for (const m in DIFFS) o[m] = Object.fromEntries(LIFE_FIELDS.map(f => [f, 0])); return o; }
 function cleanLife(d) {
@@ -3174,7 +3187,7 @@ function setLifeOwner(uid) {
 /* add (sum) or take the higher value (max) of another copy, e.g. the cloud copy */
 function mergeLife(other, add) {
   const o = cleanLife(other);
-  for (const m in life) for (const f of LIFE_FIELDS) life[m][f] = LIFE_MAX.has(f) || !add ? Math.max(life[m][f], o[m][f]) : life[m][f] + o[m][f];
+  for (const m in life) for (const f of LIFE_FIELDS) life[m][f] = LIFE_BITS.has(f) ? (life[m][f] | o[m][f]) : LIFE_MAX.has(f) || !add ? Math.max(life[m][f], o[m][f]) : life[m][f] + o[m][f];
   lifeDirty = true;
 }
 function lifeMark() { lifeSnap = {score, week, earned: stats.earned, spent: stats.spent, trips: stats.trips, tows: stats.tows, breakdowns: stats.breakdowns, goals: goalsDone.size}; }
@@ -3187,6 +3200,7 @@ function lifeTick(realDt) {
   const s = lifeSnap, up = v => v > 0 ? v : 0;
   L.parcels += up(score - s.score); L.weeks += up(week - s.week); L.earned += up(stats.earned - s.earned); L.spent += up(stats.spent - s.spent);
   L.trips += up(stats.trips - s.trips); L.tows += up(stats.tows - s.tows); L.breakdowns += up(stats.breakdowns - s.breakdowns); L.goals += up(goalsDone.size - s.goals);
+  for (const c of cars) { L.bodies |= 1 << bodyOf(c); L.kits |= 1 << carUp(c, 'spd'); }
   L.bestParcels = Math.max(L.bestParcels, score); L.bestWeek = Math.max(L.bestWeek, week); L.bestEarned = Math.max(L.bestEarned, Math.round(stats.earned));
   lifeMark(); if (playing || realDt === 0) lifeDirty = true;
 }
@@ -3219,6 +3233,9 @@ const ACH = [
   {id: 'light8', g: 'Building', name: 'Signal box',        hint: 'Have 8 traffic lights at once',  hit: () => cntSpecial('light') >= 8},
   {id: 'clock',  g: 'Building', name: 'Clockwork',         hint: 'Keep 25+ cars moving with no jams', hit: () => cars.filter(c => c.state === 'driving').length >= 25 && stats.jamPct < 0.05},
   {id: 'tow10',  g: 'Building', name: 'Tow fleet',         hint: 'Rescue 10 cars with tow trucks in one city', hit: () => stats.tows >= 10},
+  {id: 'van',    g: 'Building', name: 'Van life',          hint: 'Put a van on the road',          hit: () => cars.some(c => c.van)},
+  {id: 'bodies', g: 'Building', name: 'Car collector',     hint: 'Drive every kind of car: hatchback, estate, pickup, panel van and box truck', life: L => lifeBits(L, 'bodies') === (1 << BODY.length) - 1},
+  {id: 'kits',   g: 'Building', name: 'Tuner',             hint: 'Fit every speed kit: Sport, GT and Racer', life: L => (lifeBits(L, 'kits') & 14) === 14},
   {id: 'amb10',  g: 'Building', name: 'Blue lights',       hint: 'Get 10 ambulances there on time in one city', hit: () => (stats.ambOk || 0) >= 10},
   // modes
   {id: 'frantic10',  g: 'Modes', name: 'Nerves of steel', hint: 'Reach week 10 on Frantic',          hit: () => inMode('frantic') && week >= 10},
@@ -3241,6 +3258,7 @@ const ACH = [
 ];
 const ACH_KEY = 'junction-ach-v1';
 const lifeSum = (L, f) => Object.values(L).reduce((a, m) => a + (m[f] || 0), 0);
+const lifeBits = (L, f) => Object.values(L).reduce((a, m) => a | (m[f] || 0), 0);
 let ach = readAch(lifeOwner);
 function readAch(owner) { try { return cleanAch(JSON.parse(localStorage.getItem(ACH_KEY + (owner ? ':' + owner : '')))); } catch (e) { return {}; } }
 function cleanAch(d) { const o = {}; if (d && typeof d === 'object') for (const a of ACH) if (+d[a.id] > 0) o[a.id] = +d[a.id]; return o; }
@@ -4101,9 +4119,9 @@ function drawCar(c, sizeBoost) {
     ctx.beginPath(); ctx.arc(c.x, c.y, 11 + Math.sin(animT * 5), 0, 6.3); ctx.stroke();
   }
 }
-function drawTruck(t) {
+function drawTruck(t, sc) {
   const L = t.len, Wd = 7.6, on = t.job === 'seek' || t.job === 'home' || t.hauling;
-  ctx.save(); ctx.translate(t.x, t.y); ctx.rotate(t.ang);
+  ctx.save(); ctx.translate(t.x, t.y); ctx.rotate(t.ang); if (sc) ctx.scale(sc, sc);
   rr(-L / 2 + 1, -Wd / 2 + 1.7, L, Wd, 2.4); ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.fill();
   rr(-L / 2, -Wd / 2, L, Wd, 2.4); ctx.fillStyle = '#f08a1c'; ctx.fill(); ctx.lineWidth = 0.7; ctx.strokeStyle = 'rgba(0,0,0,.4)'; ctx.stroke();
   rr(-L / 2 + 1, -Wd / 2 + 1, L * 0.5, Wd - 2, 1.2); ctx.fillStyle = '#3b4650'; ctx.fill();        // flat bed
@@ -4309,7 +4327,7 @@ function draw() {
   drawSelectedBuilding();
   drawSelectedRoute();
   for (const c of cars) drawCar(c);
-  for (const t of trucks) if (t.state !== 'garage') drawTruck(t);
+  for (const t of trucks) drawTruck(t, t.state === 'garage' ? 0.62 : 0);   // parked ones wait, small, inside their store
   for (const a of ambs) { drawAmbTarget(a); drawAmb(a); }
   for (const b of buildings) { if (b.type === 'store') { drawStoreLevel(b); drawStoreBadge(b); drawContractBadge(b); } else drawHouseBadge(b); }
   drawFX(); drawMotoPick();
@@ -5179,7 +5197,7 @@ function bindInput() {
     if (e.target.closest && (e.target.closest('#menu') || e.target.closest('#btn-menu'))) return;
     m.hidden = true; $('btn-menu').setAttribute('aria-expanded', 'false');
   });
-  $('btn-panel').addEventListener('click', () => { $('app').classList.toggle('panel-off'); layout(); });
+  $('btn-panel').addEventListener('click', () => { setLay({panel: $('app').classList.contains('panel-off')}); });
   $('opt-night').addEventListener('change', e => { nightOn = e.target.checked; savePrefs(); });
   $('opt-grid').addEventListener('change', e => { showGrid = e.target.checked; savePrefs(); });
   $('opt-fx').addEventListener('change', e => { fxOn = e.target.checked; savePrefs(); });
@@ -5237,6 +5255,59 @@ const CFG_SPEEDS = [0.5, 1, 2, 3];
 function toggleMute() { muted = !muted; savePrefs(); refreshUI(); }
 /* settings that should outlive a reload */
 const PREFS_KEY = 'junction2-prefs';
+
+/* ------------------------------------------------------------ layout
+   Each bar can be full or small, and the side panel shown or hidden. Phones (and phones held
+   sideways) and bigger screens each remember their own layout. */
+const LAY_KEY = 'junction-layout-v1';
+const LAY_PRESETS = {
+  full:    {stats: false, ctrl: false, dock: false, panel: true},
+  compact: {stats: false, ctrl: true,  dock: true,  panel: true},
+  minimal: {stats: true,  ctrl: true,  dock: true,  panel: false}
+};
+const layDevice = () => compactUI() || window.innerWidth <= 820 || window.innerHeight < 500 ? 'phone' : 'desk';
+function layDefault(dev) {
+  if (dev === 'phone') return Object.assign({}, LAY_PRESETS.minimal);
+  return window.innerHeight <= 760 || window.innerWidth < 1200 ? Object.assign({}, LAY_PRESETS.compact) : Object.assign({}, LAY_PRESETS.full);
+}
+let layAll = (() => { try { return JSON.parse(localStorage.getItem(LAY_KEY)) || {}; } catch (e) { return {}; } })();
+let layDev = '';
+function curLay() { const d = layDevice(); return Object.assign(layDefault(d), layAll[d] || {}); }
+function applyLayout() {
+  layDev = layDevice();
+  const L = curLay(), app = $('app');
+  app.classList.toggle('lay-stats-mini', !!L.stats);
+  app.classList.toggle('lay-ctrl-mini', !!L.ctrl);
+  app.classList.toggle('lay-dock-icons', !!L.dock);
+  app.classList.toggle('panel-off', !L.panel);
+  const set = (id, v) => { const e = $(id); if (e) e.checked = !!v; };
+  set('lay-stats', L.stats); set('lay-ctrl', L.ctrl); set('lay-dock', L.dock); set('lay-panel', L.panel);
+  const pre = Object.keys(LAY_PRESETS).find(k => ['stats', 'ctrl', 'dock', 'panel'].every(f => !!LAY_PRESETS[k][f] === !!L[f]));
+  document.querySelectorAll('#lay-pre button').forEach(b => b.setAttribute('aria-pressed', b.dataset.pre === pre ? 'true' : 'false'));
+  document.querySelectorAll('.minbtn').forEach(b => {
+    const on = L[b.dataset.min];
+    b.setAttribute('aria-label', (on ? 'Grow ' : 'Shrink ') + ({stats: 'the stats bar', ctrl: 'the controls', dock: 'the tools'})[b.dataset.min]);
+  });
+  requestAnimationFrame(layout);
+}
+function setLay(ch) {
+  const d = layDevice();
+  layAll[d] = Object.assign(curLay(), ch);
+  try { localStorage.setItem(LAY_KEY, JSON.stringify(layAll)); } catch (e) {}
+  applyLayout();
+}
+function bindLayout() {
+  document.querySelectorAll('.minbtn').forEach(b => b.addEventListener('click', e => {
+    e.stopPropagation();
+    const k = b.dataset.min; setLay({[k]: !curLay()[k]});
+  }));
+  document.querySelectorAll('#lay-pre button').forEach(b => b.addEventListener('click', () => setLay(Object.assign({}, LAY_PRESETS[b.dataset.pre]))));
+  [['lay-stats', 'stats'], ['lay-ctrl', 'ctrl'], ['lay-dock', 'dock'], ['lay-panel', 'panel']].forEach(([id, k]) => {
+    const e = $(id); if (e) e.addEventListener('change', () => setLay({[k]: e.checked}));
+  });
+  // rotating a phone or resizing across the phone/laptop line switches to that device's layout
+  window.addEventListener('resize', () => { if (layDevice() !== layDev) applyLayout(); });
+}
 function savePrefs(noCity) {
   try { localStorage.setItem(PREFS_KEY, JSON.stringify({muted, nightOn, showGrid, fxOn, colorMode, customHex, showSymbols, tipsOn, notesMode})); } catch (e) {}
   if (!noCity && started && !over && !tutorialMode && !spectating && running) saveGame();   // the open city keeps these colours
@@ -5544,7 +5615,17 @@ function layout() {
   const mobile = W < 820, panelOn = !$('app').classList.contains('panel-off');
   const topH = Math.round($('topbar').getBoundingClientRect().height) + 20;
   document.documentElement.style.setProperty('--top', topH + 'px');
-  insets.l = mobile ? 0 : 92; insets.r = (!mobile && panelOn) ? 312 : 0; insets.t = topH; insets.b = mobile ? (panelOn ? Math.round(H * 0.44) + 100 : 100) : 40;
+  // keep the city clear of whatever bars are actually on screen, whatever size they are
+  const box = id => { const e = $(id); if (!e || e.hidden) return null; const b = e.getBoundingClientRect(); return b.width > 0 && b.height > 0 ? b : null; };
+  insets.l = 0; insets.r = 0; insets.b = 40;
+  for (const b of [box('dock'), panelOn ? box('panel') : null]) {
+    if (!b) continue;
+    const tall = b.height > b.width;
+    if (tall && b.left - r.left < W * 0.3) insets.l = Math.max(insets.l, Math.round(b.right - r.left) + 12);        // a column on the left
+    else if (tall && r.right - b.right < W * 0.3) insets.r = Math.max(insets.r, Math.round(r.right - b.left) + 12); // a column on the right
+    else if (b.top > r.top + H * 0.3) insets.b = Math.max(insets.b, Math.round(r.bottom - b.top) + 30);            // a sheet along the bottom
+  }
+  insets.t = topH;
   if (tutorialMode) {
     const tp = $('tut-panel');
     const tmin = tp && tp.classList.contains('min');
@@ -5592,8 +5673,8 @@ function boot() {
   try { t = localStorage.getItem('junction2-theme') || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); } catch (e) {}
   setTheme(t);
   loadPrefs();
-  if (window.innerWidth < 820) $('app').classList.add('panel-off');
   buildToolbars(); bindInput(); showTab('city');
+  applyLayout(); bindLayout();
   resetGame('standard'); running = false;
   layout();
   showStartBest();
