@@ -756,6 +756,12 @@ ol.board b{font-weight:800}
 #tut-coach:not(.full) .tc-top::after{content:"Tap for more";margin-left:auto;font-size:10.5px;color:var(--soft);font-weight:600}
 #tut-coach.full .tc-top::after{content:"Tap to shrink";margin-left:auto;font-size:10.5px;color:var(--soft);font-weight:600}
 
+/* ---- notifications setting */
+.notesrow{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:8px 0 2px;font-size:13px}
+.notesrow .seg button{padding:0 9px}
+.notesrow .seg button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+#notes-note:empty{display:none}
+
 /* ---- tips in the City tab */
 .tipsbox{margin:4px 0 8px;font-size:12.5px}
 .tipsbox summary{cursor:pointer;font-weight:700;padding:4px 0}
