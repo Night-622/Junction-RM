@@ -35,11 +35,12 @@ const CONFIG = {
   startStores:        1,
 
   // spawning
-  houseIntervalBase:  80,  houseIntervalRamp: 0.6,  houseIntervalMin: 34,  houseJitter: 16,  firstHouseDelay: 28,
+  houseIntervalBase:  240, houseIntervalRamp: 0.6,  houseIntervalMin: 120, houseJitter: 40,  firstHouseDelay: 60,
   storeIntervalBase:  36,  storeIntervalRamp: 0.8,  storeIntervalMin: 26,  storeJitter: 8, firstStoreDelay: 12,
   newColourChance:    0.8,
   housesOnStoreSpawn: 1,       // houses of the same colour that appear when a new store opens
-  housesOnStoreTierUp:2,       // houses of the same colour that appear when a store tiers up (gets busier)
+  housesOnStoreTierUp:1,       // houses of the same colour that appear when a store tiers up (gets busier)
+  tierUpHouseChance:  0.5,     // chance a tier-up brings any houses at all
 
   // demand
   pinIntervalBase:    12,  pinIntervalRamp:   0.3,  pinIntervalMin:   7.5, pinJitter: 4,
@@ -3000,8 +3001,12 @@ function update(dt) {
         s.evolveTimer = rnd(CFG.storeEvolveCheckMin, CFG.storeEvolveCheckMax);
         if (Math.random() < CFG.storeEvolveChance) {
           s.tier++;
-          for (let i = 0; i < CFG.housesOnStoreTierUp; i++) addBuilding('house', s.color);
-          toast('The ' + COLORS[s.color].name + ' store is busier now (tier ' + s.tier + ') — ' + CFG.housesOnStoreTierUp + ' new ' + COLORS[s.color].name + (CFG.housesOnStoreTierUp === 1 ? ' house' : ' houses') + ' moved in', 'warn');
+          let moved = 0;
+          if (Math.random() < CFG.tierUpHouseChance) {
+            for (let i = 0; i < CFG.housesOnStoreTierUp; i++) if (addBuilding('house', s.color)) moved++;
+          }
+          toast('The ' + COLORS[s.color].name + ' store is busier now (tier ' + s.tier + ')' +
+            (moved ? ' — ' + moved + ' new ' + COLORS[s.color].name + (moved === 1 ? ' house' : ' houses') + ' moved in' : ''), 'warn');
           popRing(tx(s.k), ty(s.k), COLORS[s.color].hex); sfx('upgrade');
         }
       }
@@ -4663,7 +4668,7 @@ const TIPS = {
   overflow: 'Tip: a store is overflowing. Connect more houses of its colour, buy cars, or add a lot.',
   rain: 'Tip: rain slows every car for a while. Nothing to fix \u2014 ride it out.',
   contract: 'Tip: contract! Collect enough parcels from that store before its dial runs out.',
-  tier: 'Tip: a store got busier. Two new houses of its colour have moved in nearby.',
+  tier: 'Tip: a store got busier. New houses of its colour may move in nearby.',
   breakdown: 'Tip: a broken-down car blocks its lane. A tow truck clears it automatically.',
   upgrade: 'Tip: click any car to upgrade its cargo, engine, loading or fuel tank \u2014 or a house to buy another car.',
   offscreen: 'Tip: red arrows on the screen edge point at stores overflowing out of view.',
