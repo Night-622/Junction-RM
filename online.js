@@ -10,6 +10,7 @@
      usernames/{nameLower}       uid   — names claimed by permanent accounts
      leaderboard/{uid}           name, star, parcels, weeks, goalsSec (+ which difficulty each came from)
      live/{6-digit code}         uid, name, star, playing, state, meta, watchT — the live view channel
+     feedback/{auto id}          kind, message, replyTo, details, uid, name, createdAt — write-only for players
    ===================================================================== */
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js';
 import { getAnalytics, isSupported } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-analytics.js';
@@ -20,7 +21,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js';
 import {
   getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs, query, orderBy, limit,
-  onSnapshot, runTransaction, serverTimestamp, deleteField
+  onSnapshot, runTransaction, serverTimestamp, deleteField, addDoc
 } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js';
 
 const firebaseConfig = {
@@ -566,8 +567,27 @@ function stopWatching(silent) {
 }
 $('spec-exit').addEventListener('click', () => stopWatching(false));
 
+/* Feedback from the in-game form. Players never need an account: if the automatic guest sign-in
+   hasn't finished yet, this waits for it (or starts it). Read the results in the Firebase console
+   under Firestore -> feedback. */
+async function sendFeedback(f) {
+  if (!auth.currentUser) await signInAnonymously(auth);
+  const clip = (v, n) => String(v || '').slice(0, n);
+  await addDoc(collection(db, 'feedback'), {
+    kind: ['Bug', 'Idea', 'Other'].includes(f.kind) ? f.kind : 'Other',
+    message: clip(f.message, 1500),
+    replyTo: clip(f.replyTo, 120),
+    details: clip(f.details, 3000),
+    uid: auth.currentUser.uid,
+    name: clip(O.profile && O.profile.name, 16),
+    createdAt: serverTimestamp()
+  });
+}
+
 /* public surface used by game.js */
 window.JunctionOnline = {
   get ready() { return O.ready && !!(O.profile && O.profile.name); },
-  openSaves, openBoard, openWatch
+  openSaves, openBoard, openWatch, sendFeedback,
+  /* a permanent (Google or email) account, or null for guests and when online features are off */
+  get account() { return isPerm() ? {email: O.user.email || '', name: myName(), uid: O.user.uid} : null; }
 };
