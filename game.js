@@ -39,7 +39,7 @@ const CONFIG = {
   storeIntervalBase:  54,  storeIntervalRamp: 0.8,  storeIntervalMin: 30,  storeJitter: 16, firstStoreDelay: 12,
   newColourChance:    0.8,
   housesOnStoreSpawn: 1,       // houses of the same colour that appear when a new store opens
-  housesOnStoreTierUp:1,       // houses of the same colour that appear when a store tiers up (gets busier)
+  housesOnStoreTierUp:2,       // houses of the same colour that appear when a store tiers up (gets busier)
 
   // demand
   pinIntervalBase:    12,  pinIntervalRamp:   0.3,  pinIntervalMin:   7.5, pinJitter: 4,
@@ -1406,6 +1406,7 @@ let undoStack = [], redoStack = [], undoGroup = 0, replaying = false, tool = 'se
 let goalsDone = new Set(), autosaveT = CFG.autosaveSeconds, statT = 0;
 
 function resetGame(dk) {
+  lifeNewCity = true; lifeSnap = null;
   tutorialMode = false;
   setTutorialUI(false);
   if (dk) diffKey = dk;
@@ -1951,7 +1952,7 @@ function startTutorial() {
   tutLoopTiles = []; tutLive = null; tutDone = new Set(); tutInspected = new Set(); tutLightTuned = false; tutShopOpened = false; tutEventTried = false;
   let n0 = 0; for (let k = 0; k < N; k++) if (road[k]) n0++; tutRoadBaseline = n0;
   setTutorialUI(true);
-  setTutMin(compactUI(), true);
+  setTutMin(compactUI() || window.innerHeight < 900, true);
   renderTutorialPanel();
   toast(tcol('Welcome \u2014 connect the red store to the red house to get started.'), 'good');
 }
@@ -2921,7 +2922,7 @@ function checkGoals() {
       goalsDone.add(g.id);
       if (g.reward) giveReward(g.reward);
       toast('Goal: ' + g.name + (g.reward ? ' · ' + rewardText(g.reward) : ''), 'good'); sfx('upgrade'); renderGoals(); refreshUI();
-      if (goalsDone.size === GOALS.length && !tutorialMode) JEvents.emit('allGoals', {clock, diffKey});
+      if (goalsDone.size === GOALS.length && !tutorialMode) { if (life[diffKey] && !spectating) { life[diffKey].allGoals++; saveLife(); } JEvents.emit('allGoals', {clock, diffKey}); }
     }
   }
 }
@@ -2979,8 +2980,8 @@ function update(dt) {
   houseTimer -= dt;
   if (houseTimer <= 0) {
     houseTimer = ramp(CFG.houseIntervalBase, CFG.houseIntervalRamp, CFG.houseIntervalMin) * DIFF.spawn + Math.random() * CFG.houseJitter;
-    const cols = [...new Set(buildings.filter(b => b.type === 'store').map(b => b.color))];
-    if (cols.length) { const h = addBuilding('house', pick(cols)); if (h) { rebuildNetSoft(); toast('A new ' + COLORS[h.color].name + ' house appeared'); } }
+    const col = houseColour();
+    if (col !== null) { const h = addBuilding('house', col); if (h) { rebuildNetSoft(); toast('A new ' + COLORS[h.color].name + ' house appeared'); } }
   }
   storeTimer -= dt;
   if (storeTimer <= 0) {
@@ -3107,6 +3108,18 @@ function weekStart(grew) {
   offerUpgrade(grew);
 }
 
+/* New houses favour colours that are short of houses for their stores, so a city gets a
+   proper mix instead of piling up the first colour. */
+function houseColour() {
+  const st = {}, hs = {};
+  for (const b of buildings) { if (b.type === 'store') st[b.color] = (st[b.color] || 0) + 1; else hs[b.color] = (hs[b.color] || 0) + 1; }
+  const cols = Object.keys(st).map(Number); if (!cols.length) return null;
+  const w = cols.map(c => st[c] / Math.pow((hs[c] || 0) + 1, 1.6));
+  let r = Math.random() * w.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < cols.length; i++) { r -= w[i]; if (r <= 0) return cols[i]; }
+  return cols[cols.length - 1];
+}
+
 /* best score is kept per difficulty, under junction2-best-<difficulty> */
 const bestKey = dk => 'junction2-best-' + dk;
 function bestFor(dk) {
@@ -3118,6 +3131,8 @@ function bestFor(dk) {
 }
 function endGame(why) {
   if (spectating) return;
+  lifeTick(0);
+  if (!tutorialMode && life[diffKey]) { life[diffKey].ended++; saveLife(); }
   running = false; over = true;
   best = Math.max(best, score);
   sampleRun();
@@ -3126,6 +3141,55 @@ function endGame(why) {
   sfx('over');
   if (!tutorialMode) JEvents.emit('over', {score, week, diffKey, clock});
 }
+
+/* ------------------------------------------------------------ lifetime stats
+   Totals per mode across every city, kept in localStorage per player (online.js tells us who
+   that is and mirrors it to the cloud). Averages are worked out from these when shown. */
+const LIFE_KEY = 'junction-life-v1';
+const LIFE_FIELDS = ['cities', 'ended', 'parcels', 'weeks', 'earned', 'spent', 'trips', 'tows', 'breakdowns', 'goals', 'allGoals', 'playSec', 'bestParcels', 'bestWeek', 'bestEarned'];
+const LIFE_MAX = new Set(['bestParcels', 'bestWeek', 'bestEarned']);
+let lifeOwner = '', life = readLife(''), lifeSnap = null, lifeNewCity = false, lifeDirty = false;
+function blankLife() { const o = {}; for (const m in DIFFS) o[m] = Object.fromEntries(LIFE_FIELDS.map(f => [f, 0])); return o; }
+function cleanLife(d) {
+  const o = blankLife();
+  if (d && typeof d === 'object') for (const m in o) if (d[m] && typeof d[m] === 'object') for (const f of LIFE_FIELDS) { const v = +d[m][f]; if (isFinite(v) && v > 0) o[m][f] = v; }
+  return o;
+}
+function readLife(owner) { try { return cleanLife(JSON.parse(localStorage.getItem(LIFE_KEY + (owner ? ':' + owner : '')))); } catch (e) { return blankLife(); } }
+function lifeEmpty(L) { return Object.values(L).every(m => !m.cities && !m.playSec); }
+function saveLife() {
+  try { localStorage.setItem(LIFE_KEY + (lifeOwner ? ':' + lifeOwner : ''), JSON.stringify(life)); } catch (e) {}
+  lifeDirty = false; JEvents.emit('life', {});
+}
+/* switch to a player's own stats; anything played before they were known (offline) is folded in once */
+function setLifeOwner(uid) {
+  if (uid === lifeOwner) return;
+  lifeTick(0); if (lifeDirty) saveLife();
+  const loose = lifeOwner ? null : life;
+  lifeOwner = uid || ''; life = readLife(lifeOwner);
+  if (loose && !lifeEmpty(loose)) { mergeLife(loose, true); try { localStorage.removeItem(LIFE_KEY); } catch (e) {} }
+  lifeSnap = null; saveLife();
+}
+/* add (sum) or take the higher value (max) of another copy, e.g. the cloud copy */
+function mergeLife(other, add) {
+  const o = cleanLife(other);
+  for (const m in life) for (const f of LIFE_FIELDS) life[m][f] = LIFE_MAX.has(f) || !add ? Math.max(life[m][f], o[m][f]) : life[m][f] + o[m][f];
+  lifeDirty = true;
+}
+function lifeMark() { lifeSnap = {score, week, earned: stats.earned, spent: stats.spent, trips: stats.trips, tows: stats.tows, breakdowns: stats.breakdowns, goals: goalsDone.size}; }
+function lifeTick(realDt) {
+  if (!started || over || tutorialMode || spectating || !life[diffKey] || !stats) return;
+  const playing = running && !modalOpen, L = life[diffKey];
+  if (lifeNewCity) { if (!playing) return; L.cities++; L.weeks += week; lifeNewCity = false; lifeMark(); lifeDirty = true; }
+  if (!lifeSnap) { lifeMark(); return; }
+  if (playing) L.playSec += realDt;
+  const s = lifeSnap, up = v => v > 0 ? v : 0;
+  L.parcels += up(score - s.score); L.weeks += up(week - s.week); L.earned += up(stats.earned - s.earned); L.spent += up(stats.spent - s.spent);
+  L.trips += up(stats.trips - s.trips); L.tows += up(stats.tows - s.tows); L.breakdowns += up(stats.breakdowns - s.breakdowns); L.goals += up(goalsDone.size - s.goals);
+  L.bestParcels = Math.max(L.bestParcels, score); L.bestWeek = Math.max(L.bestWeek, week); L.bestEarned = Math.max(L.bestEarned, Math.round(stats.earned));
+  lifeMark(); if (playing || realDt === 0) lifeDirty = true;
+}
+window.addEventListener('pagehide', () => { lifeTick(0); if (lifeDirty) saveLife(); });
 
 /* ------------------------------------------------------------ saving */
 const SAVE_KEY = 'junction2-save-v1';
@@ -3160,7 +3224,9 @@ function serialize() {
     closures: [...closed].map(([k, t]) => [k, +t.toFixed(1)]),
     // the run so far, for the game-over chart
     runHist: stats.runHist.map(p => [Math.round(p.t), +p.jam.toFixed(3), +p.rate.toFixed(1)]), runStep: stats.runStep, weekMarks: stats.weekMarks.map(Math.round),
-    oneway: (() => { const o = []; if (onewayDir) for (let k = 0; k < N; k++) if (onewayDir[k] >= 0) o.push([k, onewayDir[k]]); return o; })()
+    oneway: (() => { const o = []; if (onewayDir) for (let k = 0; k < N; k++) if (onewayDir[k] >= 0) o.push([k, onewayDir[k]]); return o; })(),
+    // the colours this city was played in, so each save file keeps its own
+    pal: {mode: colorMode, hex: customHex.slice()}
   };
 }
 function saveGame(urgent) {
@@ -3174,7 +3240,15 @@ function saveGame(urgent) {
   } catch (e) {}
 }
 /* Load a city: the one in `data` (an imported file), or else the one in local storage. */
+/* bring back the colours a city was saved with (not while watching someone — viewers keep their own) */
+function applyCityPalette(p) {
+  if (!p || typeof p !== 'object' || !PALETTES[p.mode]) return;
+  if (Array.isArray(p.hex) && p.hex.length === COLORS.length && p.hex.every(h => /^#[0-9a-f]{6}$/i.test(h))) customHex = p.hex.slice();
+  colorMode = p.mode;
+  applyPalette(); savePrefs(true); renderPaletteUI();
+}
 function loadGameCore(data) {
+  const view = spectating;
   let d = data;
   if (!d) { try { d = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch (e) { return false; } }
   if (!d || (d.v !== 1 && d.v !== 2 && d.v !== 3)) return false;
@@ -3227,10 +3301,12 @@ function loadGameCore(data) {
     stats.runStep = d.runStep > 0 ? d.runStep : 5; stats.runNext = clock + stats.runStep;
     stats.weekMarks = d.weekMarks || [];
     camReset(true); closeInspector(); setTool('select'); refreshUI(); renderGoals();
+    if (!view) applyCityPalette(d.pal);
     return true;
   } catch (e) { return false; }
 }
 function resetGameBlank(dk) {
+  lifeNewCity = false; lifeSnap = null;
   tutorialMode = false;
   setTutorialUI(false);
   DIFF = DIFFS[dk] || DIFFS.standard; diffKey = dk in DIFFS ? dk : 'standard'; best = bestFor(diffKey);
@@ -4442,12 +4518,33 @@ const TIPS = {
   offscreen: 'Tip: red arrows on the screen edge point at stores overflowing out of view.'
 };
 const TIPS_KEY = 'junction-tips-seen';
+let tipsOn = true;                  // pop-up tips; they can always be read in the City tab
 const seenTips = new Set((() => { try { return JSON.parse(localStorage.getItem(TIPS_KEY)) || []; } catch (e) { return []; } })());
 function tipOnce(id) {
   if (tutorialMode || seenTips.has(id) || !TIPS[id]) return;
   seenTips.add(id);
   try { localStorage.setItem(TIPS_KEY, JSON.stringify([...seenTips])); } catch (e) {}
-  toast(TIPS[id], 'tip');
+  if (tipsOn) toast(TIPS[id], 'tip');
+  renderTipsList();
+}
+function renderTipsList() {
+  const box = $('tips-list'); if (!box) return;
+  box.innerHTML = '';
+  for (const id in TIPS) {
+    const li = document.createElement('li'), seen = seenTips.has(id);
+    li.className = seen ? '' : 'new';
+    li.textContent = TIPS[id].replace(/^Tip:\s*/, '').replace(/^./, c => c.toUpperCase());
+    if (!seen) { const t = document.createElement('small'); t.textContent = 'Not come up yet'; li.append(t); }
+    box.append(li);
+  }
+}
+function bindTipsToggle() {
+  const t = $('opt-tips'); if (t) t.addEventListener('change', () => { tipsOn = t.checked; savePrefs(true); toast(tipsOn ? 'Tips on' : 'Tips off \u2014 you can still read them here'); });
+  const r = $('tips-reset'); if (r) r.addEventListener('click', () => {
+    seenTips.clear(); try { localStorage.removeItem(TIPS_KEY); } catch (e) {}
+    renderTipsList(); toast(tipsOn ? 'Tips will show again as they come up' : 'Tips reset \u2014 turn them on to see them pop up');
+  });
+  renderTipsList();
 }
 function checkTips() {
   if (tutorialMode || !started || over) return;
@@ -4956,7 +5053,7 @@ function bindInput() {
   $('i-close').addEventListener('click', closeInspector);
   $('btn-play').addEventListener('click', togglePlay);
   document.querySelectorAll('#speed-seg button').forEach(b => b.addEventListener('click', () => { speed = +b.dataset.speed; refreshUI(); }));
-  bindTips(); bindSettings();
+  bindTips(); bindSettings(); bindTipsToggle();
   $('btn-heat').addEventListener('click', () => { showHeat = !showHeat; refreshUI(); });
   $('btn-side').addEventListener('click', () => { keepLeft = !keepLeft; laneSign = keepLeft ? -1 : 1; pathCache.ver = -1; refreshUI(); });
   $('btn-sound').addEventListener('click', toggleMute);
@@ -4974,7 +5071,7 @@ function bindInput() {
   $('btn-feedback-s').addEventListener('click', openFeedback);
   bindFeedback();
   $('tut-min').addEventListener('click', () => setTutMin(!$('tut-panel').classList.contains('min')));
-  $('tut-coach').addEventListener('click', () => { if (compactUI()) $('tut-coach').classList.toggle('full'); });
+  $('tut-coach').addEventListener('click', () => { $('tut-coach').classList.toggle('full'); });
   $('btn-snap').addEventListener('click', snapshot);
   $('btn-export').addEventListener('click', () => { $('menu').hidden = true; exportCity(); });
   $('btn-import').addEventListener('click', () => $('file-import').click());
@@ -5046,10 +5143,13 @@ const CFG_SPEEDS = [0.5, 1, 2, 3];
 function toggleMute() { muted = !muted; savePrefs(); refreshUI(); }
 /* settings that should outlive a reload */
 const PREFS_KEY = 'junction2-prefs';
-function savePrefs() { try { localStorage.setItem(PREFS_KEY, JSON.stringify({muted, nightOn, showGrid, fxOn, colorMode, customHex, showSymbols})); } catch (e) {} }
+function savePrefs(noCity) {
+  try { localStorage.setItem(PREFS_KEY, JSON.stringify({muted, nightOn, showGrid, fxOn, colorMode, customHex, showSymbols, tipsOn})); } catch (e) {}
+  if (!noCity && started && !over && !tutorialMode && !spectating && running) saveGame();   // the open city keeps these colours
+}
 function syncPrefUI() {
   const set = (id, v) => { const el = $(id); if (el) el.checked = !!v; };
-  set('opt-night', nightOn); set('opt-grid', showGrid); set('opt-fx', fxOn); set('opt-symbols', showSymbols);
+  set('opt-night', nightOn); set('opt-grid', showGrid); set('opt-fx', fxOn); set('opt-symbols', showSymbols); set('opt-tips', tipsOn);
 }
 function loadPrefs() {
   try {
@@ -5060,6 +5160,7 @@ function loadPrefs() {
       if (typeof p.showGrid === 'boolean') showGrid = p.showGrid;
       if (typeof p.fxOn === 'boolean') fxOn = p.fxOn;
       if (typeof p.showSymbols === 'boolean') showSymbols = p.showSymbols;
+      if (typeof p.tipsOn === 'boolean') tipsOn = p.tipsOn;
       if (typeof p.colorMode === 'string' && PALETTES[p.colorMode]) colorMode = p.colorMode;
       if (Array.isArray(p.customHex) && p.customHex.length === COLORS.length && p.customHex.every(h => /^#[0-9a-f]{6}$/i.test(h))) customHex = p.customHex.slice();
     }
@@ -5343,14 +5444,15 @@ function layout() {
   insets.l = mobile ? 0 : 92; insets.r = (!mobile && panelOn) ? 312 : 0; insets.t = topH; insets.b = mobile ? (panelOn ? Math.round(H * 0.44) + 100 : 100) : 40;
   if (tutorialMode) {
     const tp = $('tut-panel');
-    if (mobile) insets.b = tp && tp.classList.contains('min') ? 270 : Math.round(H * 0.52) + 100;
-    else insets.r = 312;
+    const tmin = tp && tp.classList.contains('min');
+    if (mobile) insets.b = tmin ? 200 : Math.round(H * 0.36) + 100;
+    else insets.r = tmin ? 0 : 312;
   }
   if (cam.auto) camReset(true);
 }
 
 /* ----------------------------------------------------------------- loop */
-let last = 0, accHud = 0, accMini = 0, accIns = 0;
+let last = 0, accHud = 0, accMini = 0, accIns = 0, accLife = 0, accLifeSave = 0;
 const SIM_STEP = 1 / 30;
 let simAcc = 0;
 function frame(now) {
@@ -5375,6 +5477,10 @@ function frame(now) {
   if (accHud > 0.2) { accHud = 0; refreshHud(); }
   if (accMini > 0.25) { accMini = 0; drawMini(); }
   if (accIns > 0.25 && sel) { accIns = 0; renderInspector(); }
+  accLife += real;
+  if (accLife > 1) { lifeTick(accLife); accLife = 0; }
+  accLifeSave += real;
+  if (accLifeSave > 20) { accLifeSave = 0; if (lifeDirty) saveLife(); }
 }
 
 /* ----------------------------------------------------------------- boot */
@@ -5424,6 +5530,9 @@ if (typeof window !== 'undefined' && (location.hostname === 'localhost' || locat
     events: JEvents,
     goalsTotal: GOALS.length,
     get startDiff() { return startDiff; },
+    modes: () => Object.keys(DIFFS),
+    life: () => { lifeTick(0); return JSON.parse(JSON.stringify(life)); },
+    setLifeOwner, mergeLife(d) { mergeLife(d, false); saveLife(); }, get tipsOn() { return tipsOn; },
     diffLabel(k) { return (DIFFS[k] && DIFFS[k].label) || k; },
     serialize,
     state() {
