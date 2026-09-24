@@ -40,7 +40,7 @@ const CONFIG = {
   newColourChance:    0.8,
   housesOnStoreSpawn: 1,       // houses of the same colour that appear when a new store opens
   housesOnStoreTierUp:1,       // houses of the same colour that appear when a store tiers up (gets busier)
-  tierUpHouseChance:  0.5,     // chance a tier-up brings any houses at all
+  tierUpHouseChance:  0,     // chance a tier-up brings any houses at all
 
   // demand
   pinIntervalBase:    12,  pinIntervalRamp:   0.3,  pinIntervalMin:   7.5, pinJitter: 4,
