@@ -4482,8 +4482,19 @@ const HUD_ICONS = {
   alarm: '<rect x="4" y="9" width="16" height="11" rx="1.5"/><path d="M3 9l9-5.5L21 9M9 14h6"/>'
 };
 const hudIcon = (k, sz) => '<svg class="hi" viewBox="0 0 24 24" width="' + (sz || 16) + '" height="' + (sz || 16) + '" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (HUD_ICONS[k] || HUD_ICONS.info) + '</svg>';
+/* Notifications while playing: 'all', 'warn' (warnings only) or 'off'. Anything that answers a button
+   press still shows, and nothing is hidden on menus or in the tutorial. */
+let notesMode = 'all', lastUiAct = 0;
+document.addEventListener('pointerdown', e => { if (e.target && e.target.id !== 'cv') lastUiAct = performance.now(); }, true);
+document.addEventListener('keydown', () => { lastUiAct = performance.now(); }, true);
+function muteToast(kind) {
+  if (notesMode === 'all' || !started || over || tutorialMode || spectating || !$('m-start').hidden) return false;
+  if (performance.now() - lastUiAct < 900) return false;           // feedback for something the player just did
+  return notesMode === 'off' || kind !== 'warn';
+}
 function toast(msg, kind) {
   const box = $('toasts'); if (!box) return;
+  if (muteToast(kind)) return;
   const small = compactUI();
   while (box.children && box.children.length > (small ? 1 : 3)) box.removeChild(box.children[0]);
   const d = document.createElement('div');
@@ -5172,6 +5183,10 @@ function bindInput() {
   $('opt-night').addEventListener('change', e => { nightOn = e.target.checked; savePrefs(); });
   $('opt-grid').addEventListener('change', e => { showGrid = e.target.checked; savePrefs(); });
   $('opt-fx').addEventListener('change', e => { fxOn = e.target.checked; savePrefs(); });
+  $('opt-notes').addEventListener('click', e => {
+    const b = e.target.closest('button[data-notes]'); if (!b) return;
+    notesMode = b.dataset.notes; savePrefs(true); renderNotesUI();
+  });
   $('btn-restart').addEventListener('click', () => { $('menu').hidden = true; showStartBest(); openModal('m-start'); running = false; refreshUI(); });
   $('help-close').addEventListener('click', () => closeModal('m-help'));
   document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => showTab(t.dataset.tab)));
@@ -5223,12 +5238,20 @@ function toggleMute() { muted = !muted; savePrefs(); refreshUI(); }
 /* settings that should outlive a reload */
 const PREFS_KEY = 'junction2-prefs';
 function savePrefs(noCity) {
-  try { localStorage.setItem(PREFS_KEY, JSON.stringify({muted, nightOn, showGrid, fxOn, colorMode, customHex, showSymbols, tipsOn})); } catch (e) {}
+  try { localStorage.setItem(PREFS_KEY, JSON.stringify({muted, nightOn, showGrid, fxOn, colorMode, customHex, showSymbols, tipsOn, notesMode})); } catch (e) {}
   if (!noCity && started && !over && !tutorialMode && !spectating && running) saveGame();   // the open city keeps these colours
+}
+function renderNotesUI() {
+  document.querySelectorAll('#opt-notes button').forEach(b => b.setAttribute('aria-pressed', b.dataset.notes === notesMode ? 'true' : 'false'));
+  const n = $('notes-note');
+  if (n) n.textContent = notesMode === 'all' ? '' : notesMode === 'warn'
+    ? 'Only warnings pop up (overflowing stores, ambulances, breakdowns). The warning chips and red edge arrows still show everything.'
+    : 'No pop-ups while you play. The warning chips and red edge arrows still show trouble.';
 }
 function syncPrefUI() {
   const set = (id, v) => { const el = $(id); if (el) el.checked = !!v; };
   set('opt-night', nightOn); set('opt-grid', showGrid); set('opt-fx', fxOn); set('opt-symbols', showSymbols); set('opt-tips', tipsOn);
+  renderNotesUI();
 }
 function loadPrefs() {
   try {
@@ -5240,6 +5263,7 @@ function loadPrefs() {
       if (typeof p.fxOn === 'boolean') fxOn = p.fxOn;
       if (typeof p.showSymbols === 'boolean') showSymbols = p.showSymbols;
       if (typeof p.tipsOn === 'boolean') tipsOn = p.tipsOn;
+      if (['all', 'warn', 'off'].includes(p.notesMode)) notesMode = p.notesMode;
       if (typeof p.colorMode === 'string' && PALETTES[p.colorMode]) colorMode = p.colorMode;
       if (Array.isArray(p.customHex) && p.customHex.length === COLORS.length && p.customHex.every(h => /^#[0-9a-f]{6}$/i.test(h))) customHex = p.customHex.slice();
     }
