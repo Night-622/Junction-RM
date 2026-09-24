@@ -7,7 +7,8 @@
    Firestore layout
      users/{uid}                 name, nameLower, star, liveCode (accounts only)
      users/{uid}/saves/{1|2|3}   data (serialized city, as a string), score, week, diffKey, over, updatedAt
-     usernames/{nameLower}       uid   — names claimed by permanent accounts
+     usernames/{nameLower}       uid, perm, at — every player's name is reserved here, so no two players share one.
+                                 Accounts keep theirs for good; a guest name frees up after 30 days unused.
      leaderboard/{uid}           name, star, parcels, weeks, goalsSec (+ which difficulty each came from)
      live/{6-digit code}         uid, name, star, playing, state, meta, watchT — the live view channel
      feedback/{bugs|ideas|other}/entries/{id}   guest feedback: uid, name, message, details, replyTo, createdAt
@@ -100,10 +101,11 @@ onAuthStateChanged(auth, async user => {
     return;
   }
   if (O.user && O.user.uid !== user.uid) { O.slot = null; O.lastSaveStr = ''; O.best = {parcels: 0, weeks: 0, goalsSec: 0}; }
-  O.user = user;
+  O.user = user; O.nameLost = false;
   try {
     await loadProfile();
     if (O.pendingName && isPerm() && !(O.profile && O.profile.name)) await claimName(O.pendingName);
+    await keepGuestName();
   } catch (e) { console.warn(e); }
   O.ready = true;
   renderAccount();
@@ -111,36 +113,82 @@ onAuthStateChanged(auth, async user => {
   await setupLive();
   if (needsName()) openUserModal();
 });
-const needsName = () => !O.profile || !O.profile.name || (isPerm() && !O.profile.star);
+const needsName = () => !O.profile || !O.profile.name || O.nameLost || (isPerm() && !O.profile.star);
 
 async function loadProfile() {
   const snap = await getDoc(doc(db, 'users', O.user.uid));
   O.profile = snap.exists() ? snap.data() : null;
 }
 
-/* Guests pick any free name and can change it. Permanent accounts reserve it for good. */
+/* Every name is reserved in usernames/{nameLower}, so no two players can share one.
+   Guests can change theirs (the old one is released); accounts keep theirs for good.
+   A guest name nobody has used for 30 days can be taken by someone else. */
+const GUEST_NAME_TTL = 30 * 864e5;
+const nameRef = lower => doc(db, 'usernames', lower);
+const permRes = d => d.perm !== false;             // older reservations (no perm field) all belong to accounts
+function nameFreeFor(snap, uid) {
+  if (!snap.exists()) return true;
+  const d = snap.data();
+  if (d.uid === uid) return true;
+  return !permRes(d) && !!(d.at && d.at.toMillis) && Date.now() - d.at.toMillis() > GUEST_NAME_TTL;
+}
+const TAKEN = 'That username is taken. Pick another.';
+function takenError(e) {
+  if (e && String(e.code || '').includes('permission-denied')) return new Error(TAKEN);
+  return e;
+}
 async function saveGuestName(name) {
-  const lower = name.toLowerCase();
-  const taken = await getDoc(doc(db, 'usernames', lower));
-  if (taken.exists() && taken.data().uid !== O.user.uid) throw new Error('That name belongs to a permanent account. Try another.');
-  const data = {name, nameLower: lower, star: false, updatedAt: serverTimestamp()};
-  await setDoc(doc(db, 'users', O.user.uid), data, {merge: true});
-  O.profile = Object.assign({}, O.profile, data);
+  const lower = name.toLowerCase(), uid = O.user.uid;
+  const oldLower = O.profile && O.profile.nameLower;
+  try {
+    await runTransaction(db, async tx => {
+      const n = await tx.get(nameRef(lower));
+      const old = oldLower && oldLower !== lower ? await tx.get(nameRef(oldLower)) : null;
+      if (!nameFreeFor(n, uid)) throw new Error(TAKEN);
+      tx.set(nameRef(lower), {uid, perm: false, at: serverTimestamp()});
+      if (old && old.exists() && old.data().uid === uid && !permRes(old.data())) tx.delete(old.ref);
+      tx.set(doc(db, 'users', uid), {name, nameLower: lower, star: false, updatedAt: serverTimestamp()}, {merge: true});
+    });
+  } catch (e) { throw takenError(e); }
+  O.profile = Object.assign({}, O.profile, {name, nameLower: lower, star: false});
+  O.nameLost = false;
   syncBoardName();
+}
+/* On load: keep a guest's reservation fresh, pick one up for older guest profiles made before
+   names were reserved, and flag the name as lost if someone else holds it now. */
+async function keepGuestName() {
+  if (isPerm() || !O.profile || !O.profile.name) return;
+  const lower = O.profile.nameLower || O.profile.name.toLowerCase();
+  try {
+    const snap = await getDoc(nameRef(lower));
+    if (snap.exists() && snap.data().uid === O.user.uid) {
+      const at = snap.data().at;
+      if (!at || !at.toMillis || Date.now() - at.toMillis() > 864e5)
+        await setDoc(nameRef(lower), {uid: O.user.uid, perm: false, at: serverTimestamp()}).catch(() => {});
+      return;
+    }
+    if (nameFreeFor(snap, O.user.uid)) { await saveGuestName(O.profile.name); return; }
+    O.nameLost = true;
+  } catch (e) { if (e && e.message === TAKEN) O.nameLost = true; else console.warn(e); }
 }
 async function claimName(name) {
   if (!NAME_RE.test(name || '')) throw new Error('Type the username you want to keep.');
   const lower = name.toLowerCase(), uid = O.user.uid;
+  const oldLower = O.profile && !O.profile.star && O.profile.nameLower;
   await O.user.getIdToken(true);                  // make sure the token already says "permanent account"
-  await runTransaction(db, async tx => {
-    const uref = doc(db, 'usernames', lower), pref = doc(db, 'users', uid);
-    const u = await tx.get(uref);
-    if (u.exists() && u.data().uid !== uid) throw new Error('That username is taken. Pick another.');
-    if (!u.exists()) tx.set(uref, {uid});
-    tx.set(pref, {name, nameLower: lower, star: true, updatedAt: serverTimestamp()}, {merge: true});
-  });
+  try {
+    await runTransaction(db, async tx => {
+      const u = await tx.get(nameRef(lower));
+      const old = oldLower && oldLower !== lower ? await tx.get(nameRef(oldLower)) : null;
+      if (!nameFreeFor(u, uid)) throw new Error(TAKEN);
+      if (!(u.exists() && u.data().uid === uid && permRes(u.data()))) tx.set(nameRef(lower), {uid, perm: true, at: serverTimestamp()});
+      if (old && old.exists() && old.data().uid === uid && !permRes(old.data())) tx.delete(old.ref);   // release the old guest name
+      tx.set(doc(db, 'users', uid), {name, nameLower: lower, star: true, updatedAt: serverTimestamp()}, {merge: true});
+    });
+  } catch (e) { throw takenError(e); }
   O.profile = Object.assign({}, O.profile, {name, nameLower: lower, star: true});
   O.pendingName = '';
+  O.nameLost = false;
   syncBoardName();
 }
 async function syncBoardName() {
@@ -162,9 +210,9 @@ function openUserModal() {
   $('user-name').value = hasName ? myName() : '';
   $('user-name').disabled = claimed;
   $('user-guest').textContent = claimed ? 'Sign out' : perm ? 'Claim this name' : hasName ? 'Save name' : 'Play as a guest';
-  $('user-cancel').hidden = !hasName || (perm && !claimed);
+  $('user-cancel').hidden = !hasName || O.nameLost || (perm && !claimed);
   $('user-perm').hidden = perm;
-  $('user-err').textContent = '';
+  $('user-err').textContent = O.nameLost && !perm ? 'Someone else is using \u201c' + myName() + '\u201d now \u2014 pick a new name.' : '';
   openM('m-user');
   if (!claimed) setTimeout(() => $('user-name').focus(), 50);
 }
@@ -205,7 +253,7 @@ async function afterPermanent(name) {
   await loadProfile();
   if (!(O.profile && O.profile.star)) {
     try { await claimName(name); }
-    catch (e) { O.pendingName = ''; openUserModal(); $('user-err').textContent = n ? e.message : ''; return; }
+    catch (e) { O.pendingName = ''; openUserModal(); $('user-err').textContent = name ? e.message : ''; return; }
   }
   await setupLive(true);
   closeM('m-user'); renderAccount(); loadBest();
@@ -233,8 +281,7 @@ $('user-google').addEventListener('click', () => busy(null, async () => {
 $('user-create').addEventListener('click', () => busy(null, async () => {
   const n = typedName(); if (!n) return;
   const email = $('user-email').value.trim(), pass = $('user-pass').value;
-  const taken = await getDoc(doc(db, 'usernames', n.toLowerCase()));
-  if (taken.exists() && taken.data().uid !== O.user.uid) throw new Error('That username is taken. Pick another.');
+  if (!nameFreeFor(await getDoc(nameRef(n.toLowerCase())), O.user.uid)) throw new Error(TAKEN);
   if (O.user && O.user.isAnonymous) await linkWithCredential(O.user, EmailAuthProvider.credential(email, pass));
   else await createUserWithEmailAndPassword(auth, email, pass);
   await afterPermanent(n);
