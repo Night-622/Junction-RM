@@ -9,7 +9,8 @@
      users/{uid}/saves/{1|2|3}   data (serialized city, as a string), score, week, diffKey, over, updatedAt
      usernames/{nameLower}       uid, perm, at — every player's name is reserved here, so no two players share one.
                                  Accounts keep theirs for good; a guest name frees up after 30 days unused.
-     leaderboard/{uid}           name, star, parcels, weeks, goalsSec (+ which difficulty each came from)
+     boards/{mode}/players/{uid} one leaderboard per mode (chill, standard, frantic: parcels, weeks, goalsSec;
+                                 zen: playSec, earned). The old single leaderboard/{uid} is moved over on load.
      live/{6-digit code}         uid, name, star, playing, state, meta, watchT — the live view channel
      feedback/{bugs|ideas|other}/entries/{id}   guest feedback: uid, name, message, details, replyTo, createdAt
      (signed-in accounts' feedback is emailed by a Google Apps Script on the support Gmail — see apps-script/)
@@ -56,7 +57,7 @@ const db = getFirestore(app);
 const O = {
   ready: false, user: null, profile: null, pendingName: '',
   slot: null, lastSaveAt: 0, lastSaveStr: '',
-  best: {parcels: 0, weeks: 0, goalsSec: 0}, lastBoardAt: 0,
+  best: {}, lastBoardAt: 0,
   liveCode: null, liveUnsub: null, watchedUntil: 0, lastLiveAt: 0, lastLiveStr: '', lastBeatAt: 0,
   spec: null
 };
@@ -100,7 +101,7 @@ onAuthStateChanged(auth, async user => {
     catch (e) { console.warn('Junction online unavailable:', e); API.toast('Online features are unavailable right now \u2014 playing offline.', 'warn'); }
     return;
   }
-  if (O.user && O.user.uid !== user.uid) { O.slot = null; O.lastSaveStr = ''; O.best = {parcels: 0, weeks: 0, goalsSec: 0}; }
+  if (O.user && O.user.uid !== user.uid) { O.slot = null; O.lastSaveStr = ''; O.best = emptyBest(); }
   O.user = user; O.nameLost = false;
   try {
     await loadProfile();
@@ -192,11 +193,11 @@ async function claimName(name) {
   syncBoardName();
 }
 async function syncBoardName() {
-  try {
-    const ref = doc(db, 'leaderboard', O.user.uid), s = await getDoc(ref);
-    if (s.exists()) await updateDoc(ref, {name: myName(), star: isPerm()});
-  } catch (e) { /* no board entry yet */ }
-  if (O.liveCode) updateDoc(doc(db, 'live', O.liveCode), {name: myName(), star: isPerm()}).catch(() => {});
+  const uid = O.user.uid, name = myName(), star = isPerm();
+  await Promise.all(MODES.map(async m => {
+    try { const r = boardRef(m, uid), s = await getDoc(r); if (s.exists()) await updateDoc(r, {name, star}); } catch (e) { /* no entry on this board */ }
+  }));
+  if (O.liveCode) updateDoc(doc(db, 'live', O.liveCode), {name, star}).catch(() => {});
 }
 
 /* ------------------------------------------------------------ user modal */
@@ -229,7 +230,7 @@ async function busy(btn, fn) {
 $('user-guest').addEventListener('click', () => busy(null, async () => {
   if (isPerm() && O.profile && O.profile.star) {    // "Sign out" for accounts: back to a fresh guest
     await dropLive();
-    O.profile = null; O.slot = null; O.best = {parcels: 0, weeks: 0, goalsSec: 0};
+    O.profile = null; O.slot = null; O.best = emptyBest();
     closeM('m-user'); await signOut(auth);          // onAuthStateChanged signs in a new guest and asks for a name
     return;
   }
@@ -386,82 +387,128 @@ $('saves-back').addEventListener('click', () => closeM('m-saves'));
 API.events.on('autosave', e => { cloudSave(e && e.urgent); maybeBoard(false); });
 API.events.on('week', () => { cloudSave(true); maybeBoard(true); });
 API.events.on('over', async e => {
-  submitBest({parcels: e.score, weeks: e.week, diff: e.diffKey});
+  if (e.diffKey !== 'zen') submitBest(e.diffKey, {parcels: e.score, weeks: e.week});
   if (O.ready && O.slot) {
     await setDoc(slotRef(O.slot), {data: deleteField(), score: e.score, week: e.week, diffKey: e.diffKey, over: true, updatedAt: serverTimestamp()}, {merge: true}).catch(() => {});
   }
   O.slot = null;
   pushLive(true);
 });
-API.events.on('allGoals', e => { if (e.diffKey !== 'zen') submitBest({goalsSec: Math.max(1, Math.round(e.clock)), diff: e.diffKey}); });
+API.events.on('allGoals', e => { if (e.diffKey !== 'zen') submitBest(e.diffKey, {goalsSec: Math.max(1, Math.round(e.clock))}); });
 window.addEventListener('pagehide', () => { cloudSave(true); });
 
-/* ============================================================ LEADERBOARD
-   One document per player holding their personal bests. Zen and the tutorial don't count. */
+/* ============================================================ LEADERBOARDS
+   One board per mode: boards/{chill|standard|frantic|zen}/players/{uid}, one document per player.
+   Relaxed, Standard and Frantic rank most parcels, furthest week and fastest all-goals.
+   Zen can't be lost, so it ranks longest played and most earned in a single city instead.
+   The tutorial never counts. */
+const MODES = ['chill', 'standard', 'frantic', 'zen'];
+const metricsFor = m => m === 'zen' ? ['playSec', 'earned'] : ['parcels', 'weeks', 'goalsSec'];
+const LOWER_IS_BETTER = {goalsSec: true};
+function emptyBest() { return Object.fromEntries(MODES.map(m => [m, {}])); }
+const boardRef = (mode, uid) => doc(db, 'boards', mode, 'players', uid);
+function hm(sec) { sec = Math.round(sec); const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60); return h ? h + 'h ' + String(m).padStart(2, '0') + 'm' : m + 'm'; }
+const money = v => '$' + Math.round(v).toLocaleString();
+O.best = emptyBest();
+
 async function loadBest() {
+  O.best = emptyBest();
+  await Promise.all(MODES.map(async m => {
+    try {
+      const s = await getDoc(boardRef(m, O.user.uid));
+      if (s.exists()) { const d = s.data(); metricsFor(m).forEach(k => { if (d[k] > 0) O.best[m][k] = d[k]; }); }
+    } catch (e) { /* nothing yet */ }
+  }));
+  await migrateOldBoard();
+}
+/* One-off: move a player's bests from the old all-modes leaderboard onto the board for the mode each came from. */
+async function migrateOldBoard() {
+  if (!O.profile || !O.profile.name) return;
   try {
-    const s = await getDoc(doc(db, 'leaderboard', O.user.uid));
-    const d = s.exists() ? s.data() : {};
-    O.best = {parcels: d.parcels || 0, weeks: d.weeks || 0, goalsSec: d.goalsSec || 0};
-  } catch (e) { O.best = {parcels: 0, weeks: 0, goalsSec: 0}; }
+    const ref = doc(db, 'leaderboard', O.user.uid), s = await getDoc(ref);
+    if (!s.exists()) return;
+    const d = s.data();
+    for (const [k, dk] of [['parcels', 'parcelsDiff'], ['weeks', 'weeksDiff'], ['goalsSec', 'goalsDiff']]) {
+      if (d[k] > 0 && MODES.includes(d[dk]) && d[dk] !== 'zen') await submitBest(d[dk], {[k]: d[k]}, true);
+    }
+    await deleteDoc(ref);
+  } catch (e) { console.warn('Moving old leaderboard entry failed', e); }
 }
 function maybeBoard(force) {
   const st = API.state();
   if (!st.started || st.atMenu || st.tutorialMode || st.spectating || st.over) return;
   if (!force && Date.now() - O.lastBoardAt < 60e3) return;
   O.lastBoardAt = Date.now();
-  submitBest({parcels: st.score, weeks: st.week, diff: st.diffKey});
+  if (st.diffKey === 'zen') submitBest('zen', {playSec: Math.floor(st.clock || 0), earned: Math.floor(st.earned || 0)});
+  else submitBest(st.diffKey, {parcels: st.score, weeks: st.week});
 }
-async function submitBest({parcels, weeks, goalsSec, diff}) {
-  if (!O.ready || !O.profile || !O.profile.name || diff === 'zen') return;
-  const up = {};
-  if (parcels > O.best.parcels) { up.parcels = parcels; up.parcelsDiff = diff; }
-  if (weeks > O.best.weeks) { up.weeks = weeks; up.weeksDiff = diff; }
-  if (goalsSec && (!O.best.goalsSec || goalsSec < O.best.goalsSec)) { up.goalsSec = goalsSec; up.goalsDiff = diff; }
+async function submitBest(mode, vals, quiet) {
+  if (!O.ready || !O.profile || !O.profile.name || !MODES.includes(mode)) return;
+  const best = O.best[mode], up = {};
+  for (const k of metricsFor(mode)) {
+    const v = Math.floor(vals[k] || 0); if (!(v > 0)) continue;
+    if (LOWER_IS_BETTER[k] ? (!best[k] || v < best[k]) : v > (best[k] || 0)) up[k] = v;
+  }
   if (!Object.keys(up).length) return;
-  Object.assign(O.best, {parcels: Math.max(O.best.parcels, parcels || 0), weeks: Math.max(O.best.weeks, weeks || 0)});
-  if (up.goalsSec) O.best.goalsSec = up.goalsSec;
+  Object.assign(best, up);
   try {
-    await setDoc(doc(db, 'leaderboard', O.user.uid), Object.assign({
-      name: myName(), star: isPerm(), parcels: O.best.parcels, weeks: O.best.weeks, updatedAt: serverTimestamp()
-    }, up), {merge: true});
-    if (up.goalsSec) API.toast('New personal best: every goal in ' + mmss(up.goalsSec), 'good');
+    await setDoc(boardRef(mode, O.user.uid), Object.assign({name: myName(), star: isPerm(), updatedAt: serverTimestamp()}, up), {merge: true});
+    if (up.goalsSec && !quiet) API.toast('New ' + API.diffLabel(mode) + ' best: every goal in ' + mmss(up.goalsSec), 'good');
   } catch (e) { console.warn('Leaderboard update failed', e); }
 }
+
 const BOARDS = {
-  parcels: {field: 'parcels', dir: 'desc', diff: 'parcelsDiff', fmt: v => v.toLocaleString() + ' parcels', note: 'Most parcels delivered in a single city.'},
-  weeks: {field: 'weeks', dir: 'desc', diff: 'weeksDiff', fmt: v => 'Week ' + v, note: 'Furthest week reached in a single city.'},
-  goals: {field: 'goalsSec', dir: 'asc', diff: 'goalsDiff', fmt: v => mmss(v), note: 'Quickest game time to finish every goal in one city.'}
+  parcels:  {label: 'Most parcels',      dir: 'desc', fmt: v => v.toLocaleString() + ' parcels', note: 'Most parcels delivered in a single city.'},
+  weeks:    {label: 'Longest survived',  dir: 'desc', fmt: v => 'Week ' + v,                     note: 'Furthest week reached in a single city.'},
+  goalsSec: {label: 'Fastest all goals', dir: 'asc',  fmt: v => mmss(v),                         note: 'Quickest game time to finish every goal in one city.'},
+  playSec:  {label: 'Longest played',    dir: 'desc', fmt: v => hm(v),                           note: 'Most game time played in a single city.'},
+  earned:   {label: 'Highest earned',    dir: 'desc', fmt: v => money(v),                        note: 'Most money earned in a single city.'}
 };
-let boardTab = 'parcels';
-async function openBoard(tab) {
-  boardTab = tab || boardTab;
+let boardMode = null, boardTab = 'parcels';
+/* the mode being played right now, or the one picked on the start screen */
+function currentMode() {
+  const st = API.state();
+  if (st.started && !st.tutorialMode && !st.spectating && !st.atMenu && MODES.includes(st.diffKey)) return st.diffKey;
+  return MODES.includes(API.startDiff) ? API.startDiff : 'standard';
+}
+function renderBoardTabs() {
+  $('board-modes').innerHTML = MODES.map(m => '<button type="button" data-mode="' + m + '" aria-pressed="' + (m === boardMode) + '">' + esc(API.diffLabel(m)) + '</button>').join('');
+  $('board-tabs').innerHTML = metricsFor(boardMode).map(k => '<button type="button" data-board="' + k + '" aria-pressed="' + (k === boardTab) + '">' + BOARDS[k].label + '</button>').join('');
+}
+async function openBoard(tab, mode) {
+  boardMode = mode || boardMode || currentMode();
+  if (tab) boardTab = tab;
+  if (!metricsFor(boardMode).includes(boardTab)) boardTab = metricsFor(boardMode)[0];
   $('menu').hidden = true;
-  document.querySelectorAll('#board-tabs button').forEach(b => b.setAttribute('aria-pressed', b.dataset.board === boardTab ? 'true' : 'false'));
-  const B = BOARDS[boardTab];
-  $('board-note').textContent = B.note + ' Zen and tutorial runs don\u2019t count. \u2605 marks permanent accounts.';
+  renderBoardTabs();
+  const B = BOARDS[boardTab], mode0 = boardMode, tab0 = boardTab;
+  $('board-note').textContent = API.diffLabel(boardMode) + ': ' + B.note + ' Tutorial runs don\u2019t count. \u2605 marks permanent accounts.';
   $('board-list').innerHTML = '<li class="mini">Loading\u2026</li>';
   $('board-me').textContent = '';
   if ($('m-board').hidden) openM('m-board');
   try {
-    const snap = await getDocs(query(collection(db, 'leaderboard'), orderBy(B.field, B.dir), limit(25)));
+    const snap = await getDocs(query(collection(db, 'boards', boardMode, 'players'), orderBy(boardTab, B.dir), limit(25)));
+    if (mode0 !== boardMode || tab0 !== boardTab) return;          // they switched tabs while this was loading
     const rows = []; let meIn = false;
     snap.forEach(s => {
-      const d = s.data(); if (!(d[B.field] > 0)) return;
+      const d = s.data(); if (!(d[boardTab] > 0)) return;
       const me = O.user && s.id === O.user.uid; if (me) meIn = true;
       rows.push('<li class="' + (me ? 'me' : '') + '"><span class="rank">' + (rows.length + 1) + '</span><span class="who">' + nameHTML(d.name || '?', d.star) +
-        '</span><span class="dk">' + esc(API.diffLabel(d[B.diff] || '')) + '</span><b class="num">' + B.fmt(d[B.field]) + '</b></li>');
+        '</span><b class="num">' + B.fmt(d[boardTab]) + '</b></li>');
     });
     $('board-list').innerHTML = rows.join('') || '<li class="mini">No entries yet \u2014 be the first.</li>';
-    const mine = boardTab === 'goals' ? O.best.goalsSec : O.best[boardTab];
-    $('board-me').innerHTML = mine > 0 ? 'Your best: <b>' + B.fmt(mine) + '</b>' + (meIn ? '' : ' (outside the top 25)') : (boardTab === 'goals' ? 'Finish all ' + API.goalsTotal + ' goals in one city to get on this board.' : '');
+    const mine = (O.best[boardMode] || {})[boardTab];
+    $('board-me').innerHTML = mine > 0 ? 'Your best: <b>' + B.fmt(mine) + '</b>' + (meIn ? '' : ' (outside the top 25)')
+      : boardTab === 'goalsSec' ? 'Finish all ' + API.goalsTotal + ' goals in one ' + esc(API.diffLabel(boardMode)) + ' city to get on this board.' : '';
   } catch (e) {
+    if (mode0 !== boardMode || tab0 !== boardTab) return;
     $('board-list').innerHTML = '<li class="mini">Couldn\u2019t load the leaderboard: ' + esc(e.message) + '</li>';
   }
 }
-document.querySelectorAll('#board-tabs button').forEach(b => b.addEventListener('click', () => openBoard(b.dataset.board)));
-$('btn-board').addEventListener('click', () => openBoard());
-$('btn-board-s').addEventListener('click', () => openBoard());
+$('board-modes').addEventListener('click', e => { const b = e.target.closest('button[data-mode]'); if (b) openBoard(null, b.dataset.mode); });
+$('board-tabs').addEventListener('click', e => { const b = e.target.closest('button[data-board]'); if (b) openBoard(b.dataset.board); });
+$('btn-board').addEventListener('click', () => openBoard(null, currentMode()));
+$('btn-board-s').addEventListener('click', () => openBoard(null, currentMode()));
 $('board-close').addEventListener('click', () => closeM('m-board'));
 
 /* ============================================================ LIVE VIEWING
