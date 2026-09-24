@@ -10,6 +10,8 @@
      usernames/{nameLower}       uid   — names claimed by permanent accounts
      leaderboard/{uid}           name, star, parcels, weeks, goalsSec (+ which difficulty each came from)
      live/{6-digit code}         uid, name, star, playing, state, meta, watchT — the live view channel
+     feedback/{bugs|ideas|other}/entries/{id}   guest feedback: uid, name, message, details, replyTo, createdAt
+     (signed-in accounts' feedback is emailed by a Google Apps Script on the support Gmail — see apps-script/)
    ===================================================================== */
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js';
 import { getAnalytics, isSupported } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-analytics.js';
@@ -20,7 +22,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js';
 import {
   getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs, query, orderBy, limit,
-  onSnapshot, runTransaction, serverTimestamp, deleteField
+  onSnapshot, runTransaction, serverTimestamp, deleteField, addDoc
 } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js';
 
 const firebaseConfig = {
@@ -566,8 +568,43 @@ function stopWatching(silent) {
 }
 $('spec-exit').addEventListener('click', () => stopWatching(false));
 
+/* ============================================================== FEEDBACK */
+const FB_CATS = {Bug: 'bugs', Idea: 'ideas', Other: 'other'};
+// Web app URL from Apps Script → Deploy → New deployment (see apps-script/Code.gs).
+const FEEDBACK_MAIL_URL = 'https://script.google.com/macros/s/AKfycbx3beH9XQi7sGw5iYKYAeaWpJKJ80vqdtUqpTop6ngbQ4eRS9vH_XYHHAKi0HgJTo-M/exec';
+async function emailFeedback(payload) {
+  const idToken = await O.user.getIdToken();
+  let r;
+  try {
+    // text/plain keeps this a "simple" request, so the browser doesn't need a CORS preflight
+    const res = await fetch(FEEDBACK_MAIL_URL, {method: 'POST', headers: {'Content-Type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify(Object.assign({idToken}, payload))});
+    r = await res.json();
+  } catch (e) { throw Object.assign(new Error('network'), {userMessage: 'Couldn\u2019t reach support just now. Try again in a minute.'}); }
+  if (!r || !r.ok) throw Object.assign(new Error('rejected'), {userMessage: (r && r.error) || 'Couldn\u2019t send that just now.'});
+}
+const hasEmailAccount = () => isPerm() && !!O.user.email;
+function feedbackIdentity() { return {account: hasEmailAccount(), email: hasEmailAccount() ? O.user.email : ''}; }
+async function sendFeedback({kind, message, details, replyTo}) {
+  if (!O.user) throw Object.assign(new Error('offline'), {userMessage: 'You look offline. Check your connection.'});
+  const category = FB_CATS[kind] || 'other';
+  message = String(message || '').slice(0, 1500);
+  details = String(details || '').slice(0, 1900);
+  if (hasEmailAccount()) {
+    await emailFeedback({category, message, details, name: myName()});
+    return 'email';
+  }
+  const data = {uid: O.user.uid, message, createdAt: serverTimestamp()};
+  if (details) data.details = details;
+  if (replyTo) data.replyTo = String(replyTo).slice(0, 254);
+  if (O.profile && O.profile.name) data.name = O.profile.name;
+  await addDoc(collection(db, 'feedback', category, 'entries'), data);
+  return 'firestore';
+}
+
 /* public surface used by game.js */
 window.JunctionOnline = {
   get ready() { return O.ready && !!(O.profile && O.profile.name); },
-  openSaves, openBoard, openWatch
+  get feedbackReady() { return !!O.user; },
+  openSaves, openBoard, openWatch, sendFeedback, feedbackIdentity
 };
