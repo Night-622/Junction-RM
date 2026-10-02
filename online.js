@@ -839,7 +839,7 @@ $('watch-go').addEventListener('click', async () => {
    snapshot we reload the whole city; otherwise we only patch the numbers so the traffic keeps moving. */
 function layoutKey(d) {
   return JSON.stringify([d.span, d.water.length, d.road, d.links, d.sign, d.special, d.lights, d.oneway, d.parks, d.depots, d.motorways, d.juncLvl, d.keepLeft, d.perks, d.carsBought, d.diffKey,
-    d.buildings.map(b => [b.k, b.type, b.color, b.tier, b.lvl, b.trucks, b.vans, b.extra, b.ups])]);
+    d.buildings.map(b => [b.k, b.sd, b.type, b.color, b.tier, b.lvl, b.trucks, b.vans, b.extra, b.ups])]);
 }
 function startWatching(code, first) {
   stopWatching(true);

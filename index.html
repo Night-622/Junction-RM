@@ -6,6 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#143845">
 <title>Junction — keep the city moving</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -57,7 +58,7 @@
         <button class="cbtn" id="btn-full" type="button" title="Full screen" aria-label="Full screen" aria-pressed="false"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path class="fs-on" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/><path class="fs-off" d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg></button>
         <span class="csep" aria-hidden="true"></span>
         <button class="cbtn" id="btn-sound" type="button" aria-pressed="false" title="Sound (M)" aria-label="Sound"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9z"/><path class="wave" d="M16.5 8.5a5 5 0 010 7M19 6a8.5 8.5 0 010 12"/><path class="mute" d="M17 9l5 6M22 9l-5 6"/></svg></button>
-        <button class="cbtn" id="btn-theme" type="button" title="Light or dark (T)" aria-label="Switch theme"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 010 16z" fill="currentColor"/></svg></button>
+        <button class="cbtn" id="btn-theme" type="button" title="Light or dark map (T)" aria-label="Switch map between light and dark"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 010 16z" fill="currentColor"/></svg></button>
         <button class="cbtn" id="btn-menu" type="button" title="Settings" aria-label="Settings" aria-expanded="false" aria-controls="menu"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg></button>
         <button class="cbtn" id="btn-help" type="button" title="How to play (?)" aria-label="How to play"><b>?</b></button>
         <button class="minbtn" type="button" data-min="ctrl" aria-label="Shrink the controls" title="Shrink or grow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path class="mi-h" d="M6 12h12"/><path class="mi-v" d="M12 6v12"/></svg></button>
@@ -65,7 +66,7 @@
       </div>
 
       <div class="plate menu" id="menu" hidden role="dialog" aria-label="Settings">
-        <div class="mhead"><b>Settings</b><span class="ver">Junction v1.4</span></div>
+        <div class="mhead"><b>Settings</b><span class="ver">Junction v1.5</span></div>
         <section class="msec" id="online-sec" hidden>
           <h4>Account and online</h4>
           <div class="acctline" id="acct-line"></div>
@@ -81,6 +82,30 @@
             <button class="act" id="btn-watch" type="button">Watch a player</button>
             <button class="act" id="btn-account" type="button">Account</button>
           </div>
+        </section>
+        <section class="msec" id="ui-sec">
+          <h4>Appearance</h4>
+          <div class="notesrow"><span>Map</span>
+            <div class="seg" id="opt-map" role="group" aria-label="Map colours">
+              <button type="button" data-map="light" aria-pressed="true">Light</button>
+              <button type="button" data-map="dark" aria-pressed="false">Dark</button>
+            </div>
+          </div>
+          <div class="notesrow"><span>Panels</span>
+            <div class="seg" id="opt-style" role="group" aria-label="Panel style">
+              <button type="button" data-style="clean" aria-pressed="true">Clean</button>
+              <button type="button" data-style="glass" aria-pressed="false">Glass</button>
+              <button type="button" data-style="sign" aria-pressed="false">Road sign</button>
+            </div>
+          </div>
+          <div class="themepicks" id="ui-themes" role="group" aria-label="Interface theme"></div>
+          <div class="uicolors">
+            <label class="uicol" data-tip="Menus" data-sub="Panels, bars and pop-ups"><input type="color" id="ui-plate" aria-label="Menu and panel colour"><b>Menus</b></label>
+            <label class="uicol" data-tip="Buttons" data-sub="Main actions like Start and Upgrade"><input type="color" id="ui-btn" aria-label="Button colour"><b>Buttons</b></label>
+            <label class="uicol" data-tip="Highlights" data-sub="Selected tools, tabs and the score"><input type="color" id="ui-accent" aria-label="Highlight colour"><b>Highlights</b></label>
+          </div>
+          <p class="mnote" id="ui-custom-note" hidden>Using your own colours. Pick a theme above to go back to a preset.</p>
+          <button class="linkbtn" id="ui-reset" type="button">Reset to the standard look</button>
         </section>
         <section class="msec">
           <h4>Layout</h4>
@@ -508,13 +533,13 @@
         <p>Signs are read from the driver's seat, not the map: a blue arrow means that's the <em>only</em> move allowed from this tile; a red ring bans one specific move. The same Signs tool also has a <b>one-way</b> option — pick it, then click a plain two-way stretch (not a junction) to make it flow one direction only; click again to flip it, and once more for two-way. Making a tight corridor one-way is free and removes a whole class of conflict from it.</p>
         <h3>Common questions</h3>
         <div class="faq">
-          <details><summary>Why isn't my new house or store doing anything?</summary><p>It isn't connected yet. A house, store or bay only works once a road tile is laid on one of its four sides — drag a road into it, or drag out from it.</p></details>
+          <details><summary>Why isn't my new house or store doing anything?</summary><p>It isn't connected yet. A house or bay only works once a road tile is laid on one of its four sides — drag a road into it, or drag out from it. A store is a 3×3 building with a row of parking bays in front: the road has to reach that parking row, either in front of a bay or at one end of the row.</p></details>
           <details><summary>Why did my city end?</summary><p>Either one store's parcels overflowed for too long, or the whole network gridlocked for a sustained stretch even with no single store overflowing. If you'd rather build with no losing condition at all, Zen difficulty removes it entirely.</p></details>
           <details><summary>Give-way, light or roundabout — what's the real difference?</summary><p>A give-way is free and fine for light traffic. A light suits a junction that's busy from more than one side. A roundabout suits a junction that's busy from three or more sides at once — it costs more but almost never makes anyone stop outright.</p></details>
           <details><summary>Why do prices keep going up?</summary><p>Road, signs, lights, roundabouts, lots, bays and motorways all rise 15% a week, compounding — so it pays to build key pieces early. Past a free allowance, existing road also costs a small amount of upkeep every week.</p></details>
           <details><summary>What happens when a store "tiers up"?</summary><p>It randomly grows busier over time, in up to three steps — a thicker outline means it now sends out parcels faster and pays a little more per parcel, and two new houses of its colour move in nearby to match the extra demand.</p></details>
           <details><summary>Can I undo a mistake?</summary><p>Yes — Ctrl+Z undoes, Ctrl+Y redoes. Both work back through everything from your last press-and-drag.</p></details>
-          <details><summary>Can I change the colours?</summary><p>Yes. Open Settings and pick a colour mode: red–green safe, blue–yellow safe, high contrast, or custom colours you choose one by one. You can also switch on a shape for each colour on houses and stores.</p></details>
+          <details><summary>Can I change the colours?</summary><p>Yes. Open Settings. Under Appearance, pick an interface theme, or choose your own colours for menus, buttons and highlights, and switch the panels between Clean, Glass and Road sign styles. Under Colour mode, pick red–green safe, blue–yellow safe, high contrast, or custom city colours you choose one by one. You can also switch on a shape for each colour on houses and stores.</p></details>
           <details><summary>What's a tow truck actually for?</summary><p>Hired at a store, it drives out to stuck or broken-down cars nearby, hooks them, hauls them clear and saves their parcels — handy once a city is busy enough that a single stuck car can back up a whole street.</p></details>
           <details><summary>Is a bigger city always a better city?</summary><p>No — score comes from steady throughput, not size. A small, tightly controlled loop consistently out-earns a sprawling network that's constantly jammed.</p></details>
           <details><summary>Is there a "correct" way to play?</summary><p>No. There's no correct way to play Junction — take any path you want.</p></details>
@@ -571,7 +596,7 @@
             <h3>Vehicles</h3>
             <p>Every vehicle shows its parcel slots, filling as it loads. Click one to upgrade it. <b>Carry size</b> moves it up a model (hatchback, estate, pickup, panel van, box truck), adding a slot each time but making it 10% slower. <b>Speed</b> fits a faster kit (sport, GT, racer) for +12% each, so you can win the speed back. <b>Loading</b> cuts time at the store. Click a house to <b>buy another car</b>: each costs more than the last, and the house itself grows from cottage to family home to villa.</p>
             <h3>Stores</h3>
-            <p>As a store tiers up it rebuilds: corner shop, supermarket, depot, then distribution centre. Each paid upgrade adds a rooftop sign, then solar panels, then flags and gold trim, and makes every parcel pay more.</p>
+            <p>Each store takes up a 3×4 plot: a 3×3 building with a row of parking bays on the street side, where cars back in to load. Connect your road to that parking row. As a store tiers up it rebuilds: corner shop, supermarket, depot, then distribution centre. Each paid upgrade adds a rooftop sign, then solar panels, then flags and gold trim, and makes every parcel pay more.</p>
             <h3>Money</h3>
             <p>A parcel pays $2 at the door; upgrade a store (<kbd>U</kbd>) and it pays more, and busier stores and rush hour pay extra. Spend it on road, signs, lights and the Shop. Click any junction to upgrade it — each level lets more cars through. Hire a tow truck (<kbd>Y</kbd>, or the Shop tab) and it drives out from its store to hook stuck or broken cars, tow them clear and save their parcels. A council grant arrives each week, and you also pick one free reward: cash, pieces, or a free upgrade level. Road, sign, light, roundabout, lot, bay and motorway prices rise 15% every week, so build early. Past a free allowance, every extra tile of road also costs a small amount of upkeep each week — the weekly toast breaks down the grant, any upkeep and the current price rise.</p>
             <h3>Events</h3>

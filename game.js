@@ -17,7 +17,7 @@
 const CONFIG = {
   // clock & map
   weekSeconds:        110,
-  startSpan:          9,
+  startSpan:          11,     // stores take a 3x4 plot, so the first map needs a little more room
   growPerWeek:        1,      // tiles added on EVERY side each week
   maxSpan:            128,
   cameraEase:         2.4,
@@ -639,8 +639,68 @@ function faceAngle(k, acc) {
   const a = Math.atan2(cy(acc) - cy(k), cx(acc) - cx(k)) - Math.PI / 2;
   return Math.round(a / (Math.PI / 2)) * (Math.PI / 2);
 }
+/* Store footprints. A store covers 3x4 tiles: a 3x3 building plus, on the side facing the street, one
+   row of parking bays. b.k is the middle bay of that row and b.sd (0 N, 2 E, 4 S, 6 W) points from the row
+   out to the street. A road reaches the store by touching the parking row: in front of any of its three
+   bays, or at either end. Cities saved before stores grew keep their single-tile store (no b.sd). */
+const STORE_DEPTH = 4;
+const isBig = b => !!b && b.type === 'store' && b.sd >= 0;
+function storeTilesAt(k, sd) {                       // parking row first (3 tiles, middle second), then the building
+  if (k < 0) return null;
+  const fx = DX[sd], fy = DY[sd], px = -fy, py = fx, c0 = cx(k), r0 = cy(k), out = [];
+  for (let depth = 0; depth < STORE_DEPTH; depth++) for (let s = -1; s <= 1; s++) {
+    const c = c0 + px * s - fx * depth, r = r0 + py * s - fy * depth;
+    if (c < 0 || r < 0 || c >= COLS || r >= ROWS) return null;
+    out.push(idx(c, r));
+  }
+  return out;
+}
+const bTiles = b => isBig(b) ? storeTilesAt(b.k, b.sd) : [b.k];
+const rowTiles = b => isBig(b) ? storeTilesAt(b.k, b.sd).slice(0, 3) : [b.k];
+const sdFace = sd => Math.atan2(DY[sd], DX[sd]) - Math.PI / 2;    // local +y points out of the parking row
+/* world-space centre of a building's whole plot, and of the 3x3 building on a big store */
+const bX = b => isBig(b) ? tx(b.k) - DX[b.sd] * CELL * 1.5 : tx(b.k);
+const bY = b => isBig(b) ? ty(b.k) - DY[b.sd] * CELL * 1.5 : ty(b.k);
+/* [road tile, parking-row tile it would enter by] for every way into a big store */
+function storeDoors(b) {
+  const row = rowTiles(b), out = [];
+  for (const t of row) out.push([nbr(t, b.sd), t]);
+  out.push([nbr(row[0], dirBetween(row[1], row[0])), row[0]]);
+  out.push([nbr(row[2], dirBetween(row[1], row[2])), row[2]]);
+  return out.filter(o => o[0] >= 0);
+}
+function storeAccess(b) {
+  const doors = storeDoors(b);
+  b.door = b.k;
+  if (b.pref >= 0 && road[b.pref]) for (const [t, d] of doors) if (t === b.pref) { b.door = d; return t; }
+  let best = -1, bs = 9;
+  doors.forEach(([t, d], i) => {
+    if (!road[t]) return;
+    const sc = (lnk[t] ? 0 : 2) + (i === 1 ? 0 : 1);  // a road that goes somewhere, then the middle bay
+    if (sc < bs) { bs = sc; best = t; b.door = d; }
+  });
+  return best;
+}
+/* is tile k somewhere a road may attach to a building (a house, a bay, or a store's parking row)? */
+function isDoorTile(k) {
+  const b = buildings[bAt[k]];
+  return !isBig(b) || rowTiles(b).includes(k);
+}
+function markBuilding(b, i) { for (const t of bTiles(b)) bAt[t] = i; }
+/* can a big store sit with its middle bay on k, facing sd? every tile must be open ground in play, and
+   the street side must have room for a road */
+function storeFits(k, sd, inBounds) {
+  const tiles = storeTilesAt(k, sd); if (!tiles) return false;
+  for (const t of tiles) if (!inBounds(t) || water[t] || occupied(t)) return false;
+  let open = 0;
+  for (const t of tiles.slice(0, 3)) { const f = nbr(t, sd); if (f >= 0 && inBounds(f) && !water[f] && (road[f] || !occupied(f))) open++; }
+  return open >= 2;
+}
 function linkBuildings() {
-  for (const b of buildings) { b.acc = nearestRoadTo(b.k, b.pref); b.face = faceAngle(b.k, b.acc); }
+  for (const b of buildings) {
+    if (isBig(b)) { b.acc = storeAccess(b); b.face = sdFace(b.sd); }
+    else { b.acc = nearestRoadTo(b.k, b.pref); b.face = faceAngle(b.k, b.acc); b.door = b.k; }
+  }
   for (const p of parks) p.face = buildings[p.b] ? buildings[p.b].face : 0;
   for (const d of depots) { d.acc = nearestRoadTo(d.k, d.pref); d.face = faceAngle(d.k, d.acc); }
   netVer++;                                          // driveways are part of the road drawing
@@ -842,9 +902,13 @@ function homeSpots(b) {
   }
   return list;
 }
+/* a big store's parking row has six bays; cars back in so they leave nose first. Docks fill from the
+   middle out. Local coordinates are relative to the middle bay's tile, +y towards the street. */
+const STORE_BAYS = [-7.5, 7.5, -22.5, 22.5, -37.5, 37.5];
 function dockSpots(s) {
   const list = [], x = tx(s.k), y = ty(s.k), th = s.face || 0;
-  for (const lx of [-7, 7]) { const p = rot(x, y, th, lx, 10.5); list.push({x: p.x, y: p.y, a: th + Math.PI / 2}); }
+  if (isBig(s)) for (const lx of STORE_BAYS) { const p = rot(x, y, th, lx, 1); list.push({x: p.x, y: p.y, a: th + Math.PI / 2}); }
+  else for (const lx of [-7, 7]) { const p = rot(x, y, th, lx, 10.5); list.push({x: p.x, y: p.y, a: th + Math.PI / 2}); }
   for (const p of parks) if (buildings[p.b] === s) {
     const q = rot(tx(p.k), ty(p.k), p.face || 0, 6, 0);
     list.push({x: q.x, y: q.y, a: (p.face || 0) + Math.PI / 2});
@@ -864,10 +928,11 @@ function parkedPose(c) {
     const s = buildings[L.i];
     if (c.isTruck && !c.isAmb) {                     // tow trucks wait inside their store, side by side
       const mine = trucks.filter(x => x.store === L.i), i = Math.max(0, mine.indexOf(c));
-      const p = rot(tx(s.k), ty(s.k), s.face || 0, mine.length > 1 ? (i ? 5.2 : -5.2) : 0, -1.5);
+      const p = isBig(s) ? rot(tx(s.k), ty(s.k), s.face || 0, i ? 30 : -30, -22.5)       // in the garage bays of the facade
+        : rot(tx(s.k), ty(s.k), s.face || 0, mine.length > 1 ? (i ? 5.2 : -5.2) : 0, -1.5);
       return {x: p.x, y: p.y, a: (s.face || 0) + Math.PI / 2};
     }
-    const p = rot(tx(s.k), ty(s.k), s.face || 0, 0, 10.5);
+    const p = rot(tx(s.k), ty(s.k), s.face || 0, 0, isBig(s) ? 1 : 10.5);
     return {x: p.x, y: p.y, a: (s.face || 0) + Math.PI / 2};
   }
   if (L.t === 'home') {
@@ -1327,7 +1392,7 @@ function finishLoading(c) {
     if (s.contract) s.contract.got += n;
     c.load = n; c.carried = n; c.want = 0; c.taken = true;
     c.cash = Math.round(n * payPerParcel(s));
-    if (n > 0) popText(tx(s.k), ty(s.k) - 14, '-' + n, COLORS[s.color].hex);
+    if (n > 0) popText(bX(s), bY(s) - 14, '-' + n, COLORS[s.color].hex);
   }
   const h = buildings[c.home];
   if (solveBudget <= 0) return;
@@ -1493,7 +1558,7 @@ function freeSpot(minGap, edgeBias) {
       else if (side === 2) { c = along; r = org + span - 1 - ring; } else { c = org + ring; r = along; }
     } else { c = org + 1 + Math.floor(Math.random() * (span - 2)); r = org + 1 + Math.floor(Math.random() * (span - 2)); }
     const k = idx(c, r);
-    if (!inPlay(k) || water[k] || occupied(k)) continue;
+    if (!inPlay(k) || water[k] || occupied(k) || storeFront(k)) continue;
     let ok = true;
     for (let dc = -minGap; dc <= minGap && ok; dc++) for (let dr = -minGap; dr <= minGap && ok; dr++) {
       const cc = c + dc, rr = r + dr;
@@ -1504,17 +1569,52 @@ function freeSpot(minGap, edgeBias) {
   }
   return -1;
 }
-function addBuilding(type, colorIdx) {
-  const k = freeSpot(type === 'store' ? 3 : 1, true);
-  if (k < 0) return null;
+/* the open tiles right in front of a store's parking row stay free of houses, so a road can always get in */
+function storeFront(k) {
+  for (const b of buildings) if (isBig(b)) for (const t of rowTiles(b)) if (nbr(t, b.sd) === k) return true;
+  return false;
+}
+/* a random spot for a whole 3x4 store, at least `gap` tiles clear of every other building */
+function storeSpot(gap) {
+  for (let t = 0; t < 900; t++) {
+    const c = org + 1 + Math.floor(Math.random() * Math.max(1, span - 2)), r = org + 1 + Math.floor(Math.random() * Math.max(1, span - 2));
+    const k = idx(c, r), sd = ORTH[Math.floor(Math.random() * 4)];
+    if (!storeFits(k, sd, inPlay)) continue;
+    let ok = true;
+    for (const tl of storeTilesAt(k, sd)) {
+      for (let dc = -gap; dc <= gap && ok; dc++) for (let dr = -gap; dr <= gap && ok; dr++) {
+        const cc = cx(tl) + dc, rr = cy(tl) + dr;
+        if (cc >= 0 && rr >= 0 && cc < COLS && rr < ROWS && bAt[idx(cc, rr)] >= 0) ok = false;
+      }
+      if (!ok) break;
+    }
+    if (ok) return {k, sd};
+  }
+  return null;
+}
+function newBuilding(k, type, colorIdx, sd) {
   const b = {k, type, color: colorIdx, pins: 0, claimed: 0, timer: 0, tier: 0, cars: [], carsN: 0, park: 0, lvl: 0, trucks: 0,
              docks: [], served: 0, acc: -1, face: 0, pref: -1, unreach: 0, born: clock, bornAnim: animT, contract: null,
              pinTimer: CFG.pinIntervalBase * 0.6 * DIFF.pin,
              evolveTimer: rnd(CFG.storeEvolveCheckMin, CFG.storeEvolveCheckMax)};
-  bAt[k] = buildings.length; buildings.push(b);
+  if (type === 'store' && sd >= 0) b.sd = sd;
+  markBuilding(b, buildings.length); buildings.push(b);
+  return b;
+}
+function addBuilding(type, colorIdx) {
+  let b;
+  if (type === 'store') {
+    const spot = storeSpot(2) || storeSpot(1) || storeSpot(0);
+    if (!spot) return null;
+    b = newBuilding(spot.k, type, colorIdx, spot.sd);
+  } else {
+    const k = freeSpot(1, true);
+    if (k < 0) return null;
+    b = newBuilding(k, type, colorIdx);
+  }
   linkBuildings();
   if (type === 'house') for (let i = 0; i < CFG.carsPerHouse; i++) addCar(buildings.length - 1);
-  if (clock > 1) { popRing(tx(k), ty(k), COLORS[colorIdx].hex); }
+  if (clock > 1) { popRing(bX(b), bY(b), COLORS[colorIdx].hex); }
   return b;
 }
 
@@ -1539,7 +1639,7 @@ function addBuilding(type, colorIdx) {
 /* Find a free tile for a tutorial building as close as possible to where the script wants it.
    The player may already have laid road, lots or bays there, so never assume the spot is empty. */
 function tutFreeTile(dc, dr) {
-  const free = k => k >= 0 && !occupied(k) && !water[k];
+  const free = k => k >= 0 && !occupied(k) && !water[k] && !storeFront(k);
   for (let rad = 0; rad < 9; rad++)
     for (let a = -rad; a <= rad; a++) for (let b = -rad; b <= rad; b++) {
       if (Math.max(Math.abs(a), Math.abs(b)) !== rad) continue;
@@ -1553,13 +1653,24 @@ function tutFreeTile(dc, dr) {
     }
   return tutAt(dc, dr);
 }
-function placeTutBuilding(type, colorIdx, dc, dr) {
-  const k = tutFreeTile(dc, dr);
-  const b = {k, type, color: colorIdx, pins: 0, claimed: 0, timer: 0, tier: 0, cars: [], carsN: 0, park: 0, lvl: 0, trucks: 0,
-             docks: [], served: 0, acc: -1, face: 0, pref: -1, unreach: 0, born: clock, bornAnim: animT, contract: null,
-             pinTimer: CFG.pinIntervalBase * 0.6 * DIFF.pin,
-             evolveTimer: rnd(CFG.storeEvolveCheckMin, CFG.storeEvolveCheckMax)};
-  bAt[k] = buildings.length; buildings.push(b);
+/* a big store as close as possible to where the script wants its parking row, facing `sds[0]` if it can */
+function tutStoreSpot(dc, dr, sds) {
+  const inside = t => { const c = cx(t) - org, r = cy(t) - org; return c >= 1 && r >= 1 && c <= span - 2 && r <= span - 2; };
+  const near = (maxRad, list) => {
+    for (const sd of list)                          // the right facing a few tiles off beats the wrong one on the spot
+      for (let rad = 0; rad < maxRad; rad++)
+        for (let a = -rad; a <= rad; a++) for (let b = -rad; b <= rad; b++) {
+          if (Math.max(Math.abs(a), Math.abs(b)) !== rad) continue;
+          const k = tutAt(dc + a, dr + b);
+          if (storeFits(k, sd, inside)) return {k, sd};
+        }
+    return null;
+  };
+  return near(4, sds.slice(0, 1)) || near(4, sds.slice(1, 3)) || near(12, sds);
+}
+function placeTutBuilding(type, colorIdx, dc, dr, sds) {
+  const spot = type === 'store' ? tutStoreSpot(dc, dr, sds || ORTH) : null;
+  newBuilding(spot ? spot.k : tutFreeTile(dc, dr), type, colorIdx, spot ? spot.sd : undefined);
   return buildings.length - 1;
 }
 function tutAt(dc, dr) { return idx(org + dc, org + dr); }
@@ -1576,15 +1687,18 @@ function tutFinishPlacement() {
 /* place one colour pair (nudged off anything the player already built) and ring both buildings */
 function tutSpawnPair(col, st, ho) {
   const startIdx = buildings.length;
-  const si = placeTutBuilding('store', col, st[0], st[1]);
+  // the store's parking row faces its house, so the natural road runs straight between them
+  const dx = ho[0] - st[0], dy = ho[1] - st[1];
+  const face = Math.abs(dx) >= Math.abs(dy) ? (dx >= 0 ? 2 : 6) : (dy >= 0 ? 4 : 0);
+  const si = placeTutBuilding('store', col, st[0], st[1], [face, (face + 2) % 8, (face + 6) % 8, (face + 4) % 8]);
   const hi = placeTutBuilding('house', col, ho[0], ho[1]);
   tutAddCarsFrom(startIdx);
   tutFinishPlacement();
-  for (const i of [si, hi]) popRing(tx(buildings[i].k), ty(buildings[i].k), COLORS[col].hex);
+  for (const i of [si, hi]) popRing(bX(buildings[i]), bY(buildings[i]), COLORS[col].hex);
 }
 /* stage 0: just the red pair, nothing else — a blank canvas for the first road */
 function buildTutorialStage0() {
-  placeTutBuilding('store', 0, 4, 8);
+  placeTutBuilding('store', 0, 4, 8, [2, 0, 4, 6]);
   placeTutBuilding('house', 0, 12, 8);
 }
 /* stage 1: an amber pair north/south of where the red road most likely runs, so the natural
@@ -2038,7 +2152,7 @@ function attachTo(bk, roadK) {
   else return;
   rebuildNet();
 }
-const isFront = k => k >= 0 && (bAt[k] >= 0 || depotAt[k] >= 0);
+const isFront = k => k >= 0 && ((bAt[k] >= 0 && isDoorTile(k)) || depotAt[k] >= 0);
 /* a click: one unlinked tile. If it sits beside a house or store, that
    building turns to face it. */
 function placeRoad(k, silent, attach) {
@@ -2528,7 +2642,7 @@ function upgradeStore(si) {
   if (c === null) { hint('That store is already at its top level.'); return false; }
   if (money < c) { hint('Upgrading costs ' + fmt$(c) + '. ' + shortBy(c)); return false; }
   spend(c); s.lvl++;
-  popRing(tx(s.k), ty(s.k), '#ffc933'); popText(tx(s.k), ty(s.k) - 20, fmt$(baseRate(s)) + ' a parcel', '#ffc933');
+  popRing(bX(s), bY(s), '#ffc933'); popText(bX(s), bY(s) - 20, fmt$(baseRate(s)) + ' a parcel', '#ffc933');
   toast('The ' + COLORS[s.color].name + ' store now pays ' + fmt$(baseRate(s)) + ' a parcel', 'good'); sfx('upgrade'); refreshUI();
   return true;
 }
@@ -2573,7 +2687,7 @@ function hireTruck(si) {
   const p = truckPrice();
   if (money < p) { hint('A tow truck costs ' + fmt$(p) + '. ' + shortBy(p)); return false; }
   spend(p); s.trucks++; makeTruck(si);
-  popRing(tx(s.k), ty(s.k), '#f08a1c');
+  popRing(bX(s), bY(s), '#f08a1c');
   toast('Tow truck hired at the ' + COLORS[s.color].name + ' store', 'good'); sfx('upgrade'); refreshUI();
   return true;
 }
@@ -2821,7 +2935,7 @@ function ambArrive(a) {
     const bonus = Math.round(CFG.ambBonus + CFG.ambBonusFast * clamp((a.limit - el) / a.limit, 0, 1));
     earn(bonus); stats.ambOk++;
     toast('Ambulance arrived in ' + Math.round(el) + 's · +' + fmt$(bonus), 'good'); sfx('deliver');
-    if (s) { popText(tx(s.k), ty(s.k) - 14, '+' + fmt$(bonus), '#7be495'); popRing(tx(s.k), ty(s.k), '#ff4d3d'); }
+    if (s) { popText(bX(s), bY(s) - 14, '+' + fmt$(bonus), '#7be495'); popRing(bX(s), bY(s), '#ff4d3d'); }
     bump('v-money');
   } else {
     const p = ambPenalty(5 + (el - a.limit) * 0.8 > CFG.ambPenaltyMax ? CFG.ambPenaltyMax : 5 + (el - a.limit) * 0.8);
@@ -2915,7 +3029,7 @@ function maybeOfferContract() {
   const b = pick(cand), bonus = Math.round(CFG.contractBonusBase + CFG.contractBonusPerWeek * week);
   b.contract = {left: CFG.contractSeconds, need: CFG.contractNeed, got: 0, bonus};
   toast('The ' + COLORS[b.color].name + ' store wants ' + CFG.contractNeed + ' parcels moved fast — ' + fmt$(bonus) + ' if you deliver in time', 'warn');
-  popRing(tx(b.k), ty(b.k), '#ffd23a'); sfx('alarm');
+  popRing(bX(b), bY(b), '#ffd23a'); sfx('alarm');
   return true;
 }
 function stepContracts(dt) {
@@ -2928,7 +3042,7 @@ function stepContracts(dt) {
     const c = b.contract;
     if (c.got >= c.need) {
       earn(c.bonus); toast('Contract met at the ' + COLORS[b.color].name + ' store — +' + fmt$(c.bonus), 'good');
-      popText(tx(b.k), ty(b.k) - 20, '+' + fmt$(c.bonus), '#7be495'); sfx('upgrade'); b.contract = null;
+      popText(bX(b), bY(b) - 20, '+' + fmt$(c.bonus), '#7be495'); sfx('upgrade'); b.contract = null;
     } else {
       c.left -= dt;
       if (c.left <= 0) { toast('The ' + COLORS[b.color].name + ' store’s contract offer expired'); b.contract = null; }
@@ -3006,7 +3120,7 @@ function update(dt) {
         if (Math.random() < CFG.storeEvolveChance) {
           s.tier++;
           toast('The ' + COLORS[s.color].name + ' store is busier now (tier ' + s.tier + ') \u2014 parcels arrive faster', 'warn');
-          popRing(tx(s.k), ty(s.k), COLORS[s.color].hex); sfx('upgrade');
+          popRing(bX(s), bY(s), COLORS[s.color].hex); sfx('upgrade');
         }
       }
     }
@@ -3365,7 +3479,7 @@ function serialize() {
     sign: sign.map((s, k) => s ? [k, s] : null).filter(Boolean),
     special: special.map((s, k) => s ? [k, s] : null).filter(Boolean),
     lights: [...lightQ].filter(([k]) => special[k] === 'light').map(([k, q]) => [k, q[0], q[1]]),
-    buildings: buildings.map(b => ({pref: b.pref, k: b.k, type: b.type, color: b.color, pins: b.pins, tier: b.tier, timer: b.timer, lvl: b.lvl, trucks: b.trucks, vans: b.cars.map(c => c.van ? 1 : 0), extra: b.extra || 0, ov: b.overSpent ? 1 : 0, ovT: +(b.followT || 0).toFixed(1), ups: b.cars.map(c => [carUp(c, 'cap'), carUp(c, 'spd'), carUp(c, 'load'), carUp(c, 'fuel')])})), carsBought, fuelV: 1,
+    buildings: buildings.map(b => ({pref: b.pref, k: b.k, sd: isBig(b) ? b.sd : undefined, type: b.type, color: b.color, pins: b.pins, tier: b.tier, timer: b.timer, lvl: b.lvl, trucks: b.trucks, vans: b.cars.map(c => c.van ? 1 : 0), extra: b.extra || 0, ov: b.overSpent ? 1 : 0, ovT: +(b.followT || 0).toFixed(1), ups: b.cars.map(c => [carUp(c, 'cap'), carUp(c, 'spd'), carUp(c, 'load'), carUp(c, 'fuel')])})), carsBought, fuelV: 1,
     parks: parks.map(p => ({k: p.k, b: p.b})), depots: depots.map(d => d.k), dprefs: depots.map(d => d.pref),
     juncLvl: nodeList.filter(nd => nd.lvl > 0).map(nd => [nd.k, nd.lvl, nd.spent]),
     motorways: motorways.map(m => ({a: m.a, b: m.b, len: m.len})), goals: [...goalsDone],
@@ -3399,6 +3513,21 @@ function applyCityPalette(p) {
   colorMode = p.mode;
   applyPalette(); savePrefs(true); renderPaletteUI();
 }
+/* Cities saved when stores were a single tile: grow each store into the full 3x4 plot, keeping it facing
+   the road it already used, wherever the plot behind it is still open ground. Stores with no room stay small. */
+function growLegacyStores() {
+  const legacy = buildings.map((b, i) => [b, i]).filter(([b]) => b.type === 'store' && !isBig(b));
+  if (!legacy.length) return;
+  linkBuildings();
+  for (const [b, i] of legacy) {
+    bAt[b.k] = -1;
+    const toward = b.acc >= 0 ? dirBetween(b.k, b.acc) : -1;
+    const order = toward >= 0 ? [toward, (toward + 2) % 8, (toward + 6) % 8, (toward + 4) % 8] : ORTH;
+    const sd = order.find(d => storeFits(b.k, d, inPlay));
+    if (sd !== undefined) b.sd = sd;
+    markBuilding(b, i);
+  }
+}
 function loadGameCore(data) {
   const view = spectating;
   let d = data;
@@ -3423,11 +3552,13 @@ function loadGameCore(data) {
                  docks: [], served: 0, acc: -1, face: 0, pref: o.pref === undefined ? -1 : o.pref, unreach: 0, born: 0, pinTimer: rnd(3, 9), lvl: o.lvl || 0, trucks: 0,
                  overSpent: o.ov === undefined ? true : !!o.ov, followT: +o.ovT || 0,
                  evolveTimer: rnd(CFG.storeEvolveCheckMin, CFG.storeEvolveCheckMax)};
-      bAt[b.k] = buildings.length; buildings.push(b);
+      if (b.type === 'store' && ORTH.includes(o.sd)) b.sd = o.sd;
+      markBuilding(b, buildings.length); buildings.push(b);
     });
     d.parks.forEach(p => { parks.push({k: p.k, b: p.b, face: 0}); parkAt[p.k] = parks.length - 1; buildings[p.b].park++; });
     d.depots.forEach((k, i) => { depots.push({k, cap: CFG.depotCapacity, slots: [], res: 0, acc: -1, face: 0, pref: d.dprefs && d.dprefs[i] !== undefined ? d.dprefs[i] : -1}); depotAt[k] = depots.length - 1; });
     d.motorways.forEach(m => motorways.push({id: ++motoSeq, a: m.a, b: m.b, len: m.len}));
+    if (!view) growLegacyStores();
     linkBuildings();
     carsBought = d.carsBought | 0;
     d.buildings.forEach((o, i) => {
@@ -3491,17 +3622,20 @@ const PALS = {
   light: {land: '#dde5cf', land2: '#d4dec4', check: 'rgba(255,255,255,.28)', water: '#9dc9df', foam: '#cfe9f4', wave: 'rgba(255,255,255,.55)',
           road: '#fbfaf5', roadWet: '#e6ebea', edge: '#33424d', lane: '#e2b022', stop: 'rgba(51,66,77,.5)', shadow: 'rgba(24,44,34,.14)',
           grid: 'rgba(30,60,40,.07)', tree1: '#79b26f', tree2: '#5f9a5b', treeSh: 'rgba(24,52,34,.2)', pave: '#cbc9bd', asphalt: '#66727b',
-          outside: 'rgba(28,48,58,.32)', deck: '#2c62a8', deckEdge: '#0f3566', stone: '#8b8d86', grass: '#a9cf95', roofBase: '#e9e6dc', ink: '#16303c', night: [12, 22, 52]},
+          outside: 'rgba(28,48,58,.32)', deck: '#2c62a8', deckEdge: '#0f3566', stone: '#8b8d86', grass: '#a9cf95', roofBase: '#e9e6dc', ink: '#16303c', night: [12, 22, 52],
+          sh: 'rgba(22,42,40,.24)', lot: '#d9d6cb', curb: '#c3bfb2'},
   dark:  {land: '#23322f', land2: '#1f2d2b', check: 'rgba(255,255,255,.03)', water: '#1c4458', foam: '#2c6178', wave: 'rgba(160,210,235,.22)',
           road: '#4a565f', roadWet: '#3c474f', edge: '#141c21', lane: '#c9a12a', stop: 'rgba(230,240,245,.35)', shadow: 'rgba(0,0,0,.28)',
           grid: 'rgba(255,255,255,.05)', tree1: '#3c6b4a', tree2: '#2f5a3e', treeSh: 'rgba(0,0,0,.3)', pave: '#55605f', asphalt: '#39444b',
-          outside: 'rgba(4,10,14,.5)', deck: '#2a5896', deckEdge: '#0c2a52', stone: '#66696a', grass: '#3f6b48', roofBase: '#77807e', ink: '#e8f0f2', night: [6, 12, 34]}
+          outside: 'rgba(4,10,14,.5)', deck: '#2a5896', deckEdge: '#0c2a52', stone: '#66696a', grass: '#3f6b48', roofBase: '#77807e', ink: '#e8f0f2', night: [6, 12, 34],
+          sh: 'rgba(0,0,0,.34)', lot: '#4b5655', curb: '#5d6766'}
 };
 let PAL = PALS.light;
 function setTheme(t) {
   theme = t; PAL = PALS[t];
   document.documentElement.setAttribute('data-theme', t);
   try { localStorage.setItem('junction2-theme', t); } catch (e) {}
+  if (typeof uiTheme !== 'undefined') { applyUiTheme(); renderUiThemeUI(); }
 }
 
 /* --------------------------------------------------------------- colour */
@@ -3517,6 +3651,39 @@ function rr(x, y, w, h, r) {
   ctx.beginPath(); ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r);
   ctx.lineTo(x + w, y + h - r); ctx.arcTo(x + w, y + h, x + w - r, y + h, r); ctx.lineTo(x + r, y + h); ctx.arcTo(x, y + h, x, y + h - r, r);
   ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r); ctx.closePath();
+}
+/* rr without starting a new path, so several shapes can share one fill */
+function rrp(x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r);
+  ctx.lineTo(x + w, y + h - r); ctx.arcTo(x + w, y + h, x + w - r, y + h, r); ctx.lineTo(x + r, y + h); ctx.arcTo(x, y + h, x, y + h - r, r);
+  ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r); ctx.closePath();
+}
+/* One sun for the whole map: every shadow falls the same way, a little longer and softer through the
+   morning and evening, and fades out at night. SUN.x/y is the world offset per unit of height. */
+const SUN = {x: 0.55, y: 0.8, a: 1};
+function updateSun() {
+  const p = nightOn ? dayPhase() : 0, sw = Math.sin(p * Math.PI * 2);   // 0 at noon, ±1 at dawn and dusk
+  const ang = Math.PI * 0.31 - sw * 0.38, len = 1 + Math.abs(sw) * 0.45;
+  SUN.x = Math.cos(ang) * len; SUN.y = Math.sin(ang) * len;
+  SUN.a = 1 - nightAmount() * 0.6;
+}
+/* a solid shadow for rounded boxes standing `h` high, drawn as the sweep from the base to the offset copy so
+   it stays joined to its object. (x, y, ang, sc) is the object's own frame; rects are in that frame. */
+function dropShadow(x, y, ang, sc, h, rects) {
+  const ox = SUN.x * h, oy = SUN.y * h, c = Math.cos(ang), s = Math.sin(ang);
+  const lx = (ox * c + oy * s) / sc, ly = (-ox * s + oy * c) / sc, steps = h > 3 ? 5 : 3;
+  ctx.save(); ctx.translate(x, y); ctx.rotate(ang); if (sc !== 1) ctx.scale(sc, sc);
+  ctx.beginPath();
+  for (const [rx, ry, rw, rh, r] of rects) for (let i = 1; i <= steps; i++) { const t = i / steps; rrp(rx + lx * t, ry + ly * t, rw, rh, r); }
+  ctx.globalAlpha = SUN.a; ctx.fillStyle = PAL.sh; ctx.fill();
+  ctx.restore();
+}
+/* a round shadow (trees, cones, sign posts, badges) */
+function dotShadow(x, y, r, h) {
+  ctx.globalAlpha = SUN.a; ctx.fillStyle = PAL.sh;
+  ctx.beginPath(); ctx.arc(x + SUN.x * h, y + SUN.y * h, r, 0, Math.PI * 2); ctx.fill();
+  ctx.globalAlpha = 1;
 }
 function glyph(g, x, y, r, col) {
   ctx.fillStyle = col; ctx.beginPath();
@@ -3615,7 +3782,7 @@ function buildPaths() {
     }
   }
   const conn = (k, acc) => { if (acc >= 0) { P.drive.moveTo(tx(k), ty(k)); P.drive.lineTo(tx(acc), ty(acc)); } };
-  for (const b of buildings) conn(b.k, b.acc);
+  for (const b of buildings) conn(b.door >= 0 ? b.door : b.k, b.acc);
   for (const dp of depots) conn(dp.k, dp.acc);
   for (const m of motorways) {
     const ax = tx(m.a), ay = ty(m.a), bx = tx(m.b), by = ty(m.b);
@@ -3689,7 +3856,7 @@ function drawTrees(vr) {
     if (!ok) continue;
     const X = (c + 0.5 + (hash01(k, 2) - 0.5) * 0.4) * CELL, Y = (r + 0.5 + (hash01(k, 7) - 0.5) * 0.4) * CELL, R = 6 + hash01(k, 8) * 4;
     const sway = Math.sin(animT * 0.8 + k) * 0.35;
-    ctx.fillStyle = PAL.treeSh; ctx.beginPath(); ctx.arc(X + 2.5, Y + 3.5, R, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = SUN.a; ctx.fillStyle = PAL.treeSh; ctx.beginPath(); ctx.arc(X + SUN.x * 4.5, Y + SUN.y * 4.5, R, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
     ctx.fillStyle = PAL.tree2; ctx.beginPath(); ctx.arc(X + sway, Y, R, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = PAL.tree1; ctx.beginPath(); ctx.arc(X - R * 0.22 + sway, Y - R * 0.25, R * 0.66, 0, Math.PI * 2); ctx.fill();
   }
@@ -3701,12 +3868,14 @@ function drawRoads() {
   const P = pathCache, RW = CFG.roadWidth, wet = rain.amt;
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   // shadow
-  ctx.save(); ctx.translate(0, 1.6); ctx.strokeStyle = PAL.shadow; ctx.lineWidth = RW + 3; ctx.stroke(P.all); ctx.restore();
-  // bridge parapets
+  ctx.save(); ctx.globalAlpha = SUN.a; ctx.translate(SUN.x * 1.8, SUN.y * 1.8); ctx.strokeStyle = PAL.sh; ctx.lineWidth = RW + 3.4; ctx.stroke(P.all);
+  ctx.lineCap = 'butt'; ctx.lineWidth = CFG.driveWidth + 3.4; ctx.stroke(P.drive); ctx.restore(); ctx.lineCap = 'round';
+  // bridge parapets, with the deck's shadow on the water
+  ctx.save(); ctx.globalAlpha = SUN.a; ctx.translate(SUN.x * 4, SUN.y * 4); ctx.strokeStyle = PAL.sh; ctx.lineWidth = RW + 7; ctx.stroke(P.bridge); ctx.restore();
   ctx.strokeStyle = PAL.stone; ctx.lineWidth = RW + 7; ctx.stroke(P.bridge);
   // motorway deck
   if (motorways.length) {
-    ctx.save(); ctx.translate(0, 4); ctx.strokeStyle = 'rgba(0,0,0,.2)'; ctx.lineWidth = 17; ctx.stroke(P.moto); ctx.restore();
+    ctx.save(); ctx.globalAlpha = SUN.a; ctx.translate(SUN.x * 7, SUN.y * 7); ctx.strokeStyle = PAL.sh; ctx.lineWidth = 16; ctx.stroke(P.moto); ctx.restore();
   }
   ctx.strokeStyle = PAL.edge; ctx.lineWidth = RW + 3.4; ctx.stroke(P.all);
   ctx.lineCap = 'butt'; ctx.lineWidth = CFG.driveWidth + 3.4; ctx.stroke(P.drive); ctx.lineCap = 'round';   // driveways: building door to road
@@ -3754,7 +3923,7 @@ function drawJunctionFurniture(vr) {
       // Mini Motorways style: one flat road-coloured disc, a flat island the colour of the ground,
       // and a single fixed dashed lane ring
       const R = 15, IR = 6.2, wet = rain.amt > 0.2;
-      ctx.fillStyle = PAL.shadow; ctx.beginPath(); ctx.arc(x + 0.8, y + 1.4, R, 0, Math.PI * 2); ctx.fill();
+      dotShadow(x, y, R, 1.8);
       ctx.fillStyle = wet ? PAL.roadWet : PAL.road; ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = PAL.land; ctx.beginPath(); ctx.arc(x, y, IR, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = PAL.stop; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.arc(x, y, IR, 0, Math.PI * 2); ctx.stroke();
@@ -3766,6 +3935,7 @@ function drawJunctionFurniture(vr) {
     if (nd.type === 'light') {
       const ls = lightState(nd);
       const heads = [[-11, -11, 0], [11, 11, 0], [11, -11, 1], [-11, 11, 1]];
+      for (const [hx, hy] of heads) dropShadow(x + hx, y + hy, 0, 1, 3, [[-2.6, -2.6, 5.2, 5.2, 1.6]]);
       for (const [hx, hy, g] of heads) {
         rr(x + hx - 2.6, y + hy - 2.6, 5.2, 5.2, 1.6); ctx.fillStyle = '#1a242b'; ctx.fill();
         const green = !ls.allRed && ls.ph === g;
@@ -3782,6 +3952,7 @@ function drawJunctionFurniture(vr) {
       ctx.beginPath(); ctx.arc(x, y, 16.8, 0, Math.PI * 2); ctx.stroke();
     }
     if (sign[nd.k]) {
+      dotShadow(x + 9, y - 11, 5.2, 4);
       ctx.fillStyle = '#5c666d'; ctx.fillRect(x + 8.3, y - 9.5, 1.4, 6);
       drawSignIcon(sign[nd.k], x + 9, y - 11, 5.2);
     }
@@ -3794,8 +3965,8 @@ function drawJunctionFurniture(vr) {
 /* ------------------------------------------------------------ buildings */
 function drawLot(p) {
   const x = tx(p.k), y = ty(p.k), b = buildings[p.b], col = b ? COLORS[b.color].hex : '#888';
+  dropShadow(x, y, p.face || 0, 1, 1, [[-13, -13, 26, 26, 3]]);
   ctx.save(); ctx.translate(x, y); ctx.rotate(p.face || 0);
-  rr(-13 + 1.5, -13 + 2, 26, 26, 3); ctx.fillStyle = PAL.shadow; ctx.fill();
   rr(-13, -13, 26, 26, 3); ctx.fillStyle = PAL.asphalt; ctx.fill();
   ctx.strokeStyle = col; ctx.lineWidth = 2; rr(-13, -13, 26, 26, 3); ctx.stroke();
   ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 1;
@@ -3804,14 +3975,15 @@ function drawLot(p) {
 }
 function drawDepot(d) {
   const x = tx(d.k), y = ty(d.k);
+  dropShadow(x, y, d.face || 0, 1, 1.2, [[-13, -13, 26, 26, 4]]);
   ctx.save(); ctx.translate(x, y); ctx.rotate(d.face || 0);
-  rr(-13 + 1.5, -13 + 2, 26, 26, 4); ctx.fillStyle = PAL.shadow; ctx.fill();
   rr(-13, -13, 26, 26, 4); ctx.fillStyle = theme === 'dark' ? '#2f4a63' : '#5d7e9d'; ctx.fill();
   ctx.strokeStyle = 'rgba(255,255,255,.75)'; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(0, -12); ctx.lineTo(0, 12); ctx.moveTo(-12, 0); ctx.lineTo(12, 0); ctx.stroke();
   rr(-13, -13, 26, 26, 4); ctx.lineWidth = 1.6; ctx.strokeStyle = '#eaf3fa'; ctx.stroke();
   ctx.restore();
   // "P" plate stays upright
+  dropShadow(x, y, 0, 1, 3, [[6, -15, 9, 9, 2]]);
   rr(x + 6, y - 15, 9, 9, 2); ctx.fillStyle = '#1b57b0'; ctx.fill();
   ctx.fillStyle = '#fff'; ctx.font = '700 7.5px Overpass, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText('P', x + 10.5, y - 10.3);
@@ -3850,6 +4022,8 @@ function win(x, y, w, h) { ctx.fillStyle = 'rgba(24,44,58,.7)'; ctx.fillRect(x, 
 /* Houses grow with the cars bought for them: cottage (none), family home with a garage (one), villa (two). */
 function drawHouse(b) {
   const x = tx(b.k), y = ty(b.k), col = COLORS[b.color].hex, s = spawnScale(b), model = Math.min(2, b.extra || 0);
+  dropShadow(x, y, b.face || 0, s, 0.6, [[-12.5, 2.5, 25, 13.5, 3]]);                              // forecourt kerb
+  dropShadow(x, y, b.face || 0, s, model === 2 ? 4.4 : 3.6, model === 0 ? [[-9, -12, 18, 15.5, 2.6]] : model === 1 ? [[-11.5, -13, 14.5, 16.5, 2.6], [3.4, -8.5, 8.1, 12, 1.4]] : [[-11.5, -13.5, 23, 17, 2.6]]);
   ctx.save(); ctx.translate(x, y); ctx.rotate(b.face || 0); ctx.scale(s, s);
   rr(-12.5, 2.5, 25, 13.5, 3); ctx.fillStyle = PAL.pave; ctx.fill();                              // forecourt
   const nHome = CFG.carsPerHouse + (b.extra || 0), xs = nHome >= 4 ? [-9, -3, 3, 9] : nHome === 3 ? [-8, 0, 8] : [-6, 6];
@@ -3857,7 +4031,6 @@ function drawHouse(b) {
   for (const lx of xs) { rr(lx - 2.9, 5, 5.8, 9.4, 1); ctx.stroke(); }
   if (model === 0) {
     // cottage: small gabled house, garden hedge, chimney
-    rr(-9 + 1.2, -12 + 2, 18, 15.5, 2.6); ctx.fillStyle = PAL.shadow; ctx.fill();
     rr(-9, -12, 18, 15.5, 2.6); ctx.fillStyle = PAL.roofBase; ctx.fill();
     gable(-9, -12, 18, 12, col);
     ctx.fillStyle = '#4a4f54'; ctx.fillRect(3.5, -10.6, 2.6, 2.6);                                      // chimney
@@ -3867,7 +4040,6 @@ function drawHouse(b) {
     if (showSymbols) glyph(COLORS[b.color].glyph, 0, -6, 2.5, 'rgba(255,255,255,.92)');
   } else if (model === 1) {
     // family home: gabled main house plus a flat-roofed garage wing with its own door
-    rr(-11.5 + 1.2, -13 + 2, 23, 16.5, 2.6); ctx.fillStyle = PAL.shadow; ctx.fill();
     rr(-11.5, -13, 14.5, 16.5, 2.6); ctx.fillStyle = PAL.roofBase; ctx.fill();
     gable(-11.5, -13, 14.5, 13, col);
     rr(3.4, -8.5, 8.1, 12, 1.4); ctx.fillStyle = shade(PAL.roofBase, -0.08); ctx.fill();            // garage block
@@ -3879,7 +4051,6 @@ function drawHouse(b) {
     if (showSymbols) glyph(COLORS[b.color].glyph, -4.2, -6.5, 2.5, 'rgba(255,255,255,.92)');
   } else {
     // villa: wide hipped roof, solar panels, balcony and a porch
-    rr(-11.5 + 1.2, -13.5 + 2, 23, 17, 2.6); ctx.fillStyle = PAL.shadow; ctx.fill();
     rr(-11.5, -13.5, 23, 17, 2.6); ctx.fillStyle = PAL.roofBase; ctx.fill();
     hipRoof(-11.5, -13.5, 23, 13.2, col);
     ctx.fillStyle = '#1f3552'; ctx.strokeStyle = 'rgba(160,200,240,.5)'; ctx.lineWidth = 0.3;
@@ -3908,7 +4079,7 @@ function roofParcels(b, x0, y0, cols, rows) {
     ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.fillRect(px + 1.8, py, 0.6, 3.2);
   }
 }
-function drawStore(b) {
+function drawStoreSmall(b) {
   const x = tx(b.k), y = ty(b.k), col = COLORS[b.color].hex, tier = Math.min(3, b.tier || 0), lvl = b.lvl || 0, s = spawnScale(b);
   ctx.save(); ctx.translate(x, y); ctx.rotate(b.face || 0); ctx.scale(s, s);
   rr(-13.5, 2.5, 27, 13.5, 3); ctx.fillStyle = PAL.pave; ctx.fill();                              // yard
@@ -3979,6 +4150,113 @@ function drawStore(b) {
   ctx.restore();
   if (b.acc < 0) drawUnlinked(x, y);
 }
+/* A big store, drawn in its plot's own frame: origin at the centre of the 3x4 plot, +y towards the street.
+   The parking row is y 32..64; the 3x3 building stands behind it with its front wall at y 30. */
+const STORE_BOX = [[-38, -54, 76, 84], [-42, -58, 84, 88], [-44, -60, 88, 90], [-45, -61, 90, 91]];
+function drawStore(b) {
+  if (!isBig(b)) { drawStoreSmall(b); return; }
+  const x = bX(b), y = bY(b), th = b.face || 0, col = COLORS[b.color].hex, tier = Math.min(3, b.tier || 0), lvl = b.lvl || 0, s = spawnScale(b);
+  const [Bx, By, Bw, Bh] = STORE_BOX[tier], front = By + Bh, roof = tier === 3 ? shade(PAL.roofBase, -0.12) : PAL.roofBase;
+  dropShadow(x, y, th, s, 0.5, [[-47, -63, 94, 126, 7]]);                                   // the plot's kerb
+  dropShadow(x, y, th, s, 5 + tier * 1.7, [[Bx, By, Bw, Bh, 4]]);                            // the building
+  ctx.save(); ctx.translate(x, y); ctx.rotate(th); ctx.scale(s, s);
+  // plot, kerb and parking row
+  rr(-47, -63, 94, 126, 7); ctx.fillStyle = PAL.lot; ctx.fill();
+  ctx.fillStyle = PAL.curb; ctx.fillRect(-46, 30, 92, 3);
+  rr(-46, 33, 92, 29.5, 4); ctx.fillStyle = PAL.asphalt; ctx.fill();
+  const active = Math.min(STORE_BAYS.length, dockCap(b)), on = new Set(STORE_BAYS.slice(0, active));
+  for (let i = 0; i <= 6; i++) {                                                              // bay lines, bright beside a working bay
+    const lx = -45 + i * 15, lit = on.has(lx - 7.5) || on.has(lx + 7.5);
+    ctx.fillStyle = lit ? 'rgba(255,255,255,.8)' : 'rgba(255,255,255,.22)'; ctx.fillRect(lx - 0.5, 35, 1, 22);
+  }
+  for (const lx of on) {
+    ctx.fillStyle = '#ffc933'; rr(lx - 4.5, 35.5, 9, 1.8, 0.9); ctx.fill();                  // wheel stop
+    ctx.fillStyle = rgba(col, 0.55); ctx.fillRect(lx - 1.6, 58.5, 3.2, 1.6);                  // store-colour bay mark
+  }
+  if (tier === 0) {                                                                            // a corner shop keeps a little garden
+    ctx.fillStyle = PAL.grass; rr(-46, -62, 92, 9, 4); ctx.fill(); rr(-46, -62, 7, 90, 3.5); ctx.fill(); rr(39, -62, 7, 90, 3.5); ctx.fill();
+    for (const [gx, gy, gr] of [[-42.5, -57, 4.4], [42.5, -57, 4.2], [-42.5, -20, 3.6], [42.5, 4, 3.8], [0, -58.5, 3.2]]) {
+      dotShadow(gx, gy, gr, 3); ctx.fillStyle = PAL.tree2; ctx.beginPath(); ctx.arc(gx, gy, gr, 0, 6.3); ctx.fill();
+      ctx.fillStyle = PAL.tree1; ctx.beginPath(); ctx.arc(gx - gr * 0.25, gy - gr * 0.25, gr * 0.6, 0, 6.3); ctx.fill();
+    }
+  }
+  // walls and roof
+  rr(Bx, By, Bw, Bh, 4); ctx.fillStyle = shade(roof, -0.14); ctx.fill();
+  rr(Bx + 2, By + 2, Bw - 4, Bh - 10, 3); ctx.fillStyle = roof; ctx.fill();
+  ctx.save(); rr(Bx + 2, By + 2, Bw - 4, Bh - 10, 3); ctx.clip();
+  if (tier === 2) {                                                                            // depot: sawtooth roof
+    for (let xx = Bx + 2; xx < Bx + Bw - 2; xx += 9) { ctx.fillStyle = 'rgba(0,0,0,.12)'; ctx.fillRect(xx, By, 4.5, Bh); ctx.fillStyle = 'rgba(170,215,240,.5)'; ctx.fillRect(xx + 4.5, By, 1, Bh); }
+  } else if (tier === 3) {                                                                     // distribution centre: skylights down the side
+    ctx.fillStyle = 'rgba(170,215,240,.45)';
+    for (let i = 0; i < 2; i++) for (let j = 0; j < 6; j++) ctx.fillRect(30 + i * 6.5, By + 20 + j * 8.5, 4.5, 5);
+  } else if (tier === 1) {                                                                     // supermarket: long rooflights down the side
+    ctx.fillStyle = 'rgba(170,215,240,.45)'; ctx.fillRect(29, By + 20, 2.6, Bh - 44); ctx.fillRect(34.5, By + 20, 2.6, Bh - 44);
+  }
+  ctx.restore();
+  // rooftop plant in the back corner, and a mast on the biggest
+  ctx.fillStyle = '#9aa3a8'; rr(Bx + Bw - 17, By + 5, 12, 10, 1.5); ctx.fill();
+  ctx.fillStyle = '#6f777c'; ctx.beginPath(); ctx.arc(Bx + Bw - 11, By + 10, 2.8, 0, 6.3); ctx.fill();
+  if (tier === 3) { ctx.strokeStyle = '#5a646a'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(Bx + 9, By + 14); ctx.lineTo(Bx + 9, By + 5); ctx.stroke(); ctx.fillStyle = '#ff5a4a'; ctx.beginPath(); ctx.arc(Bx + 9, By + 5, 1.4, 0, 6.3); ctx.fill(); }
+  // parcels waiting, stacked in the middle of the roof
+  const pc = 5, pr = tier >= 2 ? 4 : 3, n = Math.min(b.pins, pc * pr), px0 = -25, py0 = By + 22;
+  for (let i = 0; i < n; i++) {
+    const px = px0 + (i % pc) * 10, py = py0 + Math.floor(i / pc) * 8;
+    ctx.fillStyle = 'rgba(0,0,0,.16)'; ctx.fillRect(px + 1, py + 1.2, 8, 6);
+    ctx.fillStyle = i % 2 ? '#d7a862' : '#e3b46a'; ctx.fillRect(px, py, 8, 6);
+    ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.fillRect(px + 3.5, py, 1, 6);
+  }
+  if (b.pins > pc * pr) { const ox = px0 + (pc - 1) * 10, oy = py0 + pr * 8; ctx.fillStyle = '#d6342a'; rr(ox, oy, 8, 7, 2); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = '800 6px Overpass, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('+', ox + 4, oy + 3.8); }
+  // fascia in the store's colour, shop window and the two tow-truck garages
+  ctx.fillStyle = col; ctx.fillRect(Bx, front - 9, Bw, 9);
+  ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.fillRect(Bx, front - 9, Bw, 1.2);
+  rr(-13, front - 7.5, 26, 6.5, 1.5); ctx.fillStyle = 'rgba(24,44,58,.85)'; ctx.fill();
+  ctx.fillStyle = 'rgba(170,215,240,.45)'; ctx.fillRect(-11.5, front - 6.5, 6, 4.5); ctx.fillRect(5.5, front - 6.5, 6, 4.5);
+  for (const gx of [-30, 30]) { rr(gx - 7, front - 13, 14, 13, 1.5); ctx.fillStyle = 'rgba(16,26,32,.78)'; ctx.fill(); }
+  if (tier === 0) {                                                                            // striped awning over the shop window
+    for (let i = 0; i < 8; i++) { ctx.fillStyle = i % 2 ? '#fff' : col; ctx.fillRect(-16 + i * 4, front - 1, 4, 4); }
+    ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fillRect(-16, front + 3, 32, 0.8);
+  }
+  for (let i = 0; i < tier; i++) {                                                            // tier chevrons on the fascia
+    const cx_ = Bx + Bw - 30 - i * 5, cy_ = front - 5;
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(cx_ - 2, cy_ + 1.3); ctx.lineTo(cx_, cy_ - 1); ctx.lineTo(cx_ + 2, cy_ + 1.3);
+    ctx.lineTo(cx_ + 2, cy_ + 2.6); ctx.lineTo(cx_, cy_ + 0.3); ctx.lineTo(cx_ - 2, cy_ + 2.6); ctx.closePath(); ctx.fill();
+  }
+  if (showSymbols) glyph(COLORS[b.color].glyph, Bx + 20, front - 4.5, 2.6, '#fff');
+  // paid upgrades: 1 a lit sign on the roof, 2 solar panels, 3 flags and gold trim
+  if (lvl >= 1) {
+    rr(-17, By + 5, 34, 8, 1.6); ctx.fillStyle = '#12303f'; ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.stroke();
+    if (showSymbols) glyph(COLORS[b.color].glyph, 0, By + 9, 2.2, col); else { ctx.fillStyle = col; ctx.fillRect(-11, By + 8.2, 22, 1.6); }
+  }
+  if (lvl >= 2) {                                                                             // solar panels down the other side
+    ctx.fillStyle = '#1f3552'; ctx.strokeStyle = 'rgba(160,200,240,.55)'; ctx.lineWidth = 0.4;
+    const cols = Math.max(1, Math.floor((-28 - (Bx + 3)) / 7.5));
+    for (let i = 0; i < cols; i++) for (let j = 0; j < 5; j++) { const sx = -28.5 - (i + 1) * 7.5, sy = By + 20 + j * 8; ctx.fillRect(sx, sy, 6.5, 6.5); ctx.strokeRect(sx, sy, 6.5, 6.5); }
+  }
+  if (lvl >= 3) {
+    for (const fx_ of [Bx + 2, Bx + Bw - 2]) {
+      ctx.strokeStyle = '#8a9296'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(fx_, front + 2); ctx.lineTo(fx_, front - 10); ctx.stroke();
+      const wave = REDUCED_MOTION ? 0 : Math.sin(animT * 4 + fx_) * 0.9;
+      ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(fx_, front - 10); ctx.lineTo(fx_ + (fx_ < 0 ? -5 : 5), front - 8.6 + wave); ctx.lineTo(fx_, front - 7); ctx.closePath(); ctx.fill();
+    }
+  }
+  ctx.strokeStyle = col; ctx.lineWidth = 1.6 + tier * 0.9; rr(Bx + 1, By + 1, Bw - 2, Bh - 2, 3.5); ctx.stroke();   // thicker outline = busier tier
+  if (lvl >= 3) { ctx.strokeStyle = '#ffc933'; ctx.lineWidth = 0.9; rr(Bx - 1, By - 1, Bw + 2, Bh + 2, 5); ctx.stroke(); }
+  ctx.restore();
+  if (b.acc < 0) drawUnlinked(x, y, b);
+}
+/* world-space box around a building's plot, for outlines */
+function plotBox(b, pad) {
+  if (!isBig(b)) return {x: tx(b.k) - 19 - pad, y: ty(b.k) - 19 - pad, w: 38 + pad * 2, h: 38 + pad * 2};
+  const t = bTiles(b); let c0 = 1e9, r0 = 1e9, c1 = -1, r1 = -1;
+  for (const k of t) { c0 = Math.min(c0, cx(k)); r0 = Math.min(r0, cy(k)); c1 = Math.max(c1, cx(k)); r1 = Math.max(r1, cy(k)); }
+  return {x: c0 * CELL - pad, y: r0 * CELL - pad, w: (c1 - c0 + 1) * CELL + pad * 2, h: (r1 - r0 + 1) * CELL + pad * 2};
+}
+/* where a store's floating badge sits: just above its plot */
+function badgeAt(b) {
+  if (!isBig(b)) return {x: tx(b.k), y: ty(b.k)};
+  const box = plotBox(b, 0);
+  return {x: box.x + box.w / 2, y: box.y + 24};
+}
 /* above each house: one dot per parking spot, filled when that car is home, ringed when it is out */
 function drawHouseBadge(b) {
   if (b.acc < 0) return;
@@ -3986,7 +4264,8 @@ function drawHouseBadge(b) {
   const home = b.cars.filter(c => c.state === 'parked' && c.loc.t === 'home').length;
   ctx.save(); ctx.translate(x, y - 21 * s + 5 * (s - 1)); ctx.scale(s, s);
   const w = cap * 4.4 + 4;
-  rr(-w / 2, -3.4, w, 6.8, 3.4); ctx.fillStyle = 'rgba(18,48,63,.82)'; ctx.fill();
+  rr(-w / 2 + SUN.x, -3.4 + SUN.y, w, 6.8, 3.4); ctx.fillStyle = PAL.sh; ctx.fill();
+  rr(-w / 2, -3.4, w, 6.8, 3.4); ctx.fillStyle = 'rgba(18,48,63,.86)'; ctx.fill();
   for (let i = 0; i < cap; i++) {
     const cx = -w / 2 + 4.2 + i * 4.4;
     ctx.beginPath(); ctx.arc(cx, 0, 1.45, 0, Math.PI * 2);
@@ -4003,7 +4282,7 @@ function drawOffscreenAlerts() {
   const lim = overflowLimit(), m = 30, top = 96;
   ctx.save();
   for (const b of al) {
-    const sx = (tx(b.k) - cam.x) * cam.z + W / 2, sy = (ty(b.k) - cam.y) * cam.z + H / 2;
+    const sx = (bX(b) - cam.x) * cam.z + W / 2, sy = (bY(b) - cam.y) * cam.z + H / 2;
     if (sx > m && sx < W - m && sy > top && sy < H - m) continue;
     const cx = W / 2, cy = (H + top) / 2, dx = sx - cx, dy = sy - cy;
     const k = Math.min((W / 2 - m) / Math.max(1e-6, Math.abs(dx)), ((H - top) / 2 - m) / Math.max(1e-6, Math.abs(dy)));
@@ -4022,28 +4301,34 @@ function dockSpotsLocal(s) {
   const out = [[-7, 10.5], [7, 10.5]];
   return out;
 }
-function drawUnlinked(x, y) {
+function drawUnlinked(x, y, b) {
   const pulse = 0.5 + 0.5 * Math.sin(animT * 4);
   ctx.strokeStyle = 'rgba(230,70,55,' + (0.5 + pulse * 0.4) + ')'; ctx.lineWidth = 1.6; ctx.setLineDash([3, 3]);
-  ctx.beginPath(); ctx.arc(x, y, 19 + pulse * 2, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+  if (isBig(b)) {                                                    // ring the parking row: that's where the road goes
+    const row = rowTiles(b), a = row[0], z = row[2], p = 3 + pulse * 2;
+    const x0 = Math.min(cx(a), cx(z)) * CELL - p, y0 = Math.min(cy(a), cy(z)) * CELL - p;
+    rr(x0, y0, (Math.abs(cx(a) - cx(z)) + 1) * CELL + p * 2, (Math.abs(cy(a) - cy(z)) + 1) * CELL + p * 2, 8); ctx.stroke();
+  } else { ctx.beginPath(); ctx.arc(x, y, 19 + pulse * 2, 0, Math.PI * 2); ctx.stroke(); }
+  ctx.setLineDash([]);
 }
 function drawStoreBadge(b) {
-  const x = tx(b.k), y = ty(b.k), col = COLORS[b.color].hex, cap = storeCap(b), lim = overflowLimit();
+  const at = badgeAt(b), x = at.x, y = at.y, col = COLORS[b.color].hex, cap = storeCap(b), lim = overflowLimit();
   const s = clamp(0.95 / cam.z, 1, 2.6);
   const over = b.pins > cap, frac = clamp(b.timer / lim, 0, 1);
   ctx.save(); ctx.translate(x, y - 25 * s + 6 * (s - 1)); ctx.scale(s, s);
   const label = b.pins + '/' + cap, w = 20 + (label.length > 3 ? 3 : 0);
-  rr(-w / 2 + 0.6, -5.5 + 1.2, w, 11, 5.5); ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fill();
+  rr(-w / 2 + SUN.x * 1.6, -5.5 + SUN.y * 1.6, w, 11, 5.5); ctx.fillStyle = PAL.sh; ctx.fill();
   rr(-w / 2, -5.5, w, 11, 5.5); ctx.fillStyle = over ? '#d6342a' : '#12303f'; ctx.fill();
   ctx.lineWidth = 1.4; ctx.strokeStyle = col; ctx.stroke();
   ctx.fillStyle = '#fff'; ctx.font = '700 7.2px Overpass, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText(label, 0, 0.4);
   ctx.restore();
   if (b.timer > 0.05) {
-    ctx.save(); ctx.translate(x, y - 2); ctx.lineWidth = 3.2;
-    ctx.strokeStyle = 'rgba(0,0,0,.15)'; ctx.beginPath(); ctx.arc(0, 0, 24, 0, Math.PI * 2); ctx.stroke();
+    const R = isBig(b) ? 72 : 24;
+    ctx.save(); ctx.translate(bX(b), bY(b) - (isBig(b) ? 0 : 2)); ctx.lineWidth = isBig(b) ? 4.5 : 3.2;
+    ctx.strokeStyle = 'rgba(0,0,0,.15)'; ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.stroke();
     const pulse = frac > 0.7 ? 0.65 + 0.35 * Math.sin(animT * 9) : 1;
-    ctx.strokeStyle = 'rgba(224,60,48,' + pulse + ')'; ctx.beginPath(); ctx.arc(0, 0, 24, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * frac); ctx.stroke();
+    ctx.strokeStyle = 'rgba(224,60,48,' + pulse + ')'; ctx.beginPath(); ctx.arc(0, 0, R, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * frac); ctx.stroke();
     ctx.restore();
   }
 }
@@ -4076,8 +4361,8 @@ function drawCar(c, sizeBoost) {
   const bi = bodyOf(c), B = BODY[bi], L = B.L, Wd = B.W, col = COLORS[c.color].hex;
   const kit = carUp(c, 'spd'), ld = carUp(c, 'load'), hw = Wd / 2, f = L / 2, r = -L / 2;
   const light = '#f2f0e8', dark = shade(col, -0.35), hi = 'rgba(255,255,255,.2)';
+  dropShadow(c.x, c.y, c.da, 1, bi >= 3 ? 2.6 : 1.9, [[r, -hw, L, Wd, 2.2]]);
   ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.da);
-  rr(r + 0.7, -hw + 1.6, L, Wd, 2.2); ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fill();      // drop shadow
   // wheels peek out past the body; GT and racer kits sit on wider tyres
   const tw = kit >= 2 ? 3.4 : 3, th = kit >= 2 ? 1.5 : 1.2, ax = [f - 2.9, r + 2.9];
   if (bi === 4) ax.push(r + 5.8);
@@ -4178,8 +4463,8 @@ function drawCar(c, sizeBoost) {
 }
 function drawTruck(t, sc) {
   const L = t.len, Wd = 7.6, on = t.job === 'seek' || t.job === 'home' || t.hauling;
+  if (!sc) dropShadow(t.x, t.y, t.ang, 1, 2.2, [[-L / 2, -Wd / 2, L, Wd, 2.4]]);
   ctx.save(); ctx.translate(t.x, t.y); ctx.rotate(t.ang); if (sc) ctx.scale(sc, sc);
-  rr(-L / 2 + 1, -Wd / 2 + 1.7, L, Wd, 2.4); ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.fill();
   rr(-L / 2, -Wd / 2, L, Wd, 2.4); ctx.fillStyle = '#f08a1c'; ctx.fill(); ctx.lineWidth = 0.7; ctx.strokeStyle = 'rgba(0,0,0,.4)'; ctx.stroke();
   rr(-L / 2 + 1, -Wd / 2 + 1, L * 0.5, Wd - 2, 1.2); ctx.fillStyle = '#3b4650'; ctx.fill();        // flat bed
   rr(L * 0.08, -Wd / 2 + 0.9, L * 0.34, Wd - 1.8, 1.4); ctx.fillStyle = '#fff1d0'; ctx.fill();       // cab
@@ -4192,8 +4477,8 @@ function drawTruck(t, sc) {
 }
 function drawAmb(a) {
   const L = a.len, Wd = 7.8, on = Math.sin(animT * 14 + a.id) > 0;
+  dropShadow(a.x, a.y, a.ang, 1, 2.4, [[-L / 2, -Wd / 2, L, Wd, 2.4]]);
   ctx.save(); ctx.translate(a.x, a.y); ctx.rotate(a.ang);
-  rr(-L / 2 + 1, -Wd / 2 + 1.7, L, Wd, 2.4); ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.fill();
   rr(-L / 2, -Wd / 2, L, Wd, 2.4); ctx.fillStyle = '#fbfbf7'; ctx.fill(); ctx.lineWidth = 0.7; ctx.strokeStyle = 'rgba(0,0,0,.4)'; ctx.stroke();
   ctx.fillStyle = '#d8352a'; ctx.fillRect(-L / 2 + 1, -0.7, L * 0.62, 1.4);                              // stripe
   ctx.fillRect(-L * 0.3 - 0.6, -2.6, 1.2, 5.2); ctx.fillRect(-L * 0.3 - 2.6, -0.6, 5.2, 1.2);              // cross
@@ -4208,7 +4493,7 @@ function drawAmbTarget(a) {
   const s = buildings[a.store]; if (!s) return;
   const late = clock - a.t0 > a.limit;
   ctx.strokeStyle = late ? '#ff3b30' : '#ff8a80'; ctx.lineWidth = 2.2; ctx.setLineDash([4, 4]);
-  ctx.beginPath(); ctx.arc(tx(s.k), ty(s.k), 24 + Math.sin(animT * 5) * 2, 0, 6.3); ctx.stroke(); ctx.setLineDash([]);
+  ctx.beginPath(); ctx.arc(bX(s), bY(s), (isBig(s) ? 70 : 24) + Math.sin(animT * 5) * 2, 0, 6.3); ctx.stroke(); ctx.setLineDash([]);
 }
 /* cones and a striped barrier across a closed tile */
 function drawClosures(vr) {
@@ -4223,7 +4508,7 @@ function drawClosures(vr) {
     ctx.fillStyle = '#d8352a'; for (let i = 0; i < 4; i++) ctx.fillRect(-w / 2 + i * w / 4 + w / 8, -2, w / 8, 4);
     for (const sx of [-1, 1]) for (const sy of [-1, 1]) {          // four cones seen from above: an orange disc with a white ring
       const px = sx * (w / 2 - 3.4), py = sy * 5.6;
-      ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.arc(px + 0.7, py + 0.9, 3.1, 0, 6.3); ctx.fill();
+      ctx.fillStyle = PAL.sh; ctx.beginPath(); ctx.arc(px + 0.8, py + 1.1, 3.1, 0, 6.3); ctx.fill();
       ctx.fillStyle = '#ff7a1a'; ctx.beginPath(); ctx.arc(px, py, 3.1, 0, 6.3); ctx.fill();
       ctx.strokeStyle = '#fff'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.arc(px, py, 1.6, 0, 6.3); ctx.stroke();
     }
@@ -4239,6 +4524,8 @@ function drawOneways(vr) {
     if (x < vr.x0 - 30 || x > vr.x1 + 30 || y < vr.y0 - 30 || y > vr.y1 + 30) continue;
     if (linkCount(k) !== 2) continue;                   // a later junction here quietly suspends the arrow
     const d = (onewayDir[k] + 4) % 8, ang = Math.atan2(DY[d], DX[d]);
+    ctx.save(); ctx.translate(x + SUN.x * 1.2, y + SUN.y * 1.2); ctx.rotate(ang); ctx.globalAlpha = SUN.a; ctx.fillStyle = PAL.sh;
+    ctx.beginPath(); ctx.moveTo(7.5, 0); ctx.lineTo(-4, -5); ctx.lineTo(-4, 5); ctx.closePath(); ctx.fill(); ctx.restore();
     ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
     ctx.fillStyle = '#ffd23a'; ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(7.5, 0); ctx.lineTo(-4, -5); ctx.lineTo(-4, 5); ctx.closePath(); ctx.fill(); ctx.stroke();
@@ -4247,7 +4534,8 @@ function drawOneways(vr) {
 }
 function drawContractBadge(b) {
   if (!b.contract) return;
-  const x = tx(b.k), y = ty(b.k) - CELL * 0.62, frac = clamp(b.contract.left / CFG.contractSeconds, 0, 1);
+  const at = badgeAt(b), sc = clamp(0.95 / cam.z, 1, 2.6), x = isBig(b) ? at.x + 22 * sc : at.x, y = isBig(b) ? at.y - 25 * sc + 6 * (sc - 1) : at.y - CELL * 0.62, frac = clamp(b.contract.left / CFG.contractSeconds, 0, 1);
+  dotShadow(x, y, 7, 1.6);
   ctx.save(); ctx.translate(x, y);
   ctx.fillStyle = '#ffd23a'; ctx.strokeStyle = 'rgba(0,0,0,.4)'; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.arc(0, 0, 7, 0, 6.3); ctx.fill(); ctx.stroke();
@@ -4256,7 +4544,7 @@ function drawContractBadge(b) {
 }
 function drawStoreLevel(b) {
   if (!b.lvl) return;
-  const x = tx(b.k), y = ty(b.k) + CELL * 0.4;
+  const at = badgeAt(b), sc = clamp(0.95 / cam.z, 1, 2.6), x = at.x, y = isBig(b) ? at.y - 25 * sc + 6 * (sc - 1) + 9 * sc : at.y + CELL * 0.4;
   for (let i = 0; i < b.lvl; i++) { ctx.fillStyle = '#ffc933'; ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.lineWidth = 0.6; ctx.beginPath(); ctx.arc(x + (i - (b.lvl - 1) / 2) * 5, y, 1.8, 0, 6.3); ctx.fill(); ctx.stroke(); }
 }
 function drawSelectedRoute() {
@@ -4309,7 +4597,7 @@ function drawNight(vr, na) {
     ctx.fillStyle = gr; ctx.fillRect(x - R, y - R, R * 2, R * 2);
   };
   for (const nd of nodeList) if (nd.junction) glow(tx(nd.k), ty(nd.k), 34, 0.3 * na, '255,214,140');
-  for (const bd of buildings) glow(tx(bd.k), ty(bd.k), 30, 0.28 * na, '255,200,120');
+  for (const bd of buildings) glow(bX(bd), bY(bd), isBig(bd) ? 72 : 30, 0.28 * na, '255,200,120');
   for (const c of cars) {
     if (c.state === 'parked' || c.state === 'loading') continue;
     const fx_ = c.x + Math.cos(c.ang) * (c.len / 2 + 9), fy_ = c.y + Math.sin(c.ang) * (c.len / 2 + 9);
@@ -4348,7 +4636,10 @@ function drawHover() {
   else if (tool === 'tow') ok = bAt[hoverCell] >= 0 && buildings[bAt[hoverCell]].type === 'store' && buildings[bAt[hoverCell]].trucks < CFG.towTrucksPerStore && money >= truckPrice();
   const col = tool === 'select' ? 'rgba(255,255,255,.7)' : ok ? (theme === 'dark' ? '#ffd766' : '#12303f') : '#e0483e';
   ctx.strokeStyle = col; ctx.lineWidth = 2 / Math.max(0.7, cam.z * 0.7); ctx.setLineDash([4, 3]);
-  rr(X + 1, Y + 1, CELL - 2, CELL - 2, 5); ctx.stroke(); ctx.setLineDash([]);
+  const hb = bAt[hoverCell] >= 0 ? buildings[bAt[hoverCell]] : null;
+  if (isBig(hb) && (tool === 'select' || tool === 'upgrade' || tool === 'tow' || tool === 'erase')) { const bx = plotBox(hb, 1); rr(bx.x, bx.y, bx.w, bx.h, 8); }
+  else rr(X + 1, Y + 1, CELL - 2, CELL - 2, 5);
+  ctx.stroke(); ctx.setLineDash([]);
   if (tool === 'road' && ok) { ctx.globalAlpha = 0.4; ctx.fillStyle = PAL.road; ctx.beginPath(); ctx.arc(X + CELL / 2, Y + CELL / 2, CFG.roadWidth / 2, 0, 6.3); ctx.fill(); ctx.strokeStyle = PAL.edge; ctx.lineWidth = 1.6; ctx.stroke(); ctx.globalAlpha = 1; }
   if (tool === 'moto' && motoPick >= 0) {
     ctx.strokeStyle = PAL.deck; ctx.lineWidth = 3; ctx.setLineDash([6, 5]);
@@ -4363,7 +4654,7 @@ function drawSelectedBuilding() {
   if (!sel || sel.type !== 'building') return;
   const b = buildings[sel.i]; if (!b) return;
   ctx.strokeStyle = theme === 'dark' ? '#fff' : '#12303f'; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
-  rr(tx(b.k) - 19, ty(b.k) - 19, 38, 38, 8); ctx.stroke(); ctx.setLineDash([]);
+  const box = plotBox(b, isBig(b) ? 3 : 0); rr(box.x, box.y, box.w, box.h, 8); ctx.stroke(); ctx.setLineDash([]);
 }
 
 /* ------------------------------------------------------------- draw */
@@ -4372,6 +4663,7 @@ function draw() {
   ctx.clearRect(0, 0, W, H);
   ctx.setTransform(dpr * cam.z, 0, 0, dpr * cam.z, dpr * (W / 2 - cam.x * cam.z), dpr * (H / 2 - cam.y * cam.z));
   const vr = viewRect();
+  updateSun();
   drawGround(vr);
   drawTrees(vr);
   drawRoads();
@@ -4426,8 +4718,11 @@ function drawMini() {
   for (const b of buildings) {
     mctx.fillStyle = COLORS[b.color].hex;
     const X = (cx(b.k) - x0) * k, Y = (cy(b.k) - x0) * k;
-    if (b.type === 'store') mctx.fillRect(X - 0.5, Y - 0.5, k + 1, k + 1); else { mctx.beginPath(); mctx.arc(X + k / 2, Y + k / 2, k * 0.45, 0, 6.3); mctx.fill(); }
-    if (b.type === 'store' && b.timer > 0.5) { mctx.strokeStyle = '#e0483e'; mctx.lineWidth = 1.5; mctx.strokeRect(X - 2, Y - 2, k + 4, k + 4); }
+    if (b.type === 'store') {
+      const bx = plotBox(b, 0), PX = (bx.x / CELL - x0) * k, PY = (bx.y / CELL - x0) * k, PW = bx.w / CELL * k, PH = bx.h / CELL * k;
+      if (isBig(b)) mctx.fillRect(PX, PY, PW, PH); else mctx.fillRect(X - 0.5, Y - 0.5, k + 1, k + 1);
+      if (b.timer > 0.5) { mctx.strokeStyle = '#e0483e'; mctx.lineWidth = 1.5; if (isBig(b)) mctx.strokeRect(PX - 2, PY - 2, PW + 4, PH + 4); else mctx.strokeRect(X - 2, Y - 2, k + 4, k + 4); }
+    } else { mctx.beginPath(); mctx.arc(X + k / 2, Y + k / 2, k * 0.45, 0, 6.3); mctx.fill(); }
   }
   mctx.fillStyle = theme === 'dark' ? '#fff' : '#12303f';
   for (const c of cars) if (c.state !== 'parked' && c.state !== 'loading') mctx.fillRect((c.x / CELL - x0) * k - 0.8, (c.y / CELL - x0) * k - 0.8, 1.6, 1.6);
@@ -5003,7 +5298,7 @@ function renderInspector() {
   } else if (sel.type === 'building') {
     const b = buildings[sel.i]; if (!b) { closeInspector(); return; }
     title.textContent = COLORS[b.color].name + ' ' + (b.type === 'store' ? STORE_MODELS[Math.min(3, b.tier || 0)].toLowerCase() : ['cottage', 'family home', 'villa'][Math.min(2, b.extra || 0)]);
-    if (b.acc < 0) html += '<p class="line warn">Not connected to a road. Lay road on a tile beside it.</p>';
+    if (b.acc < 0) html += '<p class="line warn">' + (isBig(b) ? 'Not connected to a road. Lay road up to its parking row (the side with the bays).' : 'Not connected to a road. Lay road on a tile beside it.') + '</p>';
     if (b.type === 'store') {
       const cap = storeCap(b), frac = clamp(b.timer / overflowLimit(), 0, 1);
       html += '<p class="line">Parcels waiting <b>' + b.pins + '</b> of ' + cap + ' bays · ' + b.claimed + ' claimed</p>';
@@ -5251,7 +5546,7 @@ function bindInput() {
     r.onload = () => importCity(String(r.result)); r.onerror = () => toast('Could not read that file', 'warn');
     r.readAsText(f);
   });
-  $('btn-menu').addEventListener('click', () => { const m = $('menu'); m.hidden = !m.hidden; $('btn-menu').setAttribute('aria-expanded', m.hidden ? 'false' : 'true'); if (!m.hidden) renderPaletteUI(); });
+  $('btn-menu').addEventListener('click', () => { const m = $('menu'); m.hidden = !m.hidden; $('btn-menu').setAttribute('aria-expanded', m.hidden ? 'false' : 'true'); if (!m.hidden) { renderPaletteUI(); renderUiThemeUI(); } });
   document.addEventListener('pointerdown', e => {
     const m = $('menu'); if (m.hidden) return;
     if (e.target.closest && (e.target.closest('#menu') || e.target.closest('#btn-menu'))) return;
@@ -5278,7 +5573,7 @@ function bindInput() {
   document.addEventListener('pointerdown', e => { const b = e.target.closest && e.target.closest('[data-kind]'); if (b && e.button === 0) { e.preventDefault(); buyNow(b); } });
   document.addEventListener('click', e => {
     const b = e.target.closest && e.target.closest('[data-kind]'); if (b && e.detail === 0) buyNow(b);
-    const f = e.target.closest && e.target.closest('[data-focus]'); if (f) { const s = buildings[+f.dataset.focus]; if (s) focusOn(tx(s.k), ty(s.k)); }
+    const f = e.target.closest && e.target.closest('[data-focus]'); if (f) { const s = buildings[+f.dataset.focus]; if (s) focusOn(bX(s), bY(s)); }
     const ft = e.target.closest && e.target.closest('[data-focus-tile]');
     if (ft) { const k = +ft.dataset.focusTile; if (nodes[k]) { focusOn(tx(k), ty(k)); sel = {type: 'tile', k}; renderInspector(); refreshUI(); } }
   });
@@ -5463,7 +5758,104 @@ function pickLibColour(hex) {
   customHex[palSlot] = hex;
   applyPalette(); savePrefs(); renderPaletteUI(); refreshHud(); drawMini();
 }
+/* ------------------------------------------------ settings: interface theme
+   A preset (or the player's own colours for menus, buttons and highlights) and a panel style. Everything
+   else the interface needs — text, hairlines, hover tints, the colour of text on a button — is worked out
+   from those so any pick stays readable. Saved per browser, separately from the map's light/dark. */
+const UI_KEY = 'junction-ui-theme-v1';
+const UI_THEMES = {
+  petrol:   {label: 'Petrol',   plate: '#143845', night: '#0d2029', accent: '#ffc933'},
+  midnight: {label: 'Midnight', plate: '#171c31', accent: '#8ea8ff'},
+  graphite: {label: 'Graphite', plate: '#25282d', accent: '#4fd1a5'},
+  forest:   {label: 'Forest',   plate: '#1b3a2b', accent: '#f2c14e'},
+  plum:     {label: 'Plum',     plate: '#2f1c40', accent: '#ff8fb1'},
+  ember:    {label: 'Ember',    plate: '#3a1f18', accent: '#ffb347'},
+  paper:    {label: 'Paper',    plate: '#f6f3ec', accent: '#1f6feb'},
+  snow:     {label: 'Snow',     plate: '#ffffff', accent: '#e0483e'},
+  sand:     {label: 'Sand',     plate: '#ece1c9', accent: '#1f7a6c'}
+};
+const UI_STYLES = ['clean', 'glass', 'sign'];
+let uiTheme = {preset: 'petrol', style: 'clean', plate: '', btn: '', accent: ''};
+const hexOk = h => typeof h === 'string' && /^#[0-9a-f]{6}$/i.test(h);
+function lum(hex) {                                   // WCAG relative luminance
+  const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+  const [r, g, b] = rgbOf(hex); return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+}
+const contrast = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+const onColour = bg => contrast(bg, '#ffffff') >= contrast(bg, '#10262f') ? '#ffffff' : '#10262f';
+function mixHex(a, b, t) {
+  const A = rgbOf(a), B = rgbOf(b);
+  return '#' + A.map((v, i) => Math.round(lerp(v, B[i], t)).toString(16).padStart(2, '0')).join('');
+}
+function uiColours() {
+  const pr = UI_THEMES[uiTheme.preset] || UI_THEMES.petrol;
+  const plate = uiTheme.plate || (theme === 'dark' && pr.night ? pr.night : pr.plate);
+  const accent = uiTheme.accent || pr.accent;
+  return {plate, accent, btn: uiTheme.btn || accent};
+}
+function applyUiTheme() {
+  const {plate, accent, btn} = uiColours(), light = lum(plate) > 0.4, root = document.documentElement, st = root.style;
+  const ov = light ? '0,0,0' : '255,255,255';
+  // a highlight that would vanish against the panels is nudged until it reads
+  let acc = accent;
+  for (let i = 0; i < 6 && contrast(acc, plate) < 2.2; i++) acc = mixHex(acc, light ? '#000000' : '#ffffff', 0.18);
+  const vars = {
+    '--plate': plate, '--plate-2': mixHex(plate, light ? '#000000' : '#ffffff', 0.07), '--plate-glass': 'rgba(' + rgbOf(plate).join(',') + ',' + (light ? 0.78 : 0.74) + ')',
+    '--ink': light ? '#17252d' : '#f2f7f6', '--soft': light ? 'rgba(23,37,45,.66)' : 'rgba(242,247,246,.68)', '--ov': ov,
+    '--line': 'rgba(' + ov + ',' + (light ? 0.13 : 0.16) + ')', '--keyline': light ? 'rgba(23,37,45,.55)' : (theme === 'dark' ? 'rgba(255,255,255,.55)' : 'rgba(255,255,255,.88)'),
+    '--accent': acc, '--accent-rgb': rgbOf(acc).join(','), '--on-accent': onColour(acc),
+    '--btn': btn, '--btn-rgb': rgbOf(btn).join(','), '--on-btn': onColour(btn), '--btn-edge': mixHex(btn, '#000000', 0.28),
+    '--shadow': light ? '0 10px 26px rgba(24,34,44,.16), 0 2px 6px rgba(24,34,44,.08)' : (theme === 'dark' ? '0 10px 28px rgba(0,0,0,.5), 0 2px 6px rgba(0,0,0,.25)' : '0 10px 28px rgba(6,20,28,.3), 0 2px 6px rgba(6,20,28,.14)')
+  };
+  for (const k in vars) st.setProperty(k, vars[k]);
+  root.dataset.uiTone = light ? 'light' : 'dark';
+  root.dataset.uiStyle = UI_STYLES.includes(uiTheme.style) ? uiTheme.style : 'clean';
+  const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.content = plate;
+}
+function saveUiTheme() { try { localStorage.setItem(UI_KEY, JSON.stringify(uiTheme)); } catch (e) {} }
+function loadUiTheme() {
+  try {
+    const u = JSON.parse(localStorage.getItem(UI_KEY));
+    if (u && typeof u === 'object') {
+      if (UI_THEMES[u.preset]) uiTheme.preset = u.preset;
+      if (UI_STYLES.includes(u.style)) uiTheme.style = u.style;
+      for (const f of ['plate', 'btn', 'accent']) uiTheme[f] = hexOk(u[f]) ? u[f].toLowerCase() : '';
+    }
+  } catch (e) {}
+  applyUiTheme();
+}
+function setUi(ch) { Object.assign(uiTheme, ch); saveUiTheme(); applyUiTheme(); renderUiThemeUI(); }
+const uiCustom = () => !!(uiTheme.plate || uiTheme.btn || uiTheme.accent);
+function renderUiThemeUI() {
+  const box = $('ui-themes'); if (!box) return;
+  box.innerHTML = '';
+  for (const id in UI_THEMES) {
+    const t = UI_THEMES[id], pl = theme === 'dark' && t.night ? t.night : t.plate;
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'themepick';
+    b.setAttribute('aria-pressed', !uiCustom() && uiTheme.preset === id ? 'true' : 'false');
+    b.innerHTML = '<span class="tp-prev" style="background:' + pl + ';color:' + (lum(pl) > 0.4 ? '#17252d' : '#f2f7f6') + '"><i style="background:' + t.accent + '"></i><em></em></span><b>' + t.label + '</b>';
+    b.addEventListener('click', () => setUi({preset: id, plate: '', btn: '', accent: ''}));
+    box.append(b);
+  }
+  const c = uiColours();
+  const set = (id, v) => { const e = $(id); if (e) e.value = v; };
+  set('ui-plate', c.plate); set('ui-btn', c.btn); set('ui-accent', c.accent);
+  const cn = $('ui-custom-note'); if (cn) cn.hidden = !uiCustom();
+  document.querySelectorAll('#opt-style button').forEach(b => b.setAttribute('aria-pressed', b.dataset.style === uiTheme.style ? 'true' : 'false'));
+  document.querySelectorAll('#opt-map button').forEach(b => b.setAttribute('aria-pressed', b.dataset.map === theme ? 'true' : 'false'));
+}
+function bindUiTheme() {
+  for (const [id, f] of [['ui-plate', 'plate'], ['ui-btn', 'btn'], ['ui-accent', 'accent']]) {
+    const e = $(id); if (!e) continue;
+    e.addEventListener('input', () => { uiTheme[f] = e.value.toLowerCase(); applyUiTheme(); const cn = $('ui-custom-note'); if (cn) cn.hidden = false; document.querySelectorAll('.themepick').forEach(b => b.setAttribute('aria-pressed', 'false')); });
+    e.addEventListener('change', () => setUi({[f]: e.value.toLowerCase()}));
+  }
+  document.querySelectorAll('#opt-style button').forEach(b => b.addEventListener('click', () => setUi({style: b.dataset.style})));
+  document.querySelectorAll('#opt-map button').forEach(b => b.addEventListener('click', () => { setTheme(b.dataset.map); pathCache.ver = -1; drawMini(); }));
+  const rs = $('ui-reset'); if (rs) rs.addEventListener('click', () => setUi({preset: 'petrol', style: 'clean', plate: '', btn: '', accent: ''}));
+}
 function bindSettings() {
+  bindUiTheme();
   const sy = $('opt-symbols'); if (sy) sy.addEventListener('change', e => { showSymbols = e.target.checked; savePrefs(); });
   const rs = $('pal-reset'); if (rs) rs.addEventListener('click', () => { colorMode = 'standard'; customHex = PALETTES.standard.cols.map(c => c[1]); applyPalette(); savePrefs(); renderPaletteUI(); refreshHud(); drawMini(); });
 }
@@ -5732,6 +6124,7 @@ function boot() {
   let t = 'light';
   try { t = localStorage.getItem('junction2-theme') || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); } catch (e) {}
   setTheme(t);
+  loadUiTheme();
   loadPrefs();
   buildToolbars(); bindInput(); showTab('city');
   applyLayout(); bindLayout();
