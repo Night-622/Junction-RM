@@ -639,35 +639,48 @@ function faceAngle(k, acc) {
   const a = Math.atan2(cy(acc) - cy(k), cx(acc) - cx(k)) - Math.PI / 2;
   return Math.round(a / (Math.PI / 2)) * (Math.PI / 2);
 }
-/* Store footprints. A store covers 2x3 tiles: a strip of three parking bays and, beside it, a building
-   the same length. b.k is the middle bay and b.sd (0 N, 2 E, 4 S, 6 W) points from the building across the
-   car park. Cars drive in along the car park's aisle, so a road reaches the store only at either END of the
-   car park, never along its sides. Cities saved before stores grew keep their single-tile store (no b.sd). */
-const STORE_DEPTH = 2;
+/* Store footprints. A store covers 2x3 tiles: a 2x2 building with a 1x2 car park along one side. b.k is the
+   first car-park tile, the second sits clockwise of it, and b.sd (0 N, 2 E, 4 S, 6 W) points from the building
+   out across the car park. Cars drive in along the car park's aisle, so a road reaches the store only past an
+   END of the car park, never along its sides. b.ends says which ends are open: 0 both, 1 only the end beside
+   b.k, 2 only the far end (picked at random when the store opens). Cities saved before stores grew keep their
+   single-tile store (no b.sd). */
+const STORE_W = 2, STORE_DEPTH = 3;
 const isBig = b => !!b && b.type === 'store' && b.sd >= 0;
-function storeTilesAt(k, sd, depthN) {               // car park first (3 tiles, middle second), then the building
+function storeTilesAt(k, sd) {                       // car park first (2 tiles), then the building, row by row
   if (k < 0) return null;
   const fx = DX[sd], fy = DY[sd], px = -fy, py = fx, c0 = cx(k), r0 = cy(k), out = [];
-  for (let depth = 0; depth < (depthN || STORE_DEPTH); depth++) for (let s = -1; s <= 1; s++) {
+  for (let depth = 0; depth < STORE_DEPTH; depth++) for (let s = 0; s < STORE_W; s++) {
     const c = c0 + px * s - fx * depth, r = r0 + py * s - fy * depth;
     if (c < 0 || r < 0 || c >= COLS || r >= ROWS) return null;
     out.push(idx(c, r));
   }
   return out;
 }
+/* the footprint stores had in older saves: three tiles wide (centred on k) and depthN deep */
+function oldStoreTiles(k, sd, depthN) {
+  const fx = DX[sd], fy = DY[sd], px = -fy, py = fx, out = [];
+  for (let depth = 0; depth < depthN; depth++) for (let s = -1; s <= 1; s++) {
+    const c = cx(k) + px * s - fx * depth, r = cy(k) + py * s - fy * depth;
+    if (c >= 0 && r >= 0 && c < COLS && r < ROWS) out.push(idx(c, r));
+  }
+  return out;
+}
 const bTiles = b => isBig(b) ? storeTilesAt(b.k, b.sd) : [b.k];
-const rowTiles = b => isBig(b) ? storeTilesAt(b.k, b.sd).slice(0, 3) : [b.k];
+const rowTiles = b => isBig(b) ? storeTilesAt(b.k, b.sd).slice(0, STORE_W) : [b.k];
 const sdFace = sd => Math.atan2(DY[sd], DX[sd]) - Math.PI / 2;    // local +y points from the building across the car park
 /* world-space centre of a building's whole plot */
-const bX = b => isBig(b) ? tx(b.k) - DX[b.sd] * CELL * (STORE_DEPTH - 1) / 2 : tx(b.k);
-const bY = b => isBig(b) ? ty(b.k) - DY[b.sd] * CELL * (STORE_DEPTH - 1) / 2 : ty(b.k);
-/* [road tile, car-park tile it leads into] for the two ways into a store: one past each end of the car park */
-function storeDoorsAt(k, sd) {
+const bX = b => isBig(b) ? tx(b.k) + DX[(b.sd + 2) % 8] * CELL / 2 - DX[b.sd] * CELL : tx(b.k);
+const bY = b => isBig(b) ? ty(b.k) + DY[(b.sd + 2) % 8] * CELL / 2 - DY[b.sd] * CELL : ty(b.k);
+/* [road tile, car-park tile it leads into] for each open end of a store's car park */
+function storeDoorsAt(k, sd, ends) {
   const t = storeTilesAt(k, sd); if (!t) return [];
-  const row = t.slice(0, 3);
-  return [[nbr(row[0], dirBetween(row[1], row[0])), row[0]], [nbr(row[2], dirBetween(row[1], row[2])), row[2]]].filter(o => o[0] >= 0);
+  const out = [];
+  if (ends !== 2) out.push([nbr(t[0], (sd + 6) % 8), t[0]]);
+  if (ends !== 1) out.push([nbr(t[1], (sd + 2) % 8), t[1]]);
+  return out.filter(o => o[0] >= 0);
 }
-const storeDoors = b => storeDoorsAt(b.k, b.sd);
+const storeDoors = b => storeDoorsAt(b.k, b.sd, b.ends || 0);
 function storeAccess(b) {
   const doors = storeDoors(b);
   b.door = b.k;
@@ -681,12 +694,12 @@ function storeAccess(b) {
   return best;
 }
 function markBuilding(b, i) { for (const t of bTiles(b)) bAt[t] = i; }
-/* can a store sit with its middle bay on k, facing sd? every tile must be open ground in play, and at least
-   one end of the car park must have room for a road */
-function storeFits(k, sd, inBounds) {
+/* can a store sit with its car park starting on k, facing sd, open at `ends`? every tile must be open ground
+   in play, and at least one open end must have room for a road */
+function storeFits(k, sd, inBounds, ends) {
   const tiles = storeTilesAt(k, sd); if (!tiles) return false;
   for (const t of tiles) if (!inBounds(t) || water[t] || occupied(t)) return false;
-  return storeDoorsAt(k, sd).some(([f]) => inBounds(f) && !water[f] && (road[f] || !occupied(f)));
+  return storeDoorsAt(k, sd, ends || 0).some(([f]) => inBounds(f) && !water[f] && (road[f] || !occupied(f)));
 }
 function linkBuildings() {
   for (const b of buildings) {
@@ -897,10 +910,11 @@ function homeSpots(b) {
 /* a store's car park has six bays against the building and an aisle along the far side; cars back in so
    they leave nose first. Docks fill from the middle out. Local coordinates are relative to the middle bay's
    tile, +y away from the building. */
-const STORE_BAYS = [-7.5, 7.5, -22.5, 22.5, -37.5, 37.5];
+const STORE_BAYS = [-7.5, 7.5, -22.5, 22.5];
+const STORE_BAY_Y = 25;
 function dockSpots(s) {
   const list = [], x = tx(s.k), y = ty(s.k), th = s.face || 0;
-  if (isBig(s)) for (const lx of STORE_BAYS) { const p = rot(x, y, th, lx, -7.5); list.push({x: p.x, y: p.y, a: th + Math.PI / 2}); }
+  if (isBig(s)) for (const lx of STORE_BAYS) { const p = rot(bX(s), bY(s), th, lx, STORE_BAY_Y); list.push({x: p.x, y: p.y, a: th + Math.PI / 2}); }
   else for (const lx of [-7, 7]) { const p = rot(x, y, th, lx, 10.5); list.push({x: p.x, y: p.y, a: th + Math.PI / 2}); }
   for (const p of parks) if (buildings[p.b] === s) {
     const q = rot(tx(p.k), ty(p.k), p.face || 0, 6, 0);
@@ -921,11 +935,11 @@ function parkedPose(c) {
     const s = buildings[L.i];
     if (c.isTruck && !c.isAmb) {                     // tow trucks wait inside their store, side by side
       const mine = trucks.filter(x => x.store === L.i), i = Math.max(0, mine.indexOf(c));
-      const p = isBig(s) ? rot(tx(s.k), ty(s.k), s.face || 0, i ? 30 : -30, -24)       // in the garage bays of the facade
+      const p = isBig(s) ? rot(bX(s), bY(s), s.face || 0, i ? 18 : -18, 9)               // in the garage bays of the facade
         : rot(tx(s.k), ty(s.k), s.face || 0, mine.length > 1 ? (i ? 5.2 : -5.2) : 0, -1.5);
       return {x: p.x, y: p.y, a: (s.face || 0) + Math.PI / 2};
     }
-    const p = rot(tx(s.k), ty(s.k), s.face || 0, 0, isBig(s) ? 8 : 10.5);
+    const p = isBig(s) ? rot(bX(s), bY(s), s.face || 0, 0, 40) : rot(tx(s.k), ty(s.k), s.face || 0, 0, 10.5);
     return {x: p.x, y: p.y, a: (s.face || 0) + Math.PI / 2};
   }
   if (L.t === 'home') {
@@ -1571,8 +1585,8 @@ function storeFront(k) {
 function storeSpot(gap) {
   for (let t = 0; t < 900; t++) {
     const c = org + 1 + Math.floor(Math.random() * Math.max(1, span - 2)), r = org + 1 + Math.floor(Math.random() * Math.max(1, span - 2));
-    const k = idx(c, r), sd = ORTH[Math.floor(Math.random() * 4)];
-    if (!storeFits(k, sd, inPlay)) continue;
+    const k = idx(c, r), sd = ORTH[Math.floor(Math.random() * 4)], ends = randomEnds();
+    if (!storeFits(k, sd, inPlay, ends)) continue;
     let ok = true;
     for (const tl of storeTilesAt(k, sd)) {
       for (let dc = -gap; dc <= gap && ok; dc++) for (let dr = -gap; dr <= gap && ok; dr++) {
@@ -1581,16 +1595,18 @@ function storeSpot(gap) {
       }
       if (!ok) break;
     }
-    if (ok) return {k, sd};
+    if (ok) return {k, sd, ends};
   }
   return null;
 }
-function newBuilding(k, type, colorIdx, sd) {
+/* half of all stores open at both ends of their car park, the rest at just one */
+const randomEnds = () => Math.random() < 0.5 ? 0 : Math.random() < 0.5 ? 1 : 2;
+function newBuilding(k, type, colorIdx, sd, ends) {
   const b = {k, type, color: colorIdx, pins: 0, claimed: 0, timer: 0, tier: 0, cars: [], carsN: 0, park: 0, lvl: 0, trucks: 0,
              docks: [], served: 0, acc: -1, face: 0, pref: -1, unreach: 0, born: clock, bornAnim: animT, contract: null,
              pinTimer: CFG.pinIntervalBase * 0.6 * DIFF.pin,
              evolveTimer: rnd(CFG.storeEvolveCheckMin, CFG.storeEvolveCheckMax)};
-  if (type === 'store' && sd >= 0) b.sd = sd;
+  if (type === 'store' && sd >= 0) { b.sd = sd; b.ends = ends || 0; }
   markBuilding(b, buildings.length); buildings.push(b);
   return b;
 }
@@ -1599,7 +1615,7 @@ function addBuilding(type, colorIdx) {
   if (type === 'store') {
     const spot = storeSpot(2) || storeSpot(1) || storeSpot(0);
     if (!spot) return null;
-    b = newBuilding(spot.k, type, colorIdx, spot.sd);
+    b = newBuilding(spot.k, type, colorIdx, spot.sd, spot.ends);
   } else {
     const k = freeSpot(1, true);
     if (k < 0) return null;
@@ -2142,7 +2158,7 @@ function pushUndo(u) {
 function attachTo(bk, roadK) {
   const b = bAt[bk] >= 0 ? buildings[bAt[bk]] : null;
   if (isBig(b) && !storeDoors(b).some(([t]) => t === roadK)) {      // a store only opens at the ends of its car park
-    hint('Stores connect at either end of their car park — bring the road to one end of the parking bays.');
+    hint((b.ends ? 'This store only opens at one end of its car park' : 'Stores connect at the ends of their car park') + ' — bring the road to the end with the arrow.');
     return;
   }
   if (b) b.pref = roadK;
@@ -3471,13 +3487,13 @@ function hasSave() { try { return !!localStorage.getItem(SAVE_KEY); } catch (e) 
 function serialize() {
   const list = a => { const o = []; for (let k = 0; k < N; k++) if (a[k]) o.push(k); return o; };
   return {
-    v: 3, sv: 2, diffKey, score, week, weekTimer, span, houseTimer, storeTimer, clock, keepLeft, carCapacity, money,
+    v: 3, sv: 3, diffKey, score, week, weekTimer, span, houseTimer, storeTimer, clock, keepLeft, carCapacity, money,
     inv, perks, water: list(water), road: list(road),
     links: (() => { const o = []; for (let k = 0; k < N; k++) if (lnk[k]) o.push([k, lnk[k]]); return o; })(),
     sign: sign.map((s, k) => s ? [k, s] : null).filter(Boolean),
     special: special.map((s, k) => s ? [k, s] : null).filter(Boolean),
     lights: [...lightQ].filter(([k]) => special[k] === 'light').map(([k, q]) => [k, q[0], q[1]]),
-    buildings: buildings.map(b => ({pref: b.pref, k: b.k, sd: isBig(b) ? b.sd : undefined, type: b.type, color: b.color, pins: b.pins, tier: b.tier, timer: b.timer, lvl: b.lvl, trucks: b.trucks, vans: b.cars.map(c => c.van ? 1 : 0), extra: b.extra || 0, ov: b.overSpent ? 1 : 0, ovT: +(b.followT || 0).toFixed(1), ups: b.cars.map(c => [carUp(c, 'cap'), carUp(c, 'spd'), carUp(c, 'load'), carUp(c, 'fuel')])})), carsBought, fuelV: 1,
+    buildings: buildings.map(b => ({pref: b.pref, k: b.k, sd: isBig(b) ? b.sd : undefined, se: isBig(b) ? b.ends || 0 : undefined, type: b.type, color: b.color, pins: b.pins, tier: b.tier, timer: b.timer, lvl: b.lvl, trucks: b.trucks, vans: b.cars.map(c => c.van ? 1 : 0), extra: b.extra || 0, ov: b.overSpent ? 1 : 0, ovT: +(b.followT || 0).toFixed(1), ups: b.cars.map(c => [carUp(c, 'cap'), carUp(c, 'spd'), carUp(c, 'load'), carUp(c, 'fuel')])})), carsBought, fuelV: 1,
     parks: parks.map(p => ({k: p.k, b: p.b})), depots: depots.map(d => d.k), dprefs: depots.map(d => d.pref),
     juncLvl: nodeList.filter(nd => nd.lvl > 0).map(nd => [nd.k, nd.lvl, nd.spent]),
     motorways: motorways.map(m => ({a: m.a, b: m.b, len: m.len})), goals: [...goalsDone],
@@ -3511,14 +3527,14 @@ function applyCityPalette(p) {
   colorMode = p.mode;
   applyPalette(); savePrefs(true); renderPaletteUI();
 }
-/* Older cities: stores saved as a single tile (before stores grew), or as the 3x4 plot of v1.5, are refitted
-   into today's 2x3 plot. The new plot stays on ground the old store already covered, and if it can, it turns
+/* Older cities: stores saved as a single tile (before stores grew), or as the earlier 3-wide plots (3x4, then
+   3x2: oldDepth says which), are refitted into today's 2x3 plot, open at both ends. The new plot stays on ground the old store already covered, and if it can, it turns
    so one end of its car park meets the road the store was already using. A store with no room stays small. */
-function refitStores(fromV15) {
-  const list = buildings.map((b, i) => [b, i]).filter(([b]) => b.type === 'store' && (!isBig(b) || fromV15));
+function refitStores(oldDepth) {
+  const list = buildings.map((b, i) => [b, i]).filter(([b]) => b.type === 'store');
   for (const [b, i] of list) {
-    const old = (isBig(b) && storeTilesAt(b.k, b.sd, 4)) || [b.k];
-    for (const t of old) if (bAt[t] === i) bAt[t] = -1;
+    const old = isBig(b) ? oldStoreTiles(b.k, b.sd, oldDepth) : [b.k];
+    for (const t of old.concat(bTiles(b) || [])) if (bAt[t] === i) bAt[t] = -1;
     const oldSet = new Set(old);
     let c0 = 1e9, r0 = 1e9, c1 = -1, r1 = -1;
     for (const t of old) { c0 = Math.min(c0, cx(t)); r0 = Math.min(r0, cy(t)); c1 = Math.max(c1, cx(t)); r1 = Math.max(r1, cy(t)); }
@@ -3535,7 +3551,7 @@ function refitStores(fromV15) {
         if (sc > bs) { bs = sc; best = {k, sd}; }
       }
     }
-    if (best) { b.k = best.k; b.sd = best.sd; } else delete b.sd;
+    if (best) { b.k = best.k; b.sd = best.sd; b.ends = 0; } else { delete b.sd; delete b.ends; }
     b.pref = -1;
     markBuilding(b, i);
   }
@@ -3564,13 +3580,13 @@ function loadGameCore(data) {
                  docks: [], served: 0, acc: -1, face: 0, pref: o.pref === undefined ? -1 : o.pref, unreach: 0, born: 0, pinTimer: rnd(3, 9), lvl: o.lvl || 0, trucks: 0,
                  overSpent: o.ov === undefined ? true : !!o.ov, followT: +o.ovT || 0,
                  evolveTimer: rnd(CFG.storeEvolveCheckMin, CFG.storeEvolveCheckMax)};
-      if (b.type === 'store' && ORTH.includes(o.sd)) b.sd = o.sd;
+      if (b.type === 'store' && ORTH.includes(o.sd)) { b.sd = o.sd; b.ends = [0, 1, 2].includes(o.se) ? o.se : 0; }
       markBuilding(b, buildings.length); buildings.push(b);
     });
     d.parks.forEach(p => { parks.push({k: p.k, b: p.b, face: 0}); parkAt[p.k] = parks.length - 1; buildings[p.b].park++; });
     d.depots.forEach((k, i) => { depots.push({k, cap: CFG.depotCapacity, slots: [], res: 0, acc: -1, face: 0, pref: d.dprefs && d.dprefs[i] !== undefined ? d.dprefs[i] : -1}); depotAt[k] = depots.length - 1; });
     d.motorways.forEach(m => motorways.push({id: ++motoSeq, a: m.a, b: m.b, len: m.len}));
-    if (!view) refitStores(!(d.sv >= 2));
+    if (!view && !(d.sv >= 3)) refitStores(d.sv >= 2 ? 2 : 4);
     linkBuildings();
     carsBought = d.carsBought | 0;
     d.buildings.forEach((o, i) => {
@@ -3711,10 +3727,12 @@ function setTheme(t) {
   else setMap({theme: MAP_THEMES[mapPrefs.lastDay] && mapPrefs.lastDay !== 'night' ? mapPrefs.lastDay : 'meadow', land: '', patch: '', water: ''});
 }
 
-/* soft patches of the theme's second colour, painted once into a small canvas (8 px a tile) and stretched over
-   the map, which blurs them into organic blobs. Rebuilt whenever the map theme changes. */
-let patchCache = null;
-const PATCH_PX = 8;
+/* Patches of the theme's second colour, laid on the tile grid like road: whole tiles filled solid, outside
+   corners rounded and inside corners filleted, so a patch reads as one smooth shape. Which tiles are patch comes
+   from smooth noise. The shapes are built once as Path2Ds in 16x16-tile chunks (only visible chunks are filled)
+   and rebuilt when the map theme changes. */
+let patchCache = null, patchMask = null;
+const PATCH_CHUNK = 16;
 function patchNoise(c, r) {
   const v = (salt, sc) => {
     const x = c / sc, y = r / sc, x0 = Math.floor(x), y0 = Math.floor(y), fx = x - x0, fy = y - y0;
@@ -3724,22 +3742,45 @@ function patchNoise(c, r) {
   return v(21, 6) * 0.65 + v(22, 2.5) * 0.35;
 }
 function buildPatches() {
-  const S = PATCH_PX, pc = document.createElement('canvas'); pc.width = pc.height = MAXD * S;
-  const g = pc.getContext('2d'); g.fillStyle = PAL.patch;
-  for (let r = 0; r < ROWS * 2; r++) for (let c = 0; c < COLS * 2; c++) {      // half-tile steps keep the edges organic
-    const n = patchNoise(c / 2, r / 2);
-    if (n > 0.57) { g.beginPath(); g.arc((c + 0.5) * S / 2, (r + 0.5) * S / 2, Math.min(S * 0.6, S * (0.32 + (n - 0.57) * 1.6)), 0, 6.3); g.fill(); }
-  }
-  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
-    const k = idx(c, r);
-    if (patchNoise(c, r) <= 0.57 && hash01(k, 31) < 0.06) {   // small stray tufts between the big patches
-      g.beginPath(); g.arc((c + 0.2 + hash01(k, 32) * 0.6) * S, (r + 0.2 + hash01(k, 33) * 0.6) * S, S * (0.18 + hash01(k, 34) * 0.16), 0, 6.3); g.fill();
+  patchMask = new Uint8Array(N);
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (patchNoise(c, r) > 0.57) patchMask[idx(c, r)] = 1;
+  const isP = (c, r) => c >= 0 && r >= 0 && c < COLS && r < ROWS && patchMask[idx(c, r)] === 1;
+  const R = CELL * 0.42, e = 0.3;                      // corner radius; tiny overlap so neighbouring chunks never show a seam
+  const n = COLS / PATCH_CHUNK, chunks = [];
+  for (let cy_ = 0; cy_ < n; cy_++) for (let cx_ = 0; cx_ < n; cx_++) {
+    const P = new Path2D(), F = new Path2D();         // tiles, and the inside-corner fillets (filled separately so mirrored windings never cancel)
+    for (let r = cy_ * PATCH_CHUNK; r < (cy_ + 1) * PATCH_CHUNK; r++) for (let c = cx_ * PATCH_CHUNK; c < (cx_ + 1) * PATCH_CHUNK; c++) {
+      const x0 = c * CELL - e, y0 = r * CELL - e, x1 = (c + 1) * CELL + e, y1 = (r + 1) * CELL + e;
+      const N_ = isP(c, r - 1), S_ = isP(c, r + 1), W_ = isP(c - 1, r), E_ = isP(c + 1, r);
+      if (isP(c, r)) {
+        // a patch tile: round each corner that sticks out (open on both of its sides)
+        const tl = !N_ && !W_, tr = !N_ && !E_, br = !S_ && !E_, bl = !S_ && !W_;
+        P.moveTo(x0 + (tl ? R : 0), y0);
+        if (tr) { P.lineTo(x1 - R, y0); P.arcTo(x1, y0, x1, y0 + R, R); } else P.lineTo(x1, y0);
+        if (br) { P.lineTo(x1, y1 - R); P.arcTo(x1, y1, x1 - R, y1, R); } else P.lineTo(x1, y1);
+        if (bl) { P.lineTo(x0 + R, y1); P.arcTo(x0, y1, x0, y1 - R, R); } else P.lineTo(x0, y1);
+        if (tl) { P.lineTo(x0, y0 + R); P.arcTo(x0, y0, x0 + R, y0, R); } else P.lineTo(x0, y0);
+        P.closePath();
+      } else {
+        // open ground: fill the inside corner wherever patch wraps round it on two sides
+        const fil = (cxp, cyp, sx, sy) => { F.moveTo(cxp + sx * R, cyp); F.lineTo(cxp, cyp); F.lineTo(cxp, cyp + sy * R); F.arcTo(cxp, cyp, cxp + sx * R, cyp, R); F.closePath(); };
+        const X0 = c * CELL, Y0 = r * CELL, X1 = X0 + CELL, Y1 = Y0 + CELL;
+        if (N_ && W_) fil(X0, Y0, 1, 1);
+        if (N_ && E_) fil(X1, Y0, -1, 1);
+        if (S_ && E_) fil(X1, Y1, -1, -1);
+        if (S_ && W_) fil(X0, Y1, 1, -1);
+      }
     }
+    chunks.push([P, F]);
   }
-  // soften the edges once, as a whole layer (browsers without canvas filters just keep the crisp version)
-  const soft = document.createElement('canvas'); soft.width = soft.height = pc.width;
-  const sg = soft.getContext('2d');
-  if ('filter' in sg) { sg.filter = 'blur(2.5px)'; sg.drawImage(pc, 0, 0); patchCache = soft; } else patchCache = pc;
+  patchCache = chunks;
+}
+function drawPatches(vr) {
+  if (!patchCache) buildPatches();
+  const C = PATCH_CHUNK * CELL, n = COLS / PATCH_CHUNK;
+  ctx.fillStyle = PAL.patch;
+  for (let cy_ = Math.max(0, Math.floor(vr.y0 / C)); cy_ <= Math.min(n - 1, Math.floor(vr.y1 / C)); cy_++)
+    for (let cx_ = Math.max(0, Math.floor(vr.x0 / C)); cx_ <= Math.min(n - 1, Math.floor(vr.x1 / C)); cx_++) { const ch = patchCache[cy_ * n + cx_]; ctx.fill(ch[0]); ctx.fill(ch[1]); }
 }
 
 /* ---- decorations on open ground. Each is drawn into context g at (X, Y) with size R (a tree's radius);
@@ -4034,11 +4075,7 @@ function drawGround(vr) {
       if (((c + r) & 1) && c >= camOrg && r >= camOrg && c < camOrg + camSpan && r < camOrg + camSpan) ctx.fillRect(c * CELL, r * CELL, CELL, CELL);
     }
   }
-  if (!patchCache) buildPatches();
-  {                                                    // only the visible part of the patch layer
-    const S = PATCH_PX / CELL, X0 = Math.max(0, vr.x0), Y0 = Math.max(0, vr.y0), X1 = Math.min(MAXD * CELL, vr.x1), Y1 = Math.min(MAXD * CELL, vr.y1);
-    if (X1 > X0 && Y1 > Y0) { ctx.imageSmoothingEnabled = true; ctx.drawImage(patchCache, X0 * S, Y0 * S, (X1 - X0) * S, (Y1 - Y0) * S, X0, Y0, X1 - X0, Y1 - Y0); }
-  }
+  drawPatches(vr);
   // water
   ctx.fillStyle = PAL.water;
   for (let r = vr.r0; r <= vr.r1; r++) for (let c = vr.c0; c <= vr.c1; c++) if (water[idx(c, r)]) ctx.fillRect(c * CELL - 0.4, r * CELL - 0.4, CELL + 0.8, CELL + 0.8);
@@ -4384,95 +4421,101 @@ function drawStoreSmall(b) {
   if (b.acc < 0) drawUnlinked(x, y);
 }
 /* A big store, drawn in its plot's own frame: origin at the centre of the 2x3 plot, +y across the car park.
-   The building is y -32..-2, a kerb, then the car park y 0..32: bays against the kerb, the aisle beyond. */
-const STORE_BOX = [[-40, -29, 80, 27], [-43, -30, 86, 28], [-45, -30.5, 90, 28.5], [-46, -31, 92, 29]];
+   The 2x2 building is y -48..14, a kerb, then the car park y 16..48: bays against the kerb, the aisle beyond.
+   The end beside b.k is local +x, the far end local -x. */
+const STORE_BOX = [[-24, -40, 48, 54], [-28, -44, 56, 58], [-29, -45, 58, 59], [-30, -46, 60, 60]];
 function drawStore(b) {
   if (!isBig(b)) { drawStoreSmall(b); return; }
   const x = bX(b), y = bY(b), th = b.face || 0, col = COLORS[b.color].hex, tier = Math.min(3, b.tier || 0), lvl = b.lvl || 0, s = spawnScale(b);
   const [Bx, By, Bw, Bh] = STORE_BOX[tier], front = By + Bh, roof = tier === 3 ? shade(PAL.roofBase, -0.12) : PAL.roofBase;
-  dropShadow(x, y, th, s, 0.5, [[-47, -31, 94, 62, 6]]);                                    // the plot's kerb
-  dropShadow(x, y, th, s, 4.5 + tier * 1.5, [[Bx, By, Bw, Bh, 4]]);                          // the building
+  const ends = b.ends || 0, open = [ends !== 2 ? 1 : 0, ends !== 1 ? 1 : 0];        // [+x end, -x end]
+  dropShadow(x, y, th, s, 0.5, [[-31, -47, 62, 94, 6]]);                                    // the plot's kerb
+  dropShadow(x, y, th, s, 5 + tier * 1.6, [[Bx, By, Bw, Bh, 4]]);                            // the building
   ctx.save(); ctx.translate(x, y); ctx.rotate(th); ctx.scale(s, s);
   // plot and kerb
-  rr(-47, -31, 94, 62, 6); ctx.fillStyle = PAL.lot; ctx.fill();
-  ctx.fillStyle = PAL.curb; ctx.fillRect(-47, -2, 94, 2.5);
-  // car park: open at both ends, bays against the kerb, a one-lane aisle along the far side
-  ctx.fillStyle = PAL.asphalt; ctx.fillRect(-48, 0.5, 96, 29); rr(-47, 0.5, 94, 30, 5); ctx.fill();
-  ctx.fillStyle = PAL.curb; ctx.fillRect(-47, 29, 94, 2);                                      // far kerb: no way in along this side
+  rr(-31, -47, 62, 94, 6); ctx.fillStyle = PAL.lot; ctx.fill();
+  ctx.fillStyle = PAL.curb; ctx.fillRect(-31, 14, 62, 2.5);
+  // car park: bays against the kerb, a one-lane aisle beyond, open only at its open end(s)
+  ctx.fillStyle = PAL.asphalt; ctx.fillRect(open[1] ? -32 : -29, 16.5, (open[0] ? 32 : 29) - (open[1] ? -32 : -29), 29.5);
+  ctx.fillStyle = PAL.curb; ctx.fillRect(-31, 45.5, 62, 2);                                    // far kerb: no way in along this side
+  if (!open[0]) ctx.fillRect(29, 16.5, 2.5, 31);
+  if (!open[1]) ctx.fillRect(-31.5, 16.5, 2.5, 31);
   const active = Math.min(STORE_BAYS.length, dockCap(b)), on = new Set(STORE_BAYS.slice(0, active));
-  for (let i = 0; i <= 6; i++) {
-    const lx = -45 + i * 15, lit = on.has(lx - 7.5) || on.has(lx + 7.5);
-    ctx.fillStyle = lit ? 'rgba(255,255,255,.8)' : 'rgba(255,255,255,.22)'; ctx.fillRect(lx - 0.5, 1.5, 1, 15.5);
+  for (let i = 0; i <= 4; i++) {
+    const lx = -30 + i * 15, lit = on.has(lx - 7.5) || on.has(lx + 7.5);
+    ctx.fillStyle = lit ? 'rgba(255,255,255,.8)' : 'rgba(255,255,255,.22)'; ctx.fillRect(lx - 0.5, 17.5, 1, 15.5);
   }
   for (const lx of on) {
-    ctx.fillStyle = '#ffc933'; rr(lx - 4, 2, 8, 1.6, 0.8); ctx.fill();                       // wheel stop
-    ctx.fillStyle = rgba(col, 0.6); ctx.fillRect(lx - 1.6, 15.2, 3.2, 1.4);                    // store-colour bay mark
+    ctx.fillStyle = '#ffc933'; rr(lx - 4, 18, 8, 1.6, 0.8); ctx.fill();                       // wheel stop
+    ctx.fillStyle = rgba(col, 0.6); ctx.fillRect(lx - 1.6, 31.5, 3.2, 1.4);                    // store-colour bay mark
   }
   ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 0.8; ctx.setLineDash([4, 4]);     // aisle centre line
-  ctx.beginPath(); ctx.moveTo(-40, 23); ctx.lineTo(40, 23); ctx.stroke(); ctx.setLineDash([]);
-  ctx.fillStyle = 'rgba(255,255,255,.75)';                                                     // in/out arrows at each open end
-  for (const sx of [-1, 1]) {
-    const ax = sx * 43;
-    ctx.beginPath(); ctx.moveTo(ax + sx * 3, 23); ctx.lineTo(ax - sx * 1.5, 20); ctx.lineTo(ax - sx * 1.5, 26); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(open[1] ? -30 : -24, 39.5); ctx.lineTo(open[0] ? 30 : 24, 39.5); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = 'rgba(255,255,255,.8)';                                                      // arrows in each open end
+  for (const [sx, o] of [[1, open[0]], [-1, open[1]]]) {
+    if (!o) continue;
+    const ax = sx * 26;
+    ctx.beginPath(); ctx.moveTo(ax - sx * 3.5, 39.5); ctx.lineTo(ax + sx * 1.5, 36.2); ctx.lineTo(ax + sx * 1.5, 42.8); ctx.closePath(); ctx.fill();
   }
   if (tier === 0) {                                                                            // a corner shop keeps a little garden
-    ctx.fillStyle = PAL.grass; rr(-47, -31, 6, 29, 3); ctx.fill(); rr(41, -31, 6, 29, 3); ctx.fill();
+    ctx.fillStyle = PAL.grass; rr(-31, -47, 62, 7, 3.5); ctx.fill(); rr(-31, -47, 7, 61, 3.5); ctx.fill(); rr(24, -47, 7, 61, 3.5); ctx.fill();
     const dk = decorKind();
-    for (const [gx, gy, gr, sd] of [[-44, -26, 3.4, 1], [44, -24, 3.6, 2], [-44, -9, 3, 3], [44, -8, 3.1, 4]]) drawDecor(ctx, dk, gx, gy, gr, 0, b.k * 7 + sd);
+    for (const [gx, gy, gr, sd] of [[-27.5, -43, 3.2, 1], [27.5, -42.5, 3.4, 2], [-27.5, -14, 2.9, 3], [27.5, 2, 3, 4]]) drawDecor(ctx, dk, gx, gy, gr, 0, b.k * 7 + sd);
   }
   // walls and roof
   rr(Bx, By, Bw, Bh, 4); ctx.fillStyle = shade(roof, -0.14); ctx.fill();
-  rr(Bx + 2, By + 2, Bw - 4, Bh - 8, 3); ctx.fillStyle = roof; ctx.fill();
-  ctx.save(); rr(Bx + 2, By + 2, Bw - 4, Bh - 8, 3); ctx.clip();
+  rr(Bx + 2, By + 2, Bw - 4, Bh - 9, 3); ctx.fillStyle = roof; ctx.fill();
+  ctx.save(); rr(Bx + 2, By + 2, Bw - 4, Bh - 9, 3); ctx.clip();
   if (tier === 2) {                                                                            // depot: sawtooth roof
-    for (let xx = Bx + 2; xx < Bx + Bw - 2; xx += 8) { ctx.fillStyle = 'rgba(0,0,0,.12)'; ctx.fillRect(xx, By, 4, Bh); ctx.fillStyle = 'rgba(170,215,240,.5)'; ctx.fillRect(xx + 4, By, 0.8, Bh); }
-  } else if (tier === 3) {                                                                     // distribution centre: skylights at one end
+    for (let yy = By + 2; yy < front; yy += 8) { ctx.fillStyle = 'rgba(0,0,0,.12)'; ctx.fillRect(Bx, yy, Bw, 4); ctx.fillStyle = 'rgba(170,215,240,.5)'; ctx.fillRect(Bx, yy + 4, Bw, 0.8); }
+  } else if (tier === 3) {                                                                     // distribution centre: skylights down one side
     ctx.fillStyle = 'rgba(170,215,240,.45)';
-    for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) ctx.fillRect(30 + i * 6, By + 4 + j * 8, 4, 5);
-  } else if (tier === 1) {                                                                     // supermarket: rooflights at one end
-    ctx.fillStyle = 'rgba(170,215,240,.45)'; ctx.fillRect(29, By + 4, 2.4, Bh - 13); ctx.fillRect(34, By + 4, 2.4, Bh - 13);
+    for (let j = 0; j < 4; j++) ctx.fillRect(Bx + Bw - 8, By + 14 + j * 8, 4.5, 5);
+  } else if (tier === 1) {                                                                     // supermarket: rooflights down one side
+    ctx.fillStyle = 'rgba(170,215,240,.45)'; ctx.fillRect(Bx + Bw - 8, By + 13, 2, Bh - 30); ctx.fillRect(Bx + Bw - 5, By + 13, 2, Bh - 30);
   }
   ctx.restore();
-  if (tier === 0) { ctx.fillStyle = '#9aa3a8'; rr(Bx + Bw - 13, By + 4, 9, 8, 1.5); ctx.fill(); ctx.fillStyle = '#6f777c'; ctx.beginPath(); ctx.arc(Bx + Bw - 8.5, By + 8, 2.2, 0, 6.3); ctx.fill(); }
-  if (tier === 3) { ctx.strokeStyle = '#5a646a'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(Bx + 6, By + 12); ctx.lineTo(Bx + 6, By + 4); ctx.stroke(); ctx.fillStyle = '#ff5a4a'; ctx.beginPath(); ctx.arc(Bx + 6, By + 4, 1.3, 0, 6.3); ctx.fill(); }
+  ctx.fillStyle = '#9aa3a8'; rr(Bx + Bw - 13, By + 3, 9, 8, 1.5); ctx.fill();                   // rooftop plant
+  ctx.fillStyle = '#6f777c'; ctx.beginPath(); ctx.arc(Bx + Bw - 8.5, By + 7, 2.2, 0, 6.3); ctx.fill();
+  if (tier === 3) { ctx.strokeStyle = '#5a646a'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(Bx + 6, By + 11); ctx.lineTo(Bx + 6, By + 3); ctx.stroke(); ctx.fillStyle = '#ff5a4a'; ctx.beginPath(); ctx.arc(Bx + 6, By + 3, 1.3, 0, 6.3); ctx.fill(); }
   // parcels waiting, stacked in the middle of the roof
-  const pc = 6, pr = 2, n = Math.min(b.pins, pc * pr), px0 = -26, py0 = By + 4;
+  const pc = tier ? 4 : 3, pr = 3, n = Math.min(b.pins, pc * pr), px0 = -pc * 5 + 1, py0 = By + 14;
   for (let i = 0; i < n; i++) {
-    const px = px0 + (i % pc) * 9, py = py0 + Math.floor(i / pc) * 7;
-    ctx.fillStyle = 'rgba(0,0,0,.16)'; ctx.fillRect(px + 0.8, py + 1, 7, 5.2);
-    ctx.fillStyle = i % 2 ? '#d7a862' : '#e3b46a'; ctx.fillRect(px, py, 7, 5.2);
-    ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.fillRect(px + 3, py, 1, 5.2);
+    const px = px0 + (i % pc) * 10, py = py0 + Math.floor(i / pc) * 8;
+    ctx.fillStyle = 'rgba(0,0,0,.16)'; ctx.fillRect(px + 0.8, py + 1, 8, 6);
+    ctx.fillStyle = i % 2 ? '#d7a862' : '#e3b46a'; ctx.fillRect(px, py, 8, 6);
+    ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.fillRect(px + 3.5, py, 1, 6);
   }
-  if (b.pins > pc * pr) { const ox = px0 + pc * 9, oy = py0 + 3; ctx.fillStyle = '#d6342a'; rr(ox, oy, 7, 6.5, 2); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = '800 6px Overpass, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('+', ox + 3.5, oy + 3.5); }
+  if (b.pins > pc * pr) { const ox = px0 + (pc - 1) * 10, oy = py0 + pr * 8; ctx.fillStyle = '#d6342a'; rr(ox, oy, 8, 7, 2); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = '800 6px Overpass, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('+', ox + 4, oy + 3.8); }
   // fascia in the store's colour, shop window and the two tow-truck garages
-  ctx.fillStyle = col; ctx.fillRect(Bx, front - 6, Bw, 6);
-  ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.fillRect(Bx, front - 6, Bw, 1);
-  rr(-12, front - 5, 24, 4.2, 1.2); ctx.fillStyle = 'rgba(24,44,58,.85)'; ctx.fill();
-  ctx.fillStyle = 'rgba(170,215,240,.45)'; ctx.fillRect(-10.5, front - 4.3, 5.5, 2.8); ctx.fillRect(5, front - 4.3, 5.5, 2.8);
-  for (const gx of [-30, 30]) { rr(gx - 6.5, front - 11, 13, 11, 1.5); ctx.fillStyle = 'rgba(16,26,32,.78)'; ctx.fill(); }
+  ctx.fillStyle = col; ctx.fillRect(Bx, front - 7, Bw, 7);
+  ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.fillRect(Bx, front - 7, Bw, 1);
+  rr(-8, front - 5.8, 16, 4.6, 1.2); ctx.fillStyle = 'rgba(24,44,58,.85)'; ctx.fill();
+  ctx.fillStyle = 'rgba(170,215,240,.45)'; ctx.fillRect(-6.6, front - 5, 5, 3); ctx.fillRect(1.6, front - 5, 5, 3);
+  for (const gx of [-18, 18]) { rr(gx - 6, front - 11, 12, 11, 1.5); ctx.fillStyle = 'rgba(16,26,32,.78)'; ctx.fill(); }
   if (tier === 0) {                                                                            // striped awning over the shop window
-    for (let i = 0; i < 8; i++) { ctx.fillStyle = i % 2 ? '#fff' : col; ctx.fillRect(-14 + i * 3.5, front - 0.5, 3.5, 3); }
+    for (let i = 0; i < 6; i++) { ctx.fillStyle = i % 2 ? '#fff' : col; ctx.fillRect(-10.5 + i * 3.5, front - 0.5, 3.5, 2.8); }
   }
-  for (let i = 0; i < tier; i++) {                                                            // tier chevrons on the fascia
-    const cx_ = 18 + i * 4.5, cy_ = front - 3.5;
-    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(cx_ - 1.7, cy_ + 1.1); ctx.lineTo(cx_, cy_ - 0.8); ctx.lineTo(cx_ + 1.7, cy_ + 1.1);
+  for (let i = 0; i < tier; i++) {                                                            // tier chevrons on the roof by the sign
+    const cx_ = Bx + 6 + i * 4.5, cy_ = By + 15.5;
+    ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(cx_ - 1.7, cy_ + 1.1); ctx.lineTo(cx_, cy_ - 0.8); ctx.lineTo(cx_ + 1.7, cy_ + 1.1);
     ctx.lineTo(cx_ + 1.7, cy_ + 2.2); ctx.lineTo(cx_, cy_ + 0.3); ctx.lineTo(cx_ - 1.7, cy_ + 2.2); ctx.closePath(); ctx.fill();
   }
-  if (showSymbols) glyph(COLORS[b.color].glyph, -19, front - 3, 2.2, '#fff');
+  if (showSymbols) glyph(COLORS[b.color].glyph, -12, front - 3.5, 2.2, '#fff');
   // paid upgrades: 1 a lit sign on the roof, 2 solar panels, 3 flags and gold trim
   if (lvl >= 1) {
-    rr(-14, By - 1.5, 28, 5.5, 1.4); ctx.fillStyle = '#12303f'; ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = 0.9; ctx.stroke();
-    if (showSymbols) glyph(COLORS[b.color].glyph, 0, By + 1.2, 1.8, col); else { ctx.fillStyle = col; ctx.fillRect(-9, By + 0.6, 18, 1.4); }
+    rr(-11, By + 3, 22, 6, 1.4); ctx.fillStyle = '#12303f'; ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = 0.9; ctx.stroke();
+    if (showSymbols) glyph(COLORS[b.color].glyph, 0, By + 6, 1.8, col); else { ctx.fillStyle = col; ctx.fillRect(-7, By + 5.3, 14, 1.4); }
   }
-  if (lvl >= 2) {                                                                              // solar panels at the other end
+  if (lvl >= 2) {                                                                              // solar panels down the other side
     ctx.fillStyle = '#1f3552'; ctx.strokeStyle = 'rgba(160,200,240,.55)'; ctx.lineWidth = 0.4;
-    for (let j = 0; j < 2; j++) for (let i = 0; i < (tier ? 2 : 1); i++) { const sx = Bx + 4 + i * 6.5, sy = By + 4 + j * 7.5; ctx.fillRect(sx, sy, 5.5, 6); ctx.strokeRect(sx, sy, 5.5, 6); }
+    for (let j = 0; j < 3; j++) { const sx = Bx + 3, sy = By + 21 + j * 8; ctx.fillRect(sx, sy, 5.5, 6.5); ctx.strokeRect(sx, sy, 5.5, 6.5); }
   }
   if (lvl >= 3) {
     for (const fx_ of [Bx + 2, Bx + Bw - 2]) {
-      ctx.strokeStyle = '#8a9296'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(fx_, front + 1); ctx.lineTo(fx_, front - 9); ctx.stroke();
+      ctx.strokeStyle = '#8a9296'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(fx_, front + 1); ctx.lineTo(fx_, front - 10); ctx.stroke();
       const wave = REDUCED_MOTION ? 0 : Math.sin(animT * 4 + fx_) * 0.9;
-      ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(fx_, front - 9); ctx.lineTo(fx_ + (fx_ < 0 ? -4.5 : 4.5), front - 7.7 + wave); ctx.lineTo(fx_, front - 6.3); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(fx_, front - 10); ctx.lineTo(fx_ + (fx_ < 0 ? -4.5 : 4.5), front - 8.7 + wave); ctx.lineTo(fx_, front - 7.3); ctx.closePath(); ctx.fill();
     }
   }
   ctx.strokeStyle = col; ctx.lineWidth = 1.4 + tier * 0.8; rr(Bx + 1, By + 1, Bw - 2, Bh - 2, 3.5); ctx.stroke();   // thicker outline = busier tier
@@ -4561,7 +4604,7 @@ function drawStoreBadge(b) {
   ctx.fillText(label, 0, 0.4);
   ctx.restore();
   if (b.timer > 0.05) {
-    const R = isBig(b) ? 54 : 24;
+    const R = isBig(b) ? 60 : 24;
     ctx.save(); ctx.translate(bX(b), bY(b) - (isBig(b) ? 0 : 2)); ctx.lineWidth = isBig(b) ? 4.5 : 3.2;
     ctx.strokeStyle = 'rgba(0,0,0,.15)'; ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.stroke();
     const pulse = frac > 0.7 ? 0.65 + 0.35 * Math.sin(animT * 9) : 1;
@@ -4730,7 +4773,7 @@ function drawAmbTarget(a) {
   const s = buildings[a.store]; if (!s) return;
   const late = clock - a.t0 > a.limit;
   ctx.strokeStyle = late ? '#ff3b30' : '#ff8a80'; ctx.lineWidth = 2.2; ctx.setLineDash([4, 4]);
-  ctx.beginPath(); ctx.arc(bX(s), bY(s), (isBig(s) ? 52 : 24) + Math.sin(animT * 5) * 2, 0, 6.3); ctx.stroke(); ctx.setLineDash([]);
+  ctx.beginPath(); ctx.arc(bX(s), bY(s), (isBig(s) ? 58 : 24) + Math.sin(animT * 5) * 2, 0, 6.3); ctx.stroke(); ctx.setLineDash([]);
 }
 /* cones and a striped barrier across a closed tile */
 function drawClosures(vr) {
@@ -4834,7 +4877,7 @@ function drawNight(vr, na) {
     ctx.fillStyle = gr; ctx.fillRect(x - R, y - R, R * 2, R * 2);
   };
   for (const nd of nodeList) if (nd.junction) glow(tx(nd.k), ty(nd.k), 34, 0.3 * na, '255,214,140');
-  for (const bd of buildings) glow(bX(bd), bY(bd), isBig(bd) ? 54 : 30, 0.28 * na, '255,200,120');
+  for (const bd of buildings) glow(bX(bd), bY(bd), isBig(bd) ? 58 : 30, 0.28 * na, '255,200,120');
   for (const c of cars) {
     if (c.state === 'parked' || c.state === 'loading') continue;
     const fx_ = c.x + Math.cos(c.ang) * (c.len / 2 + 9), fy_ = c.y + Math.sin(c.ang) * (c.len / 2 + 9);
@@ -4947,7 +4990,8 @@ function drawMini() {
   mctx.fillStyle = PAL.land; mctx.fillRect(0, 0, S, S);
   mctx.fillStyle = PAL.land2; mctx.fillRect((org - x0) * k, (org - x0) * k, span * k, span * k);
   if (!patchCache) buildPatches();
-  mctx.imageSmoothingEnabled = true; mctx.drawImage(patchCache, x0 * PATCH_PX, x0 * PATCH_PX, size * PATCH_PX, size * PATCH_PX, 0, 0, S, S);
+  mctx.fillStyle = PAL.patch;
+  for (let r = x0; r < x1; r++) for (let c = x0; c < x1; c++) if (patchMask[idx(c, r)]) mctx.fillRect((c - x0) * k, (r - x0) * k, k + 0.5, k + 0.5);
   mctx.fillStyle = PAL.water;
   for (let r = x0; r < x1; r++) for (let c = x0; c < x1; c++) if (water[idx(c, r)]) mctx.fillRect((c - x0) * k, (r - x0) * k, k + 0.5, k + 0.5);
   mctx.strokeStyle = PAL.edge; mctx.lineWidth = Math.max(1, k * 0.5); mctx.lineCap = 'round';
@@ -5537,7 +5581,7 @@ function renderInspector() {
   } else if (sel.type === 'building') {
     const b = buildings[sel.i]; if (!b) { closeInspector(); return; }
     title.textContent = COLORS[b.color].name + ' ' + (b.type === 'store' ? STORE_MODELS[Math.min(3, b.tier || 0)].toLowerCase() : ['cottage', 'family home', 'villa'][Math.min(2, b.extra || 0)]);
-    if (b.acc < 0) html += '<p class="line warn">' + (isBig(b) ? 'Not connected to a road. Bring a road to either end of its car park (the dashed squares).' : 'Not connected to a road. Lay road on a tile beside it.') + '</p>';
+    if (b.acc < 0) html += '<p class="line warn">' + (isBig(b) ? (b.ends ? 'Not connected to a road. It opens at one end of its car park only: bring a road to the dashed square.' : 'Not connected to a road. Bring a road to either end of its car park (the dashed squares).') : 'Not connected to a road. Lay road on a tile beside it.') + '</p>';
     if (b.type === 'store') {
       const cap = storeCap(b), frac = clamp(b.timer / overflowLimit(), 0, 1);
       html += '<p class="line">Parcels waiting <b>' + b.pins + '</b> of ' + cap + ' bays · ' + b.claimed + ' claimed</p>';
@@ -6098,8 +6142,8 @@ function mapPreview(cvs, id, custom, decor) {
   PAL = palFor(id, custom); theme = PAL.tone;
   g.clearRect(0, 0, w, h);
   g.fillStyle = PAL.land2; g.fillRect(0, 0, w, h);
-  g.fillStyle = PAL.patch; g.beginPath(); g.ellipse(w * 0.3, h * 0.72, w * 0.26, h * 0.26, 0.3, 0, 6.3); g.fill();
-  g.beginPath(); g.ellipse(w * 0.62, h * 0.2, w * 0.14, h * 0.15, 0, 0, 6.3); g.fill();
+  g.fillStyle = PAL.patch; const u = h / 3;                // a small L of patch tiles, like on the map
+  rr_(g, w * 0.05, h * 0.62, u * 2.2, u, u * 0.4); rr_(g, w * 0.05, h * 0.3, u, u * 1.4, u * 0.4); rr_(g, w * 0.55, -u * 0.4, u, u * 1.2, u * 0.4);
   g.fillStyle = PAL.water; g.fillRect(w * 0.78, 0, w * 0.14, h);
   const dk = decor || (MAP_THEMES[id] || MAP_THEMES.meadow).decor, sc = h / 40;
   drawDecor(g, dk, w * 0.24, h * 0.45, 9 * sc, 0, 11); drawDecor(g, dk, w * 0.55, h * 0.62, 7 * sc, 0, 23);
@@ -6128,7 +6172,7 @@ function renderMapUI() {
       if (id === 'auto') b.dataset.sub = DECOR[auto] + ' for ' + MAP_THEMES[mapPrefs.theme].label;
       const c = document.createElement('canvas'); c.width = 64; c.height = 64;
       const g = c.getContext('2d'); g.fillStyle = PAL.land2; g.fillRect(0, 0, 64, 64);
-      g.fillStyle = PAL.patch; g.beginPath(); g.ellipse(32, 46, 24, 10, 0, 0, 6.3); g.fill();
+      g.fillStyle = PAL.patch; rr_(g, 6, 38, 52, 20, 8);
       drawDecor(g, id === 'auto' ? auto : id, 32, 32, 17, 0, 5);
       const lb = document.createElement('span'); lb.textContent = id === 'auto' ? 'Theme' : DECOR[id];
       b.append(c, lb);
