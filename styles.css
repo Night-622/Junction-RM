@@ -962,7 +962,7 @@ ol.board b{font-weight:800}
 :root[data-ui-style="clean"] #tip,:root[data-ui-style="glass"] #tip{box-shadow:inset 0 0 0 1px var(--line),0 8px 20px rgba(0,0,0,.22)}
 /* glass: the map shows softly through every panel */
 :root[data-ui-style="glass"] .plate,:root[data-ui-style="glass"] .chip,:root[data-ui-style="glass"] #hint,
-:root[data-ui-style="glass"] .toast,:root[data-ui-style="glass"] #tip{background:var(--plate-glass);-webkit-backdrop-filter:blur(14px) saturate(1.35);backdrop-filter:blur(14px) saturate(1.35)}
+:root[data-ui-style="glass"] .toast,:root[data-ui-style="glass"] #tip{background:var(--plate-glass);-webkit-backdrop-filter:blur(6px) saturate(1.5);backdrop-filter:blur(6px) saturate(1.5)}
 :root[data-ui-style="glass"] .modal .card{background:var(--plate)}
 :root[data-ui-style="glass"] .stats .minbtn{background:transparent;box-shadow:none}
 /* road sign: the original white keyline, slightly crisper */
@@ -1047,3 +1047,30 @@ ol.board b{font-weight:800}
 #map-custom-note[hidden]{display:none}
 #map-reset{justify-self:start;padding:2px 0}
 @media (max-width:420px){.mappicks{grid-template-columns:repeat(2,1fr)}}
+
+/* glass is clear by default; text keeps a soft shadow so it still reads over the map */
+:root[data-ui-style="glass"][data-ui-frost="0"][data-ui-tone="dark"] .plate,:root[data-ui-style="glass"][data-ui-frost="0"][data-ui-tone="dark"] .chip,
+:root[data-ui-style="glass"][data-ui-frost="0"][data-ui-tone="dark"] .toast,:root[data-ui-style="glass"][data-ui-frost="0"][data-ui-tone="dark"] #hint{text-shadow:0 1px 2px rgba(0,0,0,.45)}
+:root[data-ui-style="glass"][data-ui-frost="0"][data-ui-tone="light"] .plate,:root[data-ui-style="glass"][data-ui-frost="0"][data-ui-tone="light"] .chip,
+:root[data-ui-style="glass"][data-ui-frost="0"][data-ui-tone="light"] .toast,:root[data-ui-style="glass"][data-ui-frost="0"][data-ui-tone="light"] #hint{text-shadow:0 1px 2px rgba(255,255,255,.6)}
+/* frosted: a heavier blur, a pale sheen and a bright top edge, like etched glass */
+:root[data-ui-style="glass"][data-ui-frost="1"] .plate,:root[data-ui-style="glass"][data-ui-frost="1"] .chip,:root[data-ui-style="glass"][data-ui-frost="1"] #hint,
+:root[data-ui-style="glass"][data-ui-frost="1"] .toast,:root[data-ui-style="glass"][data-ui-frost="1"] #tip{
+  background:linear-gradient(160deg,rgba(255,255,255,.16),rgba(255,255,255,.04) 45%,rgba(255,255,255,.08)),var(--plate-frost);
+  -webkit-backdrop-filter:blur(22px) saturate(1.15) brightness(1.06);backdrop-filter:blur(22px) saturate(1.15) brightness(1.06);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.28),inset 0 0 0 1px rgba(255,255,255,.14),var(--shadow)}
+:root[data-ui-style="glass"] .modal .card{background:var(--plate)}
+#frost-row[hidden]{display:none}
+.tglsub{display:block;font-size:11px;color:var(--soft);font-weight:500}
+
+/* settings: light and dark modes */
+.modepicks{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.modepick{display:grid;gap:4px;padding:6px 6px 7px;border-radius:10px;border:1px solid var(--line);text-align:left;background:rgba(var(--ov),.03);box-shadow:0 1px 2px rgba(0,0,0,.1);transition:border-color .15s ease,box-shadow .15s ease}
+.modepick:hover{border-color:rgba(var(--ov),.35);box-shadow:0 4px 12px rgba(0,0,0,.16)}
+.modepick[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent),0 3px 10px rgba(var(--accent-rgb),.3)}
+.modepick b{display:flex;align-items:center;gap:5px;font-size:12.5px;font-weight:800;padding:0 2px}
+.modepick small{font-size:10.5px;color:var(--soft);padding:0 2px;line-height:1.25}
+.mp-prev{position:relative;display:block;height:30px;border-radius:7px;overflow:hidden;box-shadow:inset 0 0 0 1px rgba(127,127,127,.3),0 2px 5px rgba(0,0,0,.18)}
+.mp-prev i{position:absolute;left:8%;top:30%;width:28%;height:46%;border-radius:5px}
+.mp-prev em{position:absolute;right:9%;top:30%;width:22%;height:40%;border-radius:4px;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.linkbtn.inl{display:inline;padding:0;margin-left:2px;font-size:12px}

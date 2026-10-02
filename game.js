@@ -140,7 +140,7 @@ const CONFIG = {
   contractsBonus:     0.1,      // per level of the Bulk contracts upgrade
   weeklyGrant:        10,       // council grant every new week...
   weeklyGrantRamp:    2,        // ...plus this much per week survived
-  prices: {road: 10, bridge: 15, sign: 20, light: 30, round: 30, park: 30, depot: 30, moto: 60, van: 30, car: 30},
+  prices: {road: 10, bridge: 15, sign: 20, light: 30, round: 45, park: 30, depot: 30, moto: 60, van: 30, car: 30},
   // prices for road tiles, bridges, signs, lights, roundabouts, lots, bays and motorways all rise this much
   // per week (compounding); store upgrades, junction upgrades and tow trucks are NOT part of this rise
   roadPriceWeeklyRise: 0.15,
@@ -1533,7 +1533,7 @@ function resetGame(dk) {
   span = CFG.startSpan; org = Math.floor((MAXD - span) / 2); camSpan = span; camOrg = org;
   undoStack = []; redoStack = []; sel = null; follow = false; motoPick = -1; goalsDone = new Set();
   stats = freshStats(); fx.length = 0;
-  genRiver();
+  genWater();
   for (let i = 0; i < CFG.startStores; i++) addBuilding('store', i % COLORS.length);
   for (let i = 0; i < CFG.startHouses; i++) addBuilding('house', i % Math.max(1, CFG.startStores));
   rebuildNet();
@@ -1541,13 +1541,49 @@ function resetGame(dk) {
   camReset(true);
   closeInspector(); setTool('select'); refreshUI();
 }
-function genRiver() {
-  let c = 6 + Math.floor(Math.random() * (MAXD - 12));
-  for (let r = 0; r < ROWS; r++) {
-    const w = Math.random() < 0.35 ? 2 : 1;
-    for (let i = 0; i < w; i++) water[idx(clamp(c + i, 0, COLS - 1), r)] = 1;
-    c = clamp(c + pick([-1, 0, 0, 1]), 2, COLS - 3);
-  }
+/* Water is different every city: winding rivers in any direction, ponds of every size, and some bigger ponds
+   with an island in the middle. Most of it lands within reach of where the city will grow. */
+function genWater() {
+  const mid = MAXD / 2, stamp = (x, y, rad, v) => {
+    for (let r = Math.floor(y - rad); r <= Math.ceil(y + rad); r++) for (let c = Math.floor(x - rad); c <= Math.ceil(x + rad); c++) {
+      if (c < 0 || r < 0 || c >= COLS || r >= ROWS) continue;
+      if ((c + 0.5 - x) ** 2 + (r + 0.5 - y) ** 2 <= rad * rad) water[idx(c, r)] = v;
+    }
+  };
+  // a river that winds from one edge of the map to another
+  const river = () => {
+    const side = Math.floor(Math.random() * 4), along = () => 10 + Math.random() * (MAXD - 20);
+    const ends = [[along(), 0], [MAXD, along()], [along(), MAXD], [0, along()]];
+    let [x, y] = ends[side];
+    const [tx_, ty_] = ends[(side + 2) % 4];
+    let head = Math.atan2(ty_ - y, tx_ - x);
+    const ph1 = Math.random() * 6.3, ph2 = Math.random() * 6.3, wiggle = 0.35 + Math.random() * 0.5, wide = Math.random() < 0.4 ? 1.1 : 0.75;
+    for (let t = 0; t < 900; t++) {
+      const want = Math.atan2(ty_ - y, tx_ - x);
+      let d = want - head; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2;
+      head += d * 0.06 + (Math.sin(t * 0.045 + ph1) + Math.sin(t * 0.11 + ph2) * 0.5) * 0.06 * wiggle;
+      x += Math.cos(head) * 0.5; y += Math.sin(head) * 0.5;
+      stamp(x, y, wide + Math.max(0, Math.sin(t * 0.03 + ph2)) * 0.45, 1);
+      if (x < -2 || y < -2 || x > MAXD + 2 || y > MAXD + 2) break;
+    }
+  };
+  // a pond: a cluster of overlapping circles, and sometimes an island left dry in the middle
+  const pond = (big) => {
+    let x, y, tries = 0;
+    do { const a = Math.random() * 6.3, d = 7 + Math.random() * 30; x = mid + Math.cos(a) * d; y = mid + Math.sin(a) * d; } while (++tries < 20 && Math.hypot(x - mid, y - mid) < 6);
+    const R = big ? 3.4 + Math.random() * 2.2 : 1.4 + Math.random() * 1.8;
+    stamp(x, y, R, 1);
+    for (let i = 0, n = 2 + Math.floor(Math.random() * 3); i < n; i++) {
+      const a = Math.random() * 6.3, d = R * (0.4 + Math.random() * 0.4);
+      stamp(x + Math.cos(a) * d, y + Math.sin(a) * d, R * (0.5 + Math.random() * 0.4), 1);
+    }
+    if (big && Math.random() < 0.6) stamp(x + (Math.random() - 0.5) * 0.8, y + (Math.random() - 0.5) * 0.8, Math.max(1, R * (0.28 + Math.random() * 0.12)), 0);
+  };
+  const style = Math.random();
+  if (style < 0.3) { river(); for (let i = Math.floor(Math.random() * 3); i > 0; i--) pond(false); }        // a river and a few ponds
+  else if (style < 0.55) { for (let i = 3 + Math.floor(Math.random() * 3); i > 0; i--) pond(Math.random() < 0.5); pond(true); }   // lake country
+  else if (style < 0.85) { river(); pond(true); for (let i = 1 + Math.floor(Math.random() * 3); i > 0; i--) pond(Math.random() < 0.4); }
+  else { river(); river(); pond(Math.random() < 0.5); }                                       // two rivers that may cross
 }
 function growMap() {
   const ns = Math.min(MAXD, span + CFG.growPerWeek * 2);
@@ -3701,7 +3737,7 @@ function applyMap() {
   root.setAttribute('data-theme', theme); root.style.setProperty('--land', PAL.land);
   patchCache = null; if (typeof pathCache !== 'undefined') pathCache.ver = -1;
   try { localStorage.setItem(MAP_KEY, JSON.stringify(mapPrefs)); localStorage.setItem('junction2-theme', theme); } catch (e) {}
-  if (typeof uiTheme !== 'undefined') { applyUiTheme(); renderUiThemeUI(); renderMapUI(); }
+  if (typeof uiTheme !== 'undefined') { applyUiTheme(); renderUiThemeUI(); renderMapUI(); rememberMode(); }
   if (water) drawMini();
 }
 function setMap(ch) { Object.assign(mapPrefs, ch); if (mapPrefs.theme !== 'night') mapPrefs.lastDay = mapPrefs.theme; applyMap(); }
@@ -3723,10 +3759,7 @@ function loadMap() {
   applyMap();
 }
 /* the T key and the half-moon button: switch to the night map, and back to whichever day theme you had */
-function setTheme(t) {
-  if (t === 'dark') setMap({theme: 'night', land: '', patch: '', water: ''});
-  else setMap({theme: MAP_THEMES[mapPrefs.lastDay] && mapPrefs.lastDay !== 'night' ? mapPrefs.lastDay : 'meadow', land: '', patch: '', water: ''});
-}
+function setTheme(t) { useMode(t); }
 
 /* Patches of the theme's second colour, laid on the tile grid like road: whole tiles filled solid, outside
    corners rounded and inside corners filleted, so a patch reads as one smooth shape. Which tiles are patch comes
@@ -5838,7 +5871,7 @@ function bindInput() {
       case 'f': if (sel && sel.type === 'car') { follow = !follow; cam.auto = !follow ? cam.auto : false; refreshUI(); renderInspector(); } break;
       case 'm': toggleMute(); break;
       case 'c': snapshot(); break;
-      case 't': setTheme(theme === 'dark' ? 'light' : 'dark'); pathCache.ver = -1; break;
+      case 't': toggleMode(); break;
       case 'tab': break;
       case '0': case 'home': camReset(false); break;
       case '+': case '=': cycleSpeed(1); break;
@@ -5856,7 +5889,7 @@ function bindInput() {
   $('btn-heat').addEventListener('click', () => { showHeat = !showHeat; refreshUI(); });
   $('btn-side').addEventListener('click', () => { keepLeft = !keepLeft; laneSign = keepLeft ? -1 : 1; pathCache.ver = -1; refreshUI(); });
   $('btn-sound').addEventListener('click', toggleMute);
-  $('btn-theme').addEventListener('click', () => { setTheme(theme === 'dark' ? 'light' : 'dark'); pathCache.ver = -1; });
+  $('btn-theme').addEventListener('click', toggleMode);
   $('btn-help').addEventListener('click', () => openModal('m-help'));
   $('btn-tutorial').addEventListener('click', () => openModal('m-help'));
   $('btn-undo').addEventListener('click', undo);
@@ -6100,7 +6133,7 @@ function pickLibColour(hex) {
    from those so any pick stays readable. Saved per browser, separately from the map's light/dark. */
 const UI_KEY = 'junction-ui-theme-v1';
 const UI_THEMES = {
-  petrol:   {label: 'Petrol',   plate: '#143845', night: '#0d2029', accent: '#ffc933'},
+  petrol:   {label: 'Default',  plate: '#143845', night: '#0d2029', accent: '#ffc933'},
   midnight: {label: 'Midnight', plate: '#171c31', accent: '#8ea8ff'},
   graphite: {label: 'Graphite', plate: '#25282d', accent: '#4fd1a5'},
   forest:   {label: 'Forest',   plate: '#1b3a2b', accent: '#f2c14e'},
@@ -6111,7 +6144,7 @@ const UI_THEMES = {
   sand:     {label: 'Sand',     plate: '#ece1c9', accent: '#1f7a6c'}
 };
 const UI_STYLES = ['clean', 'glass', 'sign'];
-let uiTheme = {preset: 'petrol', style: 'clean', plate: '', btn: '', accent: ''};
+let uiTheme = {preset: 'petrol', style: 'clean', frost: false, plate: '', btn: '', accent: ''};
 const hexOk = h => typeof h === 'string' && /^#[0-9a-f]{6}$/i.test(h);
 function lum(hex) {                                   // WCAG relative luminance
   const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
@@ -6136,7 +6169,7 @@ function applyUiTheme() {
   let acc = accent;
   for (let i = 0; i < 6 && contrast(acc, plate) < 2.2; i++) acc = mixHex(acc, light ? '#000000' : '#ffffff', 0.18);
   const vars = {
-    '--plate': plate, '--plate-2': mixHex(plate, light ? '#000000' : '#ffffff', 0.07), '--plate-glass': 'rgba(' + rgbOf(plate).join(',') + ',' + (light ? 0.78 : 0.74) + ')',
+    '--plate': plate, '--plate-2': mixHex(plate, light ? '#000000' : '#ffffff', 0.07), '--plate-glass': 'rgba(' + rgbOf(plate).join(',') + ',' + (light ? 0.5 : 0.42) + ')', '--plate-frost': 'rgba(' + rgbOf(plate).join(',') + ',' + (light ? 0.62 : 0.55) + ')',
     '--ink': light ? '#17252d' : '#f2f7f6', '--soft': light ? 'rgba(23,37,45,.66)' : 'rgba(242,247,246,.68)', '--ov': ov,
     '--line': 'rgba(' + ov + ',' + (light ? 0.13 : 0.16) + ')', '--keyline': light ? 'rgba(23,37,45,.55)' : (theme === 'dark' ? 'rgba(255,255,255,.55)' : 'rgba(255,255,255,.88)'),
     '--accent': acc, '--accent-rgb': rgbOf(acc).join(','), '--on-accent': onColour(acc),
@@ -6146,15 +6179,17 @@ function applyUiTheme() {
   for (const k in vars) st.setProperty(k, vars[k]);
   root.dataset.uiTone = light ? 'light' : 'dark';
   root.dataset.uiStyle = UI_STYLES.includes(uiTheme.style) ? uiTheme.style : 'clean';
+  root.dataset.uiFrost = uiTheme.frost ? '1' : '0';
   const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.content = plate;
 }
-function saveUiTheme() { try { localStorage.setItem(UI_KEY, JSON.stringify(uiTheme)); } catch (e) {} }
+function saveUiTheme() { try { localStorage.setItem(UI_KEY, JSON.stringify(uiTheme)); } catch (e) {} rememberMode(); }
 function loadUiTheme() {
   try {
     const u = JSON.parse(localStorage.getItem(UI_KEY));
     if (u && typeof u === 'object') {
       if (UI_THEMES[u.preset]) uiTheme.preset = u.preset;
       if (UI_STYLES.includes(u.style)) uiTheme.style = u.style;
+      uiTheme.frost = !!u.frost;
       for (const f of ['plate', 'btn', 'accent']) uiTheme[f] = hexOk(u[f]) ? u[f].toLowerCase() : '';
     }
   } catch (e) {}
@@ -6178,6 +6213,9 @@ function renderUiThemeUI() {
   set('ui-plate', c.plate); set('ui-btn', c.btn); set('ui-accent', c.accent);
   const cn = $('ui-custom-note'); if (cn) cn.hidden = !uiCustom();
   document.querySelectorAll('#opt-style button').forEach(b => b.setAttribute('aria-pressed', b.dataset.style === uiTheme.style ? 'true' : 'false'));
+  const fr = $('frost-row'); if (fr) fr.hidden = uiTheme.style !== 'glass';
+  const fc = $('ui-frost'); if (fc) fc.checked = !!uiTheme.frost;
+  renderModesUI();
 }
 function bindUiTheme() {
   for (const [id, f] of [['ui-plate', 'plate'], ['ui-btn', 'btn'], ['ui-accent', 'accent']]) {
@@ -6186,7 +6224,54 @@ function bindUiTheme() {
     e.addEventListener('change', () => setUi({[f]: e.value.toLowerCase()}));
   }
   document.querySelectorAll('#opt-style button').forEach(b => b.addEventListener('click', () => setUi({style: b.dataset.style})));
-  const rs = $('ui-reset'); if (rs) rs.addEventListener('click', () => setUi({preset: 'petrol', style: 'clean', plate: '', btn: '', accent: ''}));
+  const fc = $('ui-frost'); if (fc) fc.addEventListener('change', () => setUi({frost: fc.checked}));
+  const rs = $('ui-reset'); if (rs) rs.addEventListener('click', () => setUi({preset: 'petrol', style: 'clean', frost: false, plate: '', btn: '', accent: ''}));
+  document.querySelectorAll('.modepick').forEach(b => b.addEventListener('click', () => useMode(b.dataset.mode)));
+  const mr = $('mode-reset'); if (mr) mr.addEventListener('click', () => { modes[modes.cur] = null; useMode(modes.cur); });
+}
+/* ---- your own light and dark modes. Each mode remembers a whole look: interface theme, panel style, map theme,
+   decorations and any custom colours. Whatever you change while a mode is on is saved into that mode, and the
+   T key (or the half-moon button) swaps between the two. */
+const MODES_KEY = 'junction-modes-v1';
+const MODE_DEFAULTS = {
+  light: {ui: {preset: 'petrol', style: 'clean', frost: false, plate: '', btn: '', accent: ''}, map: {theme: 'meadow', decor: 'auto', land: '', patch: '', water: ''}},
+  dark:  {ui: {preset: 'petrol', style: 'clean', frost: false, plate: '', btn: '', accent: ''}, map: {theme: 'night', decor: 'auto', land: '', patch: '', water: ''}}
+};
+let modes = {cur: 'light', light: null, dark: null}, modeBusy = true;      // busy until boot has loaded everything
+const snapLook = () => ({ui: Object.assign({}, uiTheme), map: {theme: mapPrefs.theme, decor: mapPrefs.decor, land: mapPrefs.land, patch: mapPrefs.patch, water: mapPrefs.water}});
+function saveModes() { try { localStorage.setItem(MODES_KEY, JSON.stringify(modes)); } catch (e) {} }
+function rememberMode() { if (modeBusy) return; modes[modes.cur] = snapLook(); saveModes(); renderModesUI(); }
+function useMode(m) {
+  m = m === 'dark' ? 'dark' : 'light';
+  const L = modes[m] || MODE_DEFAULTS[m];
+  modes.cur = m; modeBusy = true;
+  Object.assign(uiTheme, MODE_DEFAULTS[m].ui, L.ui); Object.assign(mapPrefs, MODE_DEFAULTS[m].map, L.map);
+  try { localStorage.setItem(UI_KEY, JSON.stringify(uiTheme)); } catch (e) {}
+  applyMap();
+  modeBusy = false; rememberMode();
+  renderUiThemeUI(); renderMapUI();
+}
+const toggleMode = () => useMode(modes.cur === 'dark' ? 'light' : 'dark');
+/* called once at boot, after the current look has been loaded */
+function loadModes() {
+  let m = null; try { m = JSON.parse(localStorage.getItem(MODES_KEY)); } catch (e) {}
+  if (m && typeof m === 'object') {
+    modes.cur = m.cur === 'dark' ? 'dark' : 'light';
+    for (const k of ['light', 'dark']) modes[k] = m[k] && m[k].ui && m[k].map ? m[k] : null;
+  } else modes.cur = theme === 'dark' ? 'dark' : 'light';            // first run: whatever you were using becomes that mode
+  modeBusy = false; rememberMode();
+}
+function renderModesUI() {
+  document.querySelectorAll('.modepick').forEach(b => {
+    const m = b.dataset.mode, L = modes[m] || MODE_DEFAULTS[m];
+    b.setAttribute('aria-pressed', modes.cur === m ? 'true' : 'false');
+    const pv = b.querySelector('.mp-prev'); if (!pv) return;
+    const pal = palFor(L.map.theme, L.map), pr = UI_THEMES[L.ui.preset] || UI_THEMES.petrol;
+    const plate = L.ui.plate || (pal.tone === 'dark' && pr.night ? pr.night : pr.plate), acc = L.ui.accent || pr.accent;
+    pv.style.background = 'linear-gradient(90deg,' + pal.land2 + ' 0 55%,' + plate + ' 55%)';
+    pv.innerHTML = '<i style="background:' + pal.patch + '"></i><em style="background:' + acc + '"></em>';
+    const sm = b.querySelector('small'); if (sm) sm.textContent = MAP_THEMES[L.map.theme].label + ' map · ' + (L.ui.plate ? 'custom' : pr.label) + ' panels';
+  });
 }
 /* ------------------------------------------------ settings: map theme, colours and decorations */
 /* a little picture of a map theme: its ground, a patch, a strip of water and two of its decorations */
@@ -6514,6 +6599,7 @@ function frame(now) {
 function boot() {
   loadUiTheme();
   loadMap();
+  loadModes();
   loadPrefs();
   buildToolbars(); bindInput(); showTab('city');
   applyLayout(); bindLayout();
