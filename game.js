@@ -639,16 +639,16 @@ function faceAngle(k, acc) {
   const a = Math.atan2(cy(acc) - cy(k), cx(acc) - cx(k)) - Math.PI / 2;
   return Math.round(a / (Math.PI / 2)) * (Math.PI / 2);
 }
-/* Store footprints. A store covers 3x4 tiles: a 3x3 building plus, on the side facing the street, one
-   row of parking bays. b.k is the middle bay of that row and b.sd (0 N, 2 E, 4 S, 6 W) points from the row
-   out to the street. A road reaches the store by touching the parking row: in front of any of its three
-   bays, or at either end. Cities saved before stores grew keep their single-tile store (no b.sd). */
-const STORE_DEPTH = 4;
+/* Store footprints. A store covers 2x3 tiles: a strip of three parking bays and, beside it, a building
+   the same length. b.k is the middle bay and b.sd (0 N, 2 E, 4 S, 6 W) points from the building across the
+   car park. Cars drive in along the car park's aisle, so a road reaches the store only at either END of the
+   car park, never along its sides. Cities saved before stores grew keep their single-tile store (no b.sd). */
+const STORE_DEPTH = 2;
 const isBig = b => !!b && b.type === 'store' && b.sd >= 0;
-function storeTilesAt(k, sd) {                       // parking row first (3 tiles, middle second), then the building
+function storeTilesAt(k, sd, depthN) {               // car park first (3 tiles, middle second), then the building
   if (k < 0) return null;
   const fx = DX[sd], fy = DY[sd], px = -fy, py = fx, c0 = cx(k), r0 = cy(k), out = [];
-  for (let depth = 0; depth < STORE_DEPTH; depth++) for (let s = -1; s <= 1; s++) {
+  for (let depth = 0; depth < (depthN || STORE_DEPTH); depth++) for (let s = -1; s <= 1; s++) {
     const c = c0 + px * s - fx * depth, r = r0 + py * s - fy * depth;
     if (c < 0 || r < 0 || c >= COLS || r >= ROWS) return null;
     out.push(idx(c, r));
@@ -657,44 +657,36 @@ function storeTilesAt(k, sd) {                       // parking row first (3 til
 }
 const bTiles = b => isBig(b) ? storeTilesAt(b.k, b.sd) : [b.k];
 const rowTiles = b => isBig(b) ? storeTilesAt(b.k, b.sd).slice(0, 3) : [b.k];
-const sdFace = sd => Math.atan2(DY[sd], DX[sd]) - Math.PI / 2;    // local +y points out of the parking row
-/* world-space centre of a building's whole plot, and of the 3x3 building on a big store */
-const bX = b => isBig(b) ? tx(b.k) - DX[b.sd] * CELL * 1.5 : tx(b.k);
-const bY = b => isBig(b) ? ty(b.k) - DY[b.sd] * CELL * 1.5 : ty(b.k);
-/* [road tile, parking-row tile it would enter by] for every way into a big store */
-function storeDoors(b) {
-  const row = rowTiles(b), out = [];
-  for (const t of row) out.push([nbr(t, b.sd), t]);
-  out.push([nbr(row[0], dirBetween(row[1], row[0])), row[0]]);
-  out.push([nbr(row[2], dirBetween(row[1], row[2])), row[2]]);
-  return out.filter(o => o[0] >= 0);
+const sdFace = sd => Math.atan2(DY[sd], DX[sd]) - Math.PI / 2;    // local +y points from the building across the car park
+/* world-space centre of a building's whole plot */
+const bX = b => isBig(b) ? tx(b.k) - DX[b.sd] * CELL * (STORE_DEPTH - 1) / 2 : tx(b.k);
+const bY = b => isBig(b) ? ty(b.k) - DY[b.sd] * CELL * (STORE_DEPTH - 1) / 2 : ty(b.k);
+/* [road tile, car-park tile it leads into] for the two ways into a store: one past each end of the car park */
+function storeDoorsAt(k, sd) {
+  const t = storeTilesAt(k, sd); if (!t) return [];
+  const row = t.slice(0, 3);
+  return [[nbr(row[0], dirBetween(row[1], row[0])), row[0]], [nbr(row[2], dirBetween(row[1], row[2])), row[2]]].filter(o => o[0] >= 0);
 }
+const storeDoors = b => storeDoorsAt(b.k, b.sd);
 function storeAccess(b) {
   const doors = storeDoors(b);
   b.door = b.k;
   if (b.pref >= 0 && road[b.pref]) for (const [t, d] of doors) if (t === b.pref) { b.door = d; return t; }
   let best = -1, bs = 9;
-  doors.forEach(([t, d], i) => {
-    if (!road[t]) return;
-    const sc = (lnk[t] ? 0 : 2) + (i === 1 ? 0 : 1);  // a road that goes somewhere, then the middle bay
+  for (const [t, d] of doors) {
+    if (!road[t]) continue;
+    const sc = lnk[t] ? 0 : 1;                      // prefer a road that actually goes somewhere
     if (sc < bs) { bs = sc; best = t; b.door = d; }
-  });
+  }
   return best;
 }
-/* is tile k somewhere a road may attach to a building (a house, a bay, or a store's parking row)? */
-function isDoorTile(k) {
-  const b = buildings[bAt[k]];
-  return !isBig(b) || rowTiles(b).includes(k);
-}
 function markBuilding(b, i) { for (const t of bTiles(b)) bAt[t] = i; }
-/* can a big store sit with its middle bay on k, facing sd? every tile must be open ground in play, and
-   the street side must have room for a road */
+/* can a store sit with its middle bay on k, facing sd? every tile must be open ground in play, and at least
+   one end of the car park must have room for a road */
 function storeFits(k, sd, inBounds) {
   const tiles = storeTilesAt(k, sd); if (!tiles) return false;
   for (const t of tiles) if (!inBounds(t) || water[t] || occupied(t)) return false;
-  let open = 0;
-  for (const t of tiles.slice(0, 3)) { const f = nbr(t, sd); if (f >= 0 && inBounds(f) && !water[f] && (road[f] || !occupied(f))) open++; }
-  return open >= 2;
+  return storeDoorsAt(k, sd).some(([f]) => inBounds(f) && !water[f] && (road[f] || !occupied(f)));
 }
 function linkBuildings() {
   for (const b of buildings) {
@@ -902,12 +894,13 @@ function homeSpots(b) {
   }
   return list;
 }
-/* a big store's parking row has six bays; cars back in so they leave nose first. Docks fill from the
-   middle out. Local coordinates are relative to the middle bay's tile, +y towards the street. */
+/* a store's car park has six bays against the building and an aisle along the far side; cars back in so
+   they leave nose first. Docks fill from the middle out. Local coordinates are relative to the middle bay's
+   tile, +y away from the building. */
 const STORE_BAYS = [-7.5, 7.5, -22.5, 22.5, -37.5, 37.5];
 function dockSpots(s) {
   const list = [], x = tx(s.k), y = ty(s.k), th = s.face || 0;
-  if (isBig(s)) for (const lx of STORE_BAYS) { const p = rot(x, y, th, lx, 1); list.push({x: p.x, y: p.y, a: th + Math.PI / 2}); }
+  if (isBig(s)) for (const lx of STORE_BAYS) { const p = rot(x, y, th, lx, -7.5); list.push({x: p.x, y: p.y, a: th + Math.PI / 2}); }
   else for (const lx of [-7, 7]) { const p = rot(x, y, th, lx, 10.5); list.push({x: p.x, y: p.y, a: th + Math.PI / 2}); }
   for (const p of parks) if (buildings[p.b] === s) {
     const q = rot(tx(p.k), ty(p.k), p.face || 0, 6, 0);
@@ -928,11 +921,11 @@ function parkedPose(c) {
     const s = buildings[L.i];
     if (c.isTruck && !c.isAmb) {                     // tow trucks wait inside their store, side by side
       const mine = trucks.filter(x => x.store === L.i), i = Math.max(0, mine.indexOf(c));
-      const p = isBig(s) ? rot(tx(s.k), ty(s.k), s.face || 0, i ? 30 : -30, -22.5)       // in the garage bays of the facade
+      const p = isBig(s) ? rot(tx(s.k), ty(s.k), s.face || 0, i ? 30 : -30, -24)       // in the garage bays of the facade
         : rot(tx(s.k), ty(s.k), s.face || 0, mine.length > 1 ? (i ? 5.2 : -5.2) : 0, -1.5);
       return {x: p.x, y: p.y, a: (s.face || 0) + Math.PI / 2};
     }
-    const p = rot(tx(s.k), ty(s.k), s.face || 0, 0, isBig(s) ? 1 : 10.5);
+    const p = rot(tx(s.k), ty(s.k), s.face || 0, 0, isBig(s) ? 8 : 10.5);
     return {x: p.x, y: p.y, a: (s.face || 0) + Math.PI / 2};
   }
   if (L.t === 'home') {
@@ -1569,9 +1562,9 @@ function freeSpot(minGap, edgeBias) {
   }
   return -1;
 }
-/* the open tiles right in front of a store's parking row stay free of houses, so a road can always get in */
+/* the open tiles at each end of a store's car park stay free of houses, so a road can always get in */
 function storeFront(k) {
-  for (const b of buildings) if (isBig(b)) for (const t of rowTiles(b)) if (nbr(t, b.sd) === k) return true;
+  for (const b of buildings) if (isBig(b)) for (const [t] of storeDoors(b)) if (t === k) return true;
   return false;
 }
 /* a random spot for a whole 3x4 store, at least `gap` tiles clear of every other building */
@@ -1687,10 +1680,10 @@ function tutFinishPlacement() {
 /* place one colour pair (nudged off anything the player already built) and ring both buildings */
 function tutSpawnPair(col, st, ho) {
   const startIdx = buildings.length;
-  // the store's parking row faces its house, so the natural road runs straight between them
+  // the store's car park runs towards its house, so the natural road meets one end of it
   const dx = ho[0] - st[0], dy = ho[1] - st[1];
   const face = Math.abs(dx) >= Math.abs(dy) ? (dx >= 0 ? 2 : 6) : (dy >= 0 ? 4 : 0);
-  const si = placeTutBuilding('store', col, st[0], st[1], [face, (face + 2) % 8, (face + 6) % 8, (face + 4) % 8]);
+  const si = placeTutBuilding('store', col, st[0], st[1], [(face + 2) % 8, (face + 6) % 8, face, (face + 4) % 8]);
   const hi = placeTutBuilding('house', col, ho[0], ho[1]);
   tutAddCarsFrom(startIdx);
   tutFinishPlacement();
@@ -1698,7 +1691,7 @@ function tutSpawnPair(col, st, ho) {
 }
 /* stage 0: just the red pair, nothing else — a blank canvas for the first road */
 function buildTutorialStage0() {
-  placeTutBuilding('store', 0, 4, 8, [2, 0, 4, 6]);
+  placeTutBuilding('store', 0, 4, 8, [0, 4, 2, 6]);
   placeTutBuilding('house', 0, 12, 8);
 }
 /* stage 1: an amber pair north/south of where the red road most likely runs, so the natural
@@ -2147,12 +2140,17 @@ function pushUndo(u) {
 }
 /* point a building / bay at the road tile the player just dragged into it */
 function attachTo(bk, roadK) {
-  if (bAt[bk] >= 0) buildings[bAt[bk]].pref = roadK;
+  const b = bAt[bk] >= 0 ? buildings[bAt[bk]] : null;
+  if (isBig(b) && !storeDoors(b).some(([t]) => t === roadK)) {      // a store only opens at the ends of its car park
+    hint('Stores connect at either end of their car park — bring the road to one end of the parking bays.');
+    return;
+  }
+  if (b) b.pref = roadK;
   else if (depotAt[bk] >= 0) depots[depotAt[bk]].pref = roadK;
   else return;
   rebuildNet();
 }
-const isFront = k => k >= 0 && ((bAt[k] >= 0 && isDoorTile(k)) || depotAt[k] >= 0);
+const isFront = k => k >= 0 && (bAt[k] >= 0 || depotAt[k] >= 0);
 /* a click: one unlinked tile. If it sits beside a house or store, that
    building turns to face it. */
 function placeRoad(k, silent, attach) {
@@ -3473,7 +3471,7 @@ function hasSave() { try { return !!localStorage.getItem(SAVE_KEY); } catch (e) 
 function serialize() {
   const list = a => { const o = []; for (let k = 0; k < N; k++) if (a[k]) o.push(k); return o; };
   return {
-    v: 3, diffKey, score, week, weekTimer, span, houseTimer, storeTimer, clock, keepLeft, carCapacity, money,
+    v: 3, sv: 2, diffKey, score, week, weekTimer, span, houseTimer, storeTimer, clock, keepLeft, carCapacity, money,
     inv, perks, water: list(water), road: list(road),
     links: (() => { const o = []; for (let k = 0; k < N; k++) if (lnk[k]) o.push([k, lnk[k]]); return o; })(),
     sign: sign.map((s, k) => s ? [k, s] : null).filter(Boolean),
@@ -3513,18 +3511,32 @@ function applyCityPalette(p) {
   colorMode = p.mode;
   applyPalette(); savePrefs(true); renderPaletteUI();
 }
-/* Cities saved when stores were a single tile: grow each store into the full 3x4 plot, keeping it facing
-   the road it already used, wherever the plot behind it is still open ground. Stores with no room stay small. */
-function growLegacyStores() {
-  const legacy = buildings.map((b, i) => [b, i]).filter(([b]) => b.type === 'store' && !isBig(b));
-  if (!legacy.length) return;
-  linkBuildings();
-  for (const [b, i] of legacy) {
-    bAt[b.k] = -1;
-    const toward = b.acc >= 0 ? dirBetween(b.k, b.acc) : -1;
-    const order = toward >= 0 ? [toward, (toward + 2) % 8, (toward + 6) % 8, (toward + 4) % 8] : ORTH;
-    const sd = order.find(d => storeFits(b.k, d, inPlay));
-    if (sd !== undefined) b.sd = sd;
+/* Older cities: stores saved as a single tile (before stores grew), or as the 3x4 plot of v1.5, are refitted
+   into today's 2x3 plot. The new plot stays on ground the old store already covered, and if it can, it turns
+   so one end of its car park meets the road the store was already using. A store with no room stays small. */
+function refitStores(fromV15) {
+  const list = buildings.map((b, i) => [b, i]).filter(([b]) => b.type === 'store' && (!isBig(b) || fromV15));
+  for (const [b, i] of list) {
+    const old = (isBig(b) && storeTilesAt(b.k, b.sd, 4)) || [b.k];
+    for (const t of old) if (bAt[t] === i) bAt[t] = -1;
+    const oldSet = new Set(old);
+    let c0 = 1e9, r0 = 1e9, c1 = -1, r1 = -1;
+    for (const t of old) { c0 = Math.min(c0, cx(t)); r0 = Math.min(r0, cy(t)); c1 = Math.max(c1, cx(t)); r1 = Math.max(r1, cy(t)); }
+    let best = null, bs = -1;
+    for (let r = r0 - 2; r <= r1 + 2; r++) for (let c = c0 - 2; c <= c1 + 2; c++) {
+      if (c < 0 || r < 0 || c >= COLS || r >= ROWS) continue;
+      const k = idx(c, r);
+      for (const sd of ORTH) {
+        if (!storeFits(k, sd, inPlay)) continue;
+        const tiles = storeTilesAt(k, sd); let ov = 0;
+        for (const t of tiles) if (oldSet.has(t)) ov++;
+        if (!ov) continue;
+        const sc = (storeDoorsAt(k, sd).some(([f]) => road[f]) ? 100 : 0) + ov * 3 + (tiles.includes(b.k) ? 1 : 0);
+        if (sc > bs) { bs = sc; best = {k, sd}; }
+      }
+    }
+    if (best) { b.k = best.k; b.sd = best.sd; } else delete b.sd;
+    b.pref = -1;
     markBuilding(b, i);
   }
 }
@@ -3558,7 +3570,7 @@ function loadGameCore(data) {
     d.parks.forEach(p => { parks.push({k: p.k, b: p.b, face: 0}); parkAt[p.k] = parks.length - 1; buildings[p.b].park++; });
     d.depots.forEach((k, i) => { depots.push({k, cap: CFG.depotCapacity, slots: [], res: 0, acc: -1, face: 0, pref: d.dprefs && d.dprefs[i] !== undefined ? d.dprefs[i] : -1}); depotAt[k] = depots.length - 1; });
     d.motorways.forEach(m => motorways.push({id: ++motoSeq, a: m.a, b: m.b, len: m.len}));
-    if (!view) growLegacyStores();
+    if (!view) refitStores(!(d.sv >= 2));
     linkBuildings();
     carsBought = d.carsBought | 0;
     d.buildings.forEach((o, i) => {
@@ -3631,12 +3643,229 @@ const PALS = {
           sh: 'rgba(0,0,0,.34)', lot: '#4b5655', curb: '#5d6766'}
 };
 let PAL = PALS.light;
-function setTheme(t) {
-  theme = t; PAL = PALS[t];
-  document.documentElement.setAttribute('data-theme', t);
-  try { localStorage.setItem('junction2-theme', t); } catch (e) {}
-  if (typeof uiTheme !== 'undefined') { applyUiTheme(); renderUiThemeUI(); }
+/* ---- map themes. Each theme is a ground colour, soft patches of a second colour across it, its own water
+   and a default decoration for the open ground. The decoration can be picked separately (snowmen in the
+   desert are allowed), and the ground, patch and water colours can be set by hand. theme stays 'light' or
+   'dark' (the tone the rest of the drawing and the interface key off); mapPrefs.theme is the named theme. */
+const MAP_KEY = 'junction-map-v1';
+const MAP_THEMES = {
+  meadow:   {label: 'Meadow',   tone: 'light', decor: 'tree',    land: '#dde5cf', land2: '#d4dec4', patch: '#bdd49c', water: '#9dc9df'},
+  night:    {label: 'Night',    tone: 'dark',  decor: 'tree',    land: '#23322f', land2: '#1f2d2b', patch: '#2e463a', water: '#1c4458'},
+  winter:   {label: 'Winter',   tone: 'light', decor: 'snowman', land: '#e2e9ee', land2: '#dae3e9', patch: '#f8fbfd', water: '#a6cde3', foam: '#eef7fb',
+             tree1: '#5f8f7a', tree2: '#46745f', grass: '#eff4f7', check: 'rgba(255,255,255,.35)'},
+  desert:   {label: 'Desert',   tone: 'light', decor: 'cactus',  land: '#ead8ad', land2: '#e4cf9f', patch: '#d6b77b', water: '#79c3c4', foam: '#d2efe9',
+             tree1: '#7fae5e', tree2: '#5f8f45', grass: '#d9c58f'},
+  autumn:   {label: 'Autumn',   tone: 'light', decor: 'autumn',  land: '#e3dcc4', land2: '#dbd2b6', patch: '#e2b277', water: '#94bfd2',
+             tree1: '#d9893a', tree2: '#b8612b', grass: '#d8c58f'},
+  blossom:  {label: 'Blossom',  tone: 'light', decor: 'blossom', land: '#e2ebd6', land2: '#d9e4ca', patch: '#f1cbd9', water: '#a4cfe6',
+             tree1: '#f2a7c3', tree2: '#d98aa8', grass: '#cfe2b8'},
+  tropical: {label: 'Tropical', tone: 'light', decor: 'palm',    land: '#d3ebc3', land2: '#c9e4b7', patch: '#eee0ae', water: '#5ccbd4', foam: '#d6f6f7', grass: '#b9de9d'},
+  spooky:   {label: 'Spooky',   tone: 'dark',  decor: 'pumpkin', land: '#2a2633', land2: '#25212e', patch: '#3b3046', water: '#263b55', foam: '#3b5a7a',
+             tree1: '#4d3d60', tree2: '#3a2d4a', grass: '#3a3346'}
+};
+const MAP_PAL_KEYS = ['land', 'land2', 'patch', 'water', 'foam', 'tree1', 'tree2', 'grass', 'check'];
+let mapPrefs = {theme: 'meadow', decor: 'auto', land: '', patch: '', water: '', lastDay: 'meadow'};
+/* the full drawing palette for a map theme (plus any hand-picked colours) */
+function palFor(id, custom) {
+  const T = MAP_THEMES[id] || MAP_THEMES.meadow, cu = custom || {};
+  const land = cu.land || T.land, tone = cu.land ? (lum(land) > 0.25 ? 'light' : 'dark') : T.tone;
+  const P = Object.assign({}, PALS[tone]);
+  for (const k of MAP_PAL_KEYS) if (T[k]) P[k] = T[k];
+  if (cu.land) { P.land = land; P.land2 = mixHex(land, '#000000', 0.035); P.check = tone === 'light' ? 'rgba(255,255,255,.28)' : 'rgba(255,255,255,.03)'; }
+  if (cu.patch) P.patch = cu.patch;
+  if (cu.water) { P.water = cu.water; P.foam = mixHex(cu.water, '#ffffff', 0.45); }
+  P.tone = tone;
+  return P;
 }
+const decorKind = () => mapPrefs.decor !== 'auto' && DECOR[mapPrefs.decor] ? mapPrefs.decor : (MAP_THEMES[mapPrefs.theme] || MAP_THEMES.meadow).decor;
+const mapCustom = () => !!(mapPrefs.land || mapPrefs.patch || mapPrefs.water);
+function applyMap() {
+  PAL = palFor(mapPrefs.theme, mapPrefs); theme = PAL.tone;
+  const root = document.documentElement;
+  root.setAttribute('data-theme', theme); root.style.setProperty('--land', PAL.land);
+  patchCache = null; if (typeof pathCache !== 'undefined') pathCache.ver = -1;
+  try { localStorage.setItem(MAP_KEY, JSON.stringify(mapPrefs)); localStorage.setItem('junction2-theme', theme); } catch (e) {}
+  if (typeof uiTheme !== 'undefined') { applyUiTheme(); renderUiThemeUI(); renderMapUI(); }
+  if (water) drawMini();
+}
+function setMap(ch) { Object.assign(mapPrefs, ch); if (mapPrefs.theme !== 'night') mapPrefs.lastDay = mapPrefs.theme; applyMap(); }
+function loadMap() {
+  try {
+    const m = JSON.parse(localStorage.getItem(MAP_KEY));
+    if (m && typeof m === 'object') {
+      if (MAP_THEMES[m.theme]) mapPrefs.theme = m.theme;
+      if (MAP_THEMES[m.lastDay]) mapPrefs.lastDay = m.lastDay;
+      if (m.decor === 'auto' || DECOR[m.decor]) mapPrefs.decor = m.decor;
+      for (const f of ['land', 'patch', 'water']) mapPrefs[f] = hexOk(m[f]) ? m[f].toLowerCase() : '';
+    } else {                                           // first run on this version: keep the old light/dark choice
+      let t = 'light';
+      try { t = localStorage.getItem('junction2-theme') || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); } catch (e) {}
+      mapPrefs.theme = t === 'dark' ? 'night' : 'meadow';
+    }
+  } catch (e) {}
+  applyMap();
+}
+/* the T key and the half-moon button: switch to the night map, and back to whichever day theme you had */
+function setTheme(t) {
+  if (t === 'dark') setMap({theme: 'night', land: '', patch: '', water: ''});
+  else setMap({theme: MAP_THEMES[mapPrefs.lastDay] && mapPrefs.lastDay !== 'night' ? mapPrefs.lastDay : 'meadow', land: '', patch: '', water: ''});
+}
+
+/* soft patches of the theme's second colour, painted once into a small canvas (8 px a tile) and stretched over
+   the map, which blurs them into organic blobs. Rebuilt whenever the map theme changes. */
+let patchCache = null;
+const PATCH_PX = 8;
+function patchNoise(c, r) {
+  const v = (salt, sc) => {
+    const x = c / sc, y = r / sc, x0 = Math.floor(x), y0 = Math.floor(y), fx = x - x0, fy = y - y0;
+    const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy), h = (a, b) => hash01((b + 8) * 1031 + a + 8, salt);
+    return lerp(lerp(h(x0, y0), h(x0 + 1, y0), sx), lerp(h(x0, y0 + 1), h(x0 + 1, y0 + 1), sx), sy);
+  };
+  return v(21, 6) * 0.65 + v(22, 2.5) * 0.35;
+}
+function buildPatches() {
+  const S = PATCH_PX, pc = document.createElement('canvas'); pc.width = pc.height = MAXD * S;
+  const g = pc.getContext('2d'); g.fillStyle = PAL.patch;
+  for (let r = 0; r < ROWS * 2; r++) for (let c = 0; c < COLS * 2; c++) {      // half-tile steps keep the edges organic
+    const n = patchNoise(c / 2, r / 2);
+    if (n > 0.57) { g.beginPath(); g.arc((c + 0.5) * S / 2, (r + 0.5) * S / 2, Math.min(S * 0.6, S * (0.32 + (n - 0.57) * 1.6)), 0, 6.3); g.fill(); }
+  }
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    const k = idx(c, r);
+    if (patchNoise(c, r) <= 0.57 && hash01(k, 31) < 0.06) {   // small stray tufts between the big patches
+      g.beginPath(); g.arc((c + 0.2 + hash01(k, 32) * 0.6) * S, (r + 0.2 + hash01(k, 33) * 0.6) * S, S * (0.18 + hash01(k, 34) * 0.16), 0, 6.3); g.fill();
+    }
+  }
+  // soften the edges once, as a whole layer (browsers without canvas filters just keep the crisp version)
+  const soft = document.createElement('canvas'); soft.width = soft.height = pc.width;
+  const sg = soft.getContext('2d');
+  if ('filter' in sg) { sg.filter = 'blur(2.5px)'; sg.drawImage(pc, 0, 0); patchCache = soft; } else patchCache = pc;
+}
+
+/* ---- decorations on open ground. Each is drawn into context g at (X, Y) with size R (a tree's radius);
+   k seeds any per-item variety. Shadows follow the same sun as everything else. */
+const DECOR = {
+  tree: 'Trees', pine: 'Pines', bush: 'Bushes', blossom: 'Blossom', autumn: 'Autumn trees', palm: 'Palms', cactus: 'Cacti',
+  snowman: 'Snowmen', pumpkin: 'Pumpkins', mushroom: 'Mushrooms', flowers: 'Flowers', rock: 'Rocks'
+};
+function drawDecor(g, kind, X, Y, R, sway, k) {
+  const sh = (x, y, rx, ry, h) => { g.globalAlpha = SUN.a; g.fillStyle = PAL.treeSh; g.beginPath(); g.ellipse(x + SUN.x * h, y + SUN.y * h, rx, ry, 0, 0, 6.3); g.fill(); g.globalAlpha = 1; };
+  const dot = (x, y, r, c) => { g.fillStyle = c; g.beginPath(); g.arc(x, y, r, 0, 6.3); g.fill(); };
+  const h1 = hash01(k, 41), h2 = hash01(k, 42), h3 = hash01(k, 43);
+  switch (kind) {
+    case 'pine': {
+      sh(X, Y, R * 0.85, R * 0.85, R * 0.6);
+      const layer = (rad, col, rot) => {
+        g.fillStyle = col; g.beginPath();
+        for (let i = 0; i < 16; i++) { const a = rot + i * Math.PI / 8, rr_ = i % 2 ? rad * 0.62 : rad; g.lineTo(X + sway + Math.cos(a) * rr_, Y + Math.sin(a) * rr_); }
+        g.closePath(); g.fill();
+      };
+      layer(R, '#2f6a4a', h1); layer(R * 0.68, '#3d8259', h1 + 0.2); layer(R * 0.36, '#55a06e', h1 + 0.4);
+      if (theme === 'light' && mapPrefs.theme === 'winter') { dot(X + sway - R * 0.2, Y - R * 0.25, R * 0.22, 'rgba(255,255,255,.85)'); dot(X + sway + R * 0.35, Y + R * 0.2, R * 0.16, 'rgba(255,255,255,.75)'); }
+      break;
+    }
+    case 'bush': {
+      sh(X, Y + R * 0.1, R * 0.95, R * 0.6, R * 0.35);
+      const parts = [[-0.45, 0.12, 0.55], [0.45, 0.16, 0.5], [0, -0.22, 0.62]];
+      for (const [dx, dy, rr_] of parts) dot(X + dx * R + sway * 0.5, Y + dy * R, rr_ * R, PAL.tree2);
+      for (const [dx, dy, rr_] of parts) dot(X + dx * R - rr_ * R * 0.2 + sway * 0.5, Y + dy * R - rr_ * R * 0.25, rr_ * R * 0.55, PAL.tree1);
+      if (h1 < 0.4) for (let i = 0; i < 3; i++) dot(X + (hash01(k, 50 + i) - 0.5) * R * 1.2, Y + (hash01(k, 60 + i) - 0.5) * R * 0.8, R * 0.09, '#e8455a');
+      break;
+    }
+    case 'blossom': case 'autumn': case 'tree': {
+      let c2 = PAL.tree2, c1 = PAL.tree1;
+      if (kind === 'blossom') { c2 = '#df90b0'; c1 = '#f6bfd3'; }
+      if (kind === 'autumn') [c1, c2] = [['#e8963a', '#c9692c'], ['#ecc045', '#c99a2e'], ['#cf4f3a', '#a5372d']][Math.floor(h1 * 3)];
+      sh(X, Y, R, R, R * 0.55);
+      dot(X + sway, Y, R, c2); dot(X - R * 0.22 + sway, Y - R * 0.25, R * 0.66, c1);
+      if (kind === 'blossom') for (let i = 0; i < 5; i++) dot(X + sway + (hash01(k, 70 + i) - 0.5) * R * 1.4, Y + (hash01(k, 80 + i) - 0.5) * R * 1.4, R * 0.1, '#fff4f8');
+      break;
+    }
+    case 'palm': {
+      sh(X, Y, R * 0.95, R * 0.95, R * 0.7);
+      g.save(); g.translate(X + sway, Y); g.rotate(h1 * 6.3);
+      for (let i = 0; i < 6; i++) {
+        g.rotate(Math.PI / 3);
+        g.fillStyle = i % 2 ? '#3f9a4a' : '#4fae58'; g.beginPath(); g.ellipse(R * 0.52, 0, R * 0.56, R * 0.2, 0, 0, 6.3); g.fill();
+        g.strokeStyle = 'rgba(30,70,35,.5)'; g.lineWidth = Math.max(0.4, R * 0.05); g.beginPath(); g.moveTo(R * 0.1, 0); g.lineTo(R * 1.0, 0); g.stroke();
+      }
+      g.restore();
+      dot(X + sway, Y, R * 0.2, '#8a5a2b'); dot(X + sway + R * 0.18, Y + R * 0.1, R * 0.12, '#6b4220'); dot(X + sway - R * 0.12, Y + R * 0.16, R * 0.12, '#6b4220');
+      break;
+    }
+    case 'cactus': {
+      sh(X, Y + R * 0.6, R * 0.55, R * 0.28, R * 0.6);
+      const w = R * 0.42, col = '#5c9e4c', hi = '#7cbf68';
+      g.fillStyle = col;
+      rr_(g, X - w / 2, Y - R * 0.95, w, R * 1.6, w / 2);
+      rr_(g, X - R * 0.62, Y - R * 0.15, R * 0.42, R * 0.24, R * 0.12); rr_(g, X - R * 0.62, Y - R * 0.6, R * 0.22, R * 0.6, R * 0.11);
+      if (h1 > 0.3) { rr_(g, X + R * 0.2, Y - R * 0.35, R * 0.42, R * 0.24, R * 0.12); rr_(g, X + R * 0.4, Y - R * 0.75, R * 0.22, R * 0.6, R * 0.11); }
+      g.fillStyle = hi; g.fillRect(X - w * 0.12, Y - R * 0.85, w * 0.18, R * 1.35);
+      if (h2 > 0.55) dot(X, Y - R * 0.95, R * 0.14, '#ff6f91');
+      break;
+    }
+    case 'snowman': {
+      sh(X, Y + R * 0.5, R * 0.7, R * 0.4, R * 0.6);
+      const white = '#fbfdff', edge = 'rgba(110,140,165,.55)';
+      g.lineWidth = Math.max(0.4, R * 0.06); g.strokeStyle = edge;
+      g.fillStyle = white; g.beginPath(); g.arc(X, Y + R * 0.3, R * 0.62, 0, 6.3); g.fill(); g.stroke();
+      g.beginPath(); g.arc(X + sway * 0.3, Y - R * 0.5, R * 0.42, 0, 6.3); g.fill(); g.stroke();
+      g.fillStyle = '#d8443a'; g.fillRect(X - R * 0.38, Y - R * 0.18, R * 0.76, R * 0.14);                 // scarf
+      g.fillRect(X + R * 0.12, Y - R * 0.12, R * 0.14, R * 0.34);
+      dot(X - R * 0.14 + sway * 0.3, Y - R * 0.56, R * 0.06, '#1d2328'); dot(X + R * 0.14 + sway * 0.3, Y - R * 0.56, R * 0.06, '#1d2328');
+      g.fillStyle = '#f08a24'; g.beginPath(); g.moveTo(X + sway * 0.3, Y - R * 0.47); g.lineTo(X + R * 0.38 + sway * 0.3, Y - R * 0.42); g.lineTo(X + sway * 0.3, Y - R * 0.38); g.closePath(); g.fill();
+      dot(X, Y + R * 0.15, R * 0.06, '#1d2328'); dot(X, Y + R * 0.38, R * 0.06, '#1d2328');
+      g.fillStyle = '#22282d'; g.fillRect(X - R * 0.36 + sway * 0.3, Y - R * 0.86, R * 0.72, R * 0.1);   // hat
+      g.fillRect(X - R * 0.22 + sway * 0.3, Y - R * 1.2, R * 0.44, R * 0.36);
+      break;
+    }
+    case 'pumpkin': {
+      sh(X, Y + R * 0.2, R * 0.75, R * 0.5, R * 0.4);
+      const o = '#ef8a22', od = '#cf6c14';
+      g.fillStyle = od; g.beginPath(); g.ellipse(X - R * 0.32, Y, R * 0.42, R * 0.52, 0, 0, 6.3); g.ellipse(X + R * 0.32, Y, R * 0.42, R * 0.52, 0, 0, 6.3); g.fill();
+      g.fillStyle = o; g.beginPath(); g.ellipse(X, Y, R * 0.42, R * 0.56, 0, 0, 6.3); g.fill();
+      g.fillStyle = '#4c7a2e'; g.fillRect(X - R * 0.07, Y - R * 0.72, R * 0.14, R * 0.24);
+      if (h1 > 0.45) {                                   // a jack-o'-lantern
+        g.fillStyle = theme === 'dark' ? '#ffd35a' : '#5a2a08';
+        for (const sx of [-1, 1]) { g.beginPath(); g.moveTo(X + sx * R * 0.22, Y - R * 0.2); g.lineTo(X + sx * R * 0.08, Y - R * 0.02); g.lineTo(X + sx * R * 0.34, Y - R * 0.02); g.closePath(); g.fill(); }
+        g.fillRect(X - R * 0.26, Y + R * 0.14, R * 0.52, R * 0.1);
+      }
+      break;
+    }
+    case 'mushroom': {
+      sh(X, Y + R * 0.3, R * 0.6, R * 0.35, R * 0.5);
+      g.fillStyle = '#f2e8d6'; rr_(g, X - R * 0.18, Y - R * 0.15, R * 0.36, R * 0.6, R * 0.12);
+      g.fillStyle = h1 > 0.5 ? '#d8443a' : '#b9702e'; g.beginPath(); g.ellipse(X, Y - R * 0.15, R * 0.62, R * 0.45, 0, Math.PI, 0); g.closePath(); g.fill();
+      dot(X - R * 0.28, Y - R * 0.32, R * 0.09, '#fff'); dot(X + R * 0.12, Y - R * 0.45, R * 0.1, '#fff'); dot(X + R * 0.35, Y - R * 0.25, R * 0.07, '#fff');
+      if (h2 > 0.5) { g.fillStyle = '#f2e8d6'; rr_(g, X + R * 0.45, Y + R * 0.05, R * 0.18, R * 0.32, R * 0.07); g.fillStyle = '#d8443a'; g.beginPath(); g.ellipse(X + R * 0.54, Y + R * 0.07, R * 0.28, R * 0.2, 0, Math.PI, 0); g.closePath(); g.fill(); }
+      break;
+    }
+    case 'flowers': {
+      g.globalAlpha = 0.85; dot(X, Y, R * 0.7, PAL.tree1); g.globalAlpha = 1;
+      const cols = ['#ff6b8b', '#ffd23a', '#ffffff', '#a77bff', '#ff9a3c'];
+      for (let i = 0; i < 5; i++) {
+        const fx = X + (hash01(k, 90 + i) - 0.5) * R * 1.2, fy = Y + (hash01(k, 95 + i) - 0.5) * R * 1.2, c = cols[Math.floor(hash01(k, 100 + i) * cols.length)];
+        for (let j = 0; j < 5; j++) { const a = j * 1.2566; dot(fx + Math.cos(a) * R * 0.13, fy + Math.sin(a) * R * 0.13, R * 0.11, c); }
+        dot(fx, fy, R * 0.08, '#f5b417');
+      }
+      break;
+    }
+    case 'rock': {
+      sh(X, Y, R * 0.75, R * 0.6, R * 0.35);
+      const base = theme === 'dark' ? '#5c6366' : '#9ba1a4', lite = theme === 'dark' ? '#737b7e' : '#b8bdc0';
+      const poly = (sc, col, ox, oy) => {
+        g.fillStyle = col; g.beginPath();
+        for (let i = 0; i < 7; i++) { const a = i * 0.8976 + h1, rad = R * sc * (0.75 + hash01(k, 110 + i) * 0.3); g.lineTo(X + ox + Math.cos(a) * rad, Y + oy + Math.sin(a) * rad * 0.8); }
+        g.closePath(); g.fill();
+      };
+      poly(0.75, base, 0, 0); poly(0.42, lite, -R * 0.15, -R * 0.15);
+      if (h2 > 0.5) { poly(0.32, base, R * 0.62, R * 0.32); }
+      break;
+    }
+  }
+}
+/* rounded rect on any context */
+function rr_(g, x, y, w, h, r) { r = Math.min(r, w / 2, h / 2); g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); g.fill(); }
 
 /* --------------------------------------------------------------- colour */
 function rgbOf(h) { h = h.replace('#', ''); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
@@ -3805,6 +4034,11 @@ function drawGround(vr) {
       if (((c + r) & 1) && c >= camOrg && r >= camOrg && c < camOrg + camSpan && r < camOrg + camSpan) ctx.fillRect(c * CELL, r * CELL, CELL, CELL);
     }
   }
+  if (!patchCache) buildPatches();
+  {                                                    // only the visible part of the patch layer
+    const S = PATCH_PX / CELL, X0 = Math.max(0, vr.x0), Y0 = Math.max(0, vr.y0), X1 = Math.min(MAXD * CELL, vr.x1), Y1 = Math.min(MAXD * CELL, vr.y1);
+    if (X1 > X0 && Y1 > Y0) { ctx.imageSmoothingEnabled = true; ctx.drawImage(patchCache, X0 * S, Y0 * S, (X1 - X0) * S, (Y1 - Y0) * S, X0, Y0, X1 - X0, Y1 - Y0); }
+  }
   // water
   ctx.fillStyle = PAL.water;
   for (let r = vr.r0; r <= vr.r1; r++) for (let c = vr.c0; c <= vr.c1; c++) if (water[idx(c, r)]) ctx.fillRect(c * CELL - 0.4, r * CELL - 0.4, CELL + 0.8, CELL + 0.8);
@@ -3848,6 +4082,7 @@ function drawOutside(vr) {
   ctx.strokeRect(x0, y0, sz, sz); ctx.setLineDash([]);
 }
 function drawTrees(vr) {
+  const dk = decorKind();
   for (let r = vr.r0; r <= vr.r1; r++) for (let c = vr.c0; c <= vr.c1; c++) {
     const k = idx(c, r);
     if (water[k] || occupied(k) || hash01(k, 1) > CFG.treeDensity) continue;
@@ -3856,9 +4091,7 @@ function drawTrees(vr) {
     if (!ok) continue;
     const X = (c + 0.5 + (hash01(k, 2) - 0.5) * 0.4) * CELL, Y = (r + 0.5 + (hash01(k, 7) - 0.5) * 0.4) * CELL, R = 6 + hash01(k, 8) * 4;
     const sway = Math.sin(animT * 0.8 + k) * 0.35;
-    ctx.globalAlpha = SUN.a; ctx.fillStyle = PAL.treeSh; ctx.beginPath(); ctx.arc(X + SUN.x * 4.5, Y + SUN.y * 4.5, R, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
-    ctx.fillStyle = PAL.tree2; ctx.beginPath(); ctx.arc(X + sway, Y, R, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = PAL.tree1; ctx.beginPath(); ctx.arc(X - R * 0.22 + sway, Y - R * 0.25, R * 0.66, 0, Math.PI * 2); ctx.fill();
+    drawDecor(ctx, dk, X, Y, R, sway, k);
   }
 }
 
@@ -4150,96 +4383,99 @@ function drawStoreSmall(b) {
   ctx.restore();
   if (b.acc < 0) drawUnlinked(x, y);
 }
-/* A big store, drawn in its plot's own frame: origin at the centre of the 3x4 plot, +y towards the street.
-   The parking row is y 32..64; the 3x3 building stands behind it with its front wall at y 30. */
-const STORE_BOX = [[-38, -54, 76, 84], [-42, -58, 84, 88], [-44, -60, 88, 90], [-45, -61, 90, 91]];
+/* A big store, drawn in its plot's own frame: origin at the centre of the 2x3 plot, +y across the car park.
+   The building is y -32..-2, a kerb, then the car park y 0..32: bays against the kerb, the aisle beyond. */
+const STORE_BOX = [[-40, -29, 80, 27], [-43, -30, 86, 28], [-45, -30.5, 90, 28.5], [-46, -31, 92, 29]];
 function drawStore(b) {
   if (!isBig(b)) { drawStoreSmall(b); return; }
   const x = bX(b), y = bY(b), th = b.face || 0, col = COLORS[b.color].hex, tier = Math.min(3, b.tier || 0), lvl = b.lvl || 0, s = spawnScale(b);
   const [Bx, By, Bw, Bh] = STORE_BOX[tier], front = By + Bh, roof = tier === 3 ? shade(PAL.roofBase, -0.12) : PAL.roofBase;
-  dropShadow(x, y, th, s, 0.5, [[-47, -63, 94, 126, 7]]);                                   // the plot's kerb
-  dropShadow(x, y, th, s, 5 + tier * 1.7, [[Bx, By, Bw, Bh, 4]]);                            // the building
+  dropShadow(x, y, th, s, 0.5, [[-47, -31, 94, 62, 6]]);                                    // the plot's kerb
+  dropShadow(x, y, th, s, 4.5 + tier * 1.5, [[Bx, By, Bw, Bh, 4]]);                          // the building
   ctx.save(); ctx.translate(x, y); ctx.rotate(th); ctx.scale(s, s);
-  // plot, kerb and parking row
-  rr(-47, -63, 94, 126, 7); ctx.fillStyle = PAL.lot; ctx.fill();
-  ctx.fillStyle = PAL.curb; ctx.fillRect(-46, 30, 92, 3);
-  rr(-46, 33, 92, 29.5, 4); ctx.fillStyle = PAL.asphalt; ctx.fill();
+  // plot and kerb
+  rr(-47, -31, 94, 62, 6); ctx.fillStyle = PAL.lot; ctx.fill();
+  ctx.fillStyle = PAL.curb; ctx.fillRect(-47, -2, 94, 2.5);
+  // car park: open at both ends, bays against the kerb, a one-lane aisle along the far side
+  ctx.fillStyle = PAL.asphalt; ctx.fillRect(-48, 0.5, 96, 29); rr(-47, 0.5, 94, 30, 5); ctx.fill();
+  ctx.fillStyle = PAL.curb; ctx.fillRect(-47, 29, 94, 2);                                      // far kerb: no way in along this side
   const active = Math.min(STORE_BAYS.length, dockCap(b)), on = new Set(STORE_BAYS.slice(0, active));
-  for (let i = 0; i <= 6; i++) {                                                              // bay lines, bright beside a working bay
+  for (let i = 0; i <= 6; i++) {
     const lx = -45 + i * 15, lit = on.has(lx - 7.5) || on.has(lx + 7.5);
-    ctx.fillStyle = lit ? 'rgba(255,255,255,.8)' : 'rgba(255,255,255,.22)'; ctx.fillRect(lx - 0.5, 35, 1, 22);
+    ctx.fillStyle = lit ? 'rgba(255,255,255,.8)' : 'rgba(255,255,255,.22)'; ctx.fillRect(lx - 0.5, 1.5, 1, 15.5);
   }
   for (const lx of on) {
-    ctx.fillStyle = '#ffc933'; rr(lx - 4.5, 35.5, 9, 1.8, 0.9); ctx.fill();                  // wheel stop
-    ctx.fillStyle = rgba(col, 0.55); ctx.fillRect(lx - 1.6, 58.5, 3.2, 1.6);                  // store-colour bay mark
+    ctx.fillStyle = '#ffc933'; rr(lx - 4, 2, 8, 1.6, 0.8); ctx.fill();                       // wheel stop
+    ctx.fillStyle = rgba(col, 0.6); ctx.fillRect(lx - 1.6, 15.2, 3.2, 1.4);                    // store-colour bay mark
+  }
+  ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 0.8; ctx.setLineDash([4, 4]);     // aisle centre line
+  ctx.beginPath(); ctx.moveTo(-40, 23); ctx.lineTo(40, 23); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = 'rgba(255,255,255,.75)';                                                     // in/out arrows at each open end
+  for (const sx of [-1, 1]) {
+    const ax = sx * 43;
+    ctx.beginPath(); ctx.moveTo(ax + sx * 3, 23); ctx.lineTo(ax - sx * 1.5, 20); ctx.lineTo(ax - sx * 1.5, 26); ctx.closePath(); ctx.fill();
   }
   if (tier === 0) {                                                                            // a corner shop keeps a little garden
-    ctx.fillStyle = PAL.grass; rr(-46, -62, 92, 9, 4); ctx.fill(); rr(-46, -62, 7, 90, 3.5); ctx.fill(); rr(39, -62, 7, 90, 3.5); ctx.fill();
-    for (const [gx, gy, gr] of [[-42.5, -57, 4.4], [42.5, -57, 4.2], [-42.5, -20, 3.6], [42.5, 4, 3.8], [0, -58.5, 3.2]]) {
-      dotShadow(gx, gy, gr, 3); ctx.fillStyle = PAL.tree2; ctx.beginPath(); ctx.arc(gx, gy, gr, 0, 6.3); ctx.fill();
-      ctx.fillStyle = PAL.tree1; ctx.beginPath(); ctx.arc(gx - gr * 0.25, gy - gr * 0.25, gr * 0.6, 0, 6.3); ctx.fill();
-    }
+    ctx.fillStyle = PAL.grass; rr(-47, -31, 6, 29, 3); ctx.fill(); rr(41, -31, 6, 29, 3); ctx.fill();
+    const dk = decorKind();
+    for (const [gx, gy, gr, sd] of [[-44, -26, 3.4, 1], [44, -24, 3.6, 2], [-44, -9, 3, 3], [44, -8, 3.1, 4]]) drawDecor(ctx, dk, gx, gy, gr, 0, b.k * 7 + sd);
   }
   // walls and roof
   rr(Bx, By, Bw, Bh, 4); ctx.fillStyle = shade(roof, -0.14); ctx.fill();
-  rr(Bx + 2, By + 2, Bw - 4, Bh - 10, 3); ctx.fillStyle = roof; ctx.fill();
-  ctx.save(); rr(Bx + 2, By + 2, Bw - 4, Bh - 10, 3); ctx.clip();
+  rr(Bx + 2, By + 2, Bw - 4, Bh - 8, 3); ctx.fillStyle = roof; ctx.fill();
+  ctx.save(); rr(Bx + 2, By + 2, Bw - 4, Bh - 8, 3); ctx.clip();
   if (tier === 2) {                                                                            // depot: sawtooth roof
-    for (let xx = Bx + 2; xx < Bx + Bw - 2; xx += 9) { ctx.fillStyle = 'rgba(0,0,0,.12)'; ctx.fillRect(xx, By, 4.5, Bh); ctx.fillStyle = 'rgba(170,215,240,.5)'; ctx.fillRect(xx + 4.5, By, 1, Bh); }
-  } else if (tier === 3) {                                                                     // distribution centre: skylights down the side
+    for (let xx = Bx + 2; xx < Bx + Bw - 2; xx += 8) { ctx.fillStyle = 'rgba(0,0,0,.12)'; ctx.fillRect(xx, By, 4, Bh); ctx.fillStyle = 'rgba(170,215,240,.5)'; ctx.fillRect(xx + 4, By, 0.8, Bh); }
+  } else if (tier === 3) {                                                                     // distribution centre: skylights at one end
     ctx.fillStyle = 'rgba(170,215,240,.45)';
-    for (let i = 0; i < 2; i++) for (let j = 0; j < 6; j++) ctx.fillRect(30 + i * 6.5, By + 20 + j * 8.5, 4.5, 5);
-  } else if (tier === 1) {                                                                     // supermarket: long rooflights down the side
-    ctx.fillStyle = 'rgba(170,215,240,.45)'; ctx.fillRect(29, By + 20, 2.6, Bh - 44); ctx.fillRect(34.5, By + 20, 2.6, Bh - 44);
+    for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) ctx.fillRect(30 + i * 6, By + 4 + j * 8, 4, 5);
+  } else if (tier === 1) {                                                                     // supermarket: rooflights at one end
+    ctx.fillStyle = 'rgba(170,215,240,.45)'; ctx.fillRect(29, By + 4, 2.4, Bh - 13); ctx.fillRect(34, By + 4, 2.4, Bh - 13);
   }
   ctx.restore();
-  // rooftop plant in the back corner, and a mast on the biggest
-  ctx.fillStyle = '#9aa3a8'; rr(Bx + Bw - 17, By + 5, 12, 10, 1.5); ctx.fill();
-  ctx.fillStyle = '#6f777c'; ctx.beginPath(); ctx.arc(Bx + Bw - 11, By + 10, 2.8, 0, 6.3); ctx.fill();
-  if (tier === 3) { ctx.strokeStyle = '#5a646a'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(Bx + 9, By + 14); ctx.lineTo(Bx + 9, By + 5); ctx.stroke(); ctx.fillStyle = '#ff5a4a'; ctx.beginPath(); ctx.arc(Bx + 9, By + 5, 1.4, 0, 6.3); ctx.fill(); }
+  if (tier === 0) { ctx.fillStyle = '#9aa3a8'; rr(Bx + Bw - 13, By + 4, 9, 8, 1.5); ctx.fill(); ctx.fillStyle = '#6f777c'; ctx.beginPath(); ctx.arc(Bx + Bw - 8.5, By + 8, 2.2, 0, 6.3); ctx.fill(); }
+  if (tier === 3) { ctx.strokeStyle = '#5a646a'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(Bx + 6, By + 12); ctx.lineTo(Bx + 6, By + 4); ctx.stroke(); ctx.fillStyle = '#ff5a4a'; ctx.beginPath(); ctx.arc(Bx + 6, By + 4, 1.3, 0, 6.3); ctx.fill(); }
   // parcels waiting, stacked in the middle of the roof
-  const pc = 5, pr = tier >= 2 ? 4 : 3, n = Math.min(b.pins, pc * pr), px0 = -25, py0 = By + 22;
+  const pc = 6, pr = 2, n = Math.min(b.pins, pc * pr), px0 = -26, py0 = By + 4;
   for (let i = 0; i < n; i++) {
-    const px = px0 + (i % pc) * 10, py = py0 + Math.floor(i / pc) * 8;
-    ctx.fillStyle = 'rgba(0,0,0,.16)'; ctx.fillRect(px + 1, py + 1.2, 8, 6);
-    ctx.fillStyle = i % 2 ? '#d7a862' : '#e3b46a'; ctx.fillRect(px, py, 8, 6);
-    ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.fillRect(px + 3.5, py, 1, 6);
+    const px = px0 + (i % pc) * 9, py = py0 + Math.floor(i / pc) * 7;
+    ctx.fillStyle = 'rgba(0,0,0,.16)'; ctx.fillRect(px + 0.8, py + 1, 7, 5.2);
+    ctx.fillStyle = i % 2 ? '#d7a862' : '#e3b46a'; ctx.fillRect(px, py, 7, 5.2);
+    ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.fillRect(px + 3, py, 1, 5.2);
   }
-  if (b.pins > pc * pr) { const ox = px0 + (pc - 1) * 10, oy = py0 + pr * 8; ctx.fillStyle = '#d6342a'; rr(ox, oy, 8, 7, 2); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = '800 6px Overpass, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('+', ox + 4, oy + 3.8); }
+  if (b.pins > pc * pr) { const ox = px0 + pc * 9, oy = py0 + 3; ctx.fillStyle = '#d6342a'; rr(ox, oy, 7, 6.5, 2); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = '800 6px Overpass, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('+', ox + 3.5, oy + 3.5); }
   // fascia in the store's colour, shop window and the two tow-truck garages
-  ctx.fillStyle = col; ctx.fillRect(Bx, front - 9, Bw, 9);
-  ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.fillRect(Bx, front - 9, Bw, 1.2);
-  rr(-13, front - 7.5, 26, 6.5, 1.5); ctx.fillStyle = 'rgba(24,44,58,.85)'; ctx.fill();
-  ctx.fillStyle = 'rgba(170,215,240,.45)'; ctx.fillRect(-11.5, front - 6.5, 6, 4.5); ctx.fillRect(5.5, front - 6.5, 6, 4.5);
-  for (const gx of [-30, 30]) { rr(gx - 7, front - 13, 14, 13, 1.5); ctx.fillStyle = 'rgba(16,26,32,.78)'; ctx.fill(); }
+  ctx.fillStyle = col; ctx.fillRect(Bx, front - 6, Bw, 6);
+  ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.fillRect(Bx, front - 6, Bw, 1);
+  rr(-12, front - 5, 24, 4.2, 1.2); ctx.fillStyle = 'rgba(24,44,58,.85)'; ctx.fill();
+  ctx.fillStyle = 'rgba(170,215,240,.45)'; ctx.fillRect(-10.5, front - 4.3, 5.5, 2.8); ctx.fillRect(5, front - 4.3, 5.5, 2.8);
+  for (const gx of [-30, 30]) { rr(gx - 6.5, front - 11, 13, 11, 1.5); ctx.fillStyle = 'rgba(16,26,32,.78)'; ctx.fill(); }
   if (tier === 0) {                                                                            // striped awning over the shop window
-    for (let i = 0; i < 8; i++) { ctx.fillStyle = i % 2 ? '#fff' : col; ctx.fillRect(-16 + i * 4, front - 1, 4, 4); }
-    ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fillRect(-16, front + 3, 32, 0.8);
+    for (let i = 0; i < 8; i++) { ctx.fillStyle = i % 2 ? '#fff' : col; ctx.fillRect(-14 + i * 3.5, front - 0.5, 3.5, 3); }
   }
   for (let i = 0; i < tier; i++) {                                                            // tier chevrons on the fascia
-    const cx_ = Bx + Bw - 30 - i * 5, cy_ = front - 5;
-    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(cx_ - 2, cy_ + 1.3); ctx.lineTo(cx_, cy_ - 1); ctx.lineTo(cx_ + 2, cy_ + 1.3);
-    ctx.lineTo(cx_ + 2, cy_ + 2.6); ctx.lineTo(cx_, cy_ + 0.3); ctx.lineTo(cx_ - 2, cy_ + 2.6); ctx.closePath(); ctx.fill();
+    const cx_ = 18 + i * 4.5, cy_ = front - 3.5;
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(cx_ - 1.7, cy_ + 1.1); ctx.lineTo(cx_, cy_ - 0.8); ctx.lineTo(cx_ + 1.7, cy_ + 1.1);
+    ctx.lineTo(cx_ + 1.7, cy_ + 2.2); ctx.lineTo(cx_, cy_ + 0.3); ctx.lineTo(cx_ - 1.7, cy_ + 2.2); ctx.closePath(); ctx.fill();
   }
-  if (showSymbols) glyph(COLORS[b.color].glyph, Bx + 20, front - 4.5, 2.6, '#fff');
+  if (showSymbols) glyph(COLORS[b.color].glyph, -19, front - 3, 2.2, '#fff');
   // paid upgrades: 1 a lit sign on the roof, 2 solar panels, 3 flags and gold trim
   if (lvl >= 1) {
-    rr(-17, By + 5, 34, 8, 1.6); ctx.fillStyle = '#12303f'; ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.stroke();
-    if (showSymbols) glyph(COLORS[b.color].glyph, 0, By + 9, 2.2, col); else { ctx.fillStyle = col; ctx.fillRect(-11, By + 8.2, 22, 1.6); }
+    rr(-14, By - 1.5, 28, 5.5, 1.4); ctx.fillStyle = '#12303f'; ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = 0.9; ctx.stroke();
+    if (showSymbols) glyph(COLORS[b.color].glyph, 0, By + 1.2, 1.8, col); else { ctx.fillStyle = col; ctx.fillRect(-9, By + 0.6, 18, 1.4); }
   }
-  if (lvl >= 2) {                                                                             // solar panels down the other side
+  if (lvl >= 2) {                                                                              // solar panels at the other end
     ctx.fillStyle = '#1f3552'; ctx.strokeStyle = 'rgba(160,200,240,.55)'; ctx.lineWidth = 0.4;
-    const cols = Math.max(1, Math.floor((-28 - (Bx + 3)) / 7.5));
-    for (let i = 0; i < cols; i++) for (let j = 0; j < 5; j++) { const sx = -28.5 - (i + 1) * 7.5, sy = By + 20 + j * 8; ctx.fillRect(sx, sy, 6.5, 6.5); ctx.strokeRect(sx, sy, 6.5, 6.5); }
+    for (let j = 0; j < 2; j++) for (let i = 0; i < (tier ? 2 : 1); i++) { const sx = Bx + 4 + i * 6.5, sy = By + 4 + j * 7.5; ctx.fillRect(sx, sy, 5.5, 6); ctx.strokeRect(sx, sy, 5.5, 6); }
   }
   if (lvl >= 3) {
     for (const fx_ of [Bx + 2, Bx + Bw - 2]) {
-      ctx.strokeStyle = '#8a9296'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(fx_, front + 2); ctx.lineTo(fx_, front - 10); ctx.stroke();
+      ctx.strokeStyle = '#8a9296'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(fx_, front + 1); ctx.lineTo(fx_, front - 9); ctx.stroke();
       const wave = REDUCED_MOTION ? 0 : Math.sin(animT * 4 + fx_) * 0.9;
-      ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(fx_, front - 10); ctx.lineTo(fx_ + (fx_ < 0 ? -5 : 5), front - 8.6 + wave); ctx.lineTo(fx_, front - 7); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(fx_, front - 9); ctx.lineTo(fx_ + (fx_ < 0 ? -4.5 : 4.5), front - 7.7 + wave); ctx.lineTo(fx_, front - 6.3); ctx.closePath(); ctx.fill();
     }
   }
-  ctx.strokeStyle = col; ctx.lineWidth = 1.6 + tier * 0.9; rr(Bx + 1, By + 1, Bw - 2, Bh - 2, 3.5); ctx.stroke();   // thicker outline = busier tier
+  ctx.strokeStyle = col; ctx.lineWidth = 1.4 + tier * 0.8; rr(Bx + 1, By + 1, Bw - 2, Bh - 2, 3.5); ctx.stroke();   // thicker outline = busier tier
   if (lvl >= 3) { ctx.strokeStyle = '#ffc933'; ctx.lineWidth = 0.9; rr(Bx - 1, By - 1, Bw + 2, Bh + 2, 5); ctx.stroke(); }
   ctx.restore();
   if (b.acc < 0) drawUnlinked(x, y, b);
@@ -4304,10 +4540,11 @@ function dockSpotsLocal(s) {
 function drawUnlinked(x, y, b) {
   const pulse = 0.5 + 0.5 * Math.sin(animT * 4);
   ctx.strokeStyle = 'rgba(230,70,55,' + (0.5 + pulse * 0.4) + ')'; ctx.lineWidth = 1.6; ctx.setLineDash([3, 3]);
-  if (isBig(b)) {                                                    // ring the parking row: that's where the road goes
-    const row = rowTiles(b), a = row[0], z = row[2], p = 3 + pulse * 2;
-    const x0 = Math.min(cx(a), cx(z)) * CELL - p, y0 = Math.min(cy(a), cy(z)) * CELL - p;
-    rr(x0, y0, (Math.abs(cx(a) - cx(z)) + 1) * CELL + p * 2, (Math.abs(cy(a) - cy(z)) + 1) * CELL + p * 2, 8); ctx.stroke();
+  if (isBig(b)) {                                                    // mark the two entrance tiles: that's where the road goes
+    for (const [t] of storeDoors(b)) {
+      if (!inPlay(t) || water[t] || (occupied(t) && !road[t])) continue;
+      rr(cx(t) * CELL + 4 - pulse * 2, cy(t) * CELL + 4 - pulse * 2, CELL - 8 + pulse * 4, CELL - 8 + pulse * 4, 7); ctx.stroke();
+    }
   } else { ctx.beginPath(); ctx.arc(x, y, 19 + pulse * 2, 0, Math.PI * 2); ctx.stroke(); }
   ctx.setLineDash([]);
 }
@@ -4324,7 +4561,7 @@ function drawStoreBadge(b) {
   ctx.fillText(label, 0, 0.4);
   ctx.restore();
   if (b.timer > 0.05) {
-    const R = isBig(b) ? 72 : 24;
+    const R = isBig(b) ? 54 : 24;
     ctx.save(); ctx.translate(bX(b), bY(b) - (isBig(b) ? 0 : 2)); ctx.lineWidth = isBig(b) ? 4.5 : 3.2;
     ctx.strokeStyle = 'rgba(0,0,0,.15)'; ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.stroke();
     const pulse = frac > 0.7 ? 0.65 + 0.35 * Math.sin(animT * 9) : 1;
@@ -4493,7 +4730,7 @@ function drawAmbTarget(a) {
   const s = buildings[a.store]; if (!s) return;
   const late = clock - a.t0 > a.limit;
   ctx.strokeStyle = late ? '#ff3b30' : '#ff8a80'; ctx.lineWidth = 2.2; ctx.setLineDash([4, 4]);
-  ctx.beginPath(); ctx.arc(bX(s), bY(s), (isBig(s) ? 70 : 24) + Math.sin(animT * 5) * 2, 0, 6.3); ctx.stroke(); ctx.setLineDash([]);
+  ctx.beginPath(); ctx.arc(bX(s), bY(s), (isBig(s) ? 52 : 24) + Math.sin(animT * 5) * 2, 0, 6.3); ctx.stroke(); ctx.setLineDash([]);
 }
 /* cones and a striped barrier across a closed tile */
 function drawClosures(vr) {
@@ -4597,7 +4834,7 @@ function drawNight(vr, na) {
     ctx.fillStyle = gr; ctx.fillRect(x - R, y - R, R * 2, R * 2);
   };
   for (const nd of nodeList) if (nd.junction) glow(tx(nd.k), ty(nd.k), 34, 0.3 * na, '255,214,140');
-  for (const bd of buildings) glow(bX(bd), bY(bd), isBig(bd) ? 72 : 30, 0.28 * na, '255,200,120');
+  for (const bd of buildings) glow(bX(bd), bY(bd), isBig(bd) ? 54 : 30, 0.28 * na, '255,200,120');
   for (const c of cars) {
     if (c.state === 'parked' || c.state === 'loading') continue;
     const fx_ = c.x + Math.cos(c.ang) * (c.len / 2 + 9), fy_ = c.y + Math.sin(c.ang) * (c.len / 2 + 9);
@@ -4709,6 +4946,8 @@ function drawMini() {
   mctx.clearRect(0, 0, S, S);
   mctx.fillStyle = PAL.land; mctx.fillRect(0, 0, S, S);
   mctx.fillStyle = PAL.land2; mctx.fillRect((org - x0) * k, (org - x0) * k, span * k, span * k);
+  if (!patchCache) buildPatches();
+  mctx.imageSmoothingEnabled = true; mctx.drawImage(patchCache, x0 * PATCH_PX, x0 * PATCH_PX, size * PATCH_PX, size * PATCH_PX, 0, 0, S, S);
   mctx.fillStyle = PAL.water;
   for (let r = x0; r < x1; r++) for (let c = x0; c < x1; c++) if (water[idx(c, r)]) mctx.fillRect((c - x0) * k, (r - x0) * k, k + 0.5, k + 0.5);
   mctx.strokeStyle = PAL.edge; mctx.lineWidth = Math.max(1, k * 0.5); mctx.lineCap = 'round';
@@ -5298,7 +5537,7 @@ function renderInspector() {
   } else if (sel.type === 'building') {
     const b = buildings[sel.i]; if (!b) { closeInspector(); return; }
     title.textContent = COLORS[b.color].name + ' ' + (b.type === 'store' ? STORE_MODELS[Math.min(3, b.tier || 0)].toLowerCase() : ['cottage', 'family home', 'villa'][Math.min(2, b.extra || 0)]);
-    if (b.acc < 0) html += '<p class="line warn">' + (isBig(b) ? 'Not connected to a road. Lay road up to its parking row (the side with the bays).' : 'Not connected to a road. Lay road on a tile beside it.') + '</p>';
+    if (b.acc < 0) html += '<p class="line warn">' + (isBig(b) ? 'Not connected to a road. Bring a road to either end of its car park (the dashed squares).' : 'Not connected to a road. Lay road on a tile beside it.') + '</p>';
     if (b.type === 'store') {
       const cap = storeCap(b), frac = clamp(b.timer / overflowLimit(), 0, 1);
       html += '<p class="line">Parcels waiting <b>' + b.pins + '</b> of ' + cap + ' bays · ' + b.claimed + ' claimed</p>';
@@ -5546,7 +5785,7 @@ function bindInput() {
     r.onload = () => importCity(String(r.result)); r.onerror = () => toast('Could not read that file', 'warn');
     r.readAsText(f);
   });
-  $('btn-menu').addEventListener('click', () => { const m = $('menu'); m.hidden = !m.hidden; $('btn-menu').setAttribute('aria-expanded', m.hidden ? 'false' : 'true'); if (!m.hidden) { renderPaletteUI(); renderUiThemeUI(); } });
+  $('btn-menu').addEventListener('click', () => { const m = $('menu'); m.hidden = !m.hidden; $('btn-menu').setAttribute('aria-expanded', m.hidden ? 'false' : 'true'); if (!m.hidden) { renderPaletteUI(); renderUiThemeUI(); renderMapUI(); } });
   document.addEventListener('pointerdown', e => {
     const m = $('menu'); if (m.hidden) return;
     if (e.target.closest && (e.target.closest('#menu') || e.target.closest('#btn-menu'))) return;
@@ -5842,7 +6081,6 @@ function renderUiThemeUI() {
   set('ui-plate', c.plate); set('ui-btn', c.btn); set('ui-accent', c.accent);
   const cn = $('ui-custom-note'); if (cn) cn.hidden = !uiCustom();
   document.querySelectorAll('#opt-style button').forEach(b => b.setAttribute('aria-pressed', b.dataset.style === uiTheme.style ? 'true' : 'false'));
-  document.querySelectorAll('#opt-map button').forEach(b => b.setAttribute('aria-pressed', b.dataset.map === theme ? 'true' : 'false'));
 }
 function bindUiTheme() {
   for (const [id, f] of [['ui-plate', 'plate'], ['ui-btn', 'btn'], ['ui-accent', 'accent']]) {
@@ -5851,11 +6089,67 @@ function bindUiTheme() {
     e.addEventListener('change', () => setUi({[f]: e.value.toLowerCase()}));
   }
   document.querySelectorAll('#opt-style button').forEach(b => b.addEventListener('click', () => setUi({style: b.dataset.style})));
-  document.querySelectorAll('#opt-map button').forEach(b => b.addEventListener('click', () => { setTheme(b.dataset.map); pathCache.ver = -1; drawMini(); }));
   const rs = $('ui-reset'); if (rs) rs.addEventListener('click', () => setUi({preset: 'petrol', style: 'clean', plate: '', btn: '', accent: ''}));
 }
+/* ------------------------------------------------ settings: map theme, colours and decorations */
+/* a little picture of a map theme: its ground, a patch, a strip of water and two of its decorations */
+function mapPreview(cvs, id, custom, decor) {
+  const g = cvs.getContext('2d'), w = cvs.width, h = cvs.height, keep = PAL, keepTheme = theme;
+  PAL = palFor(id, custom); theme = PAL.tone;
+  g.clearRect(0, 0, w, h);
+  g.fillStyle = PAL.land2; g.fillRect(0, 0, w, h);
+  g.fillStyle = PAL.patch; g.beginPath(); g.ellipse(w * 0.3, h * 0.72, w * 0.26, h * 0.26, 0.3, 0, 6.3); g.fill();
+  g.beginPath(); g.ellipse(w * 0.62, h * 0.2, w * 0.14, h * 0.15, 0, 0, 6.3); g.fill();
+  g.fillStyle = PAL.water; g.fillRect(w * 0.78, 0, w * 0.14, h);
+  const dk = decor || (MAP_THEMES[id] || MAP_THEMES.meadow).decor, sc = h / 40;
+  drawDecor(g, dk, w * 0.24, h * 0.45, 9 * sc, 0, 11); drawDecor(g, dk, w * 0.55, h * 0.62, 7 * sc, 0, 23);
+  PAL = keep; theme = keepTheme;
+}
+function renderMapUI() {
+  const box = $('map-themes'); if (!box) return;
+  box.innerHTML = '';
+  for (const id in MAP_THEMES) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'mappick';
+    b.setAttribute('aria-pressed', !mapCustom() && mapPrefs.theme === id ? 'true' : 'false');
+    const c = document.createElement('canvas'); c.width = 132; c.height = 72; mapPreview(c, id, null, mapPrefs.decor !== 'auto' ? mapPrefs.decor : null);
+    const lb = document.createElement('b'); lb.textContent = MAP_THEMES[id].label;
+    b.append(c, lb);
+    b.addEventListener('click', () => setMap({theme: id, land: '', patch: '', water: ''}));
+    box.append(b);
+  }
+  const dbox = $('map-decor');
+  if (dbox) {
+    dbox.innerHTML = '';
+    const auto = (MAP_THEMES[mapPrefs.theme] || MAP_THEMES.meadow).decor;
+    for (const id of ['auto', ...Object.keys(DECOR)]) {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'decorpick';
+      b.setAttribute('aria-pressed', mapPrefs.decor === id ? 'true' : 'false');
+      b.dataset.tip = id === 'auto' ? 'Theme default' : DECOR[id];
+      if (id === 'auto') b.dataset.sub = DECOR[auto] + ' for ' + MAP_THEMES[mapPrefs.theme].label;
+      const c = document.createElement('canvas'); c.width = 64; c.height = 64;
+      const g = c.getContext('2d'); g.fillStyle = PAL.land2; g.fillRect(0, 0, 64, 64);
+      g.fillStyle = PAL.patch; g.beginPath(); g.ellipse(32, 46, 24, 10, 0, 0, 6.3); g.fill();
+      drawDecor(g, id === 'auto' ? auto : id, 32, 32, 17, 0, 5);
+      const lb = document.createElement('span'); lb.textContent = id === 'auto' ? 'Theme' : DECOR[id];
+      b.append(c, lb);
+      b.addEventListener('click', () => setMap({decor: id}));
+      dbox.append(b);
+    }
+  }
+  const set = (id, v) => { const e = $(id); if (e) e.value = v; };
+  set('map-land', PAL.land); set('map-patch', PAL.patch); set('map-water', PAL.water);
+  const cn = $('map-custom-note'); if (cn) cn.hidden = !mapCustom();
+}
+function bindMap() {
+  for (const [id, f] of [['map-land', 'land'], ['map-patch', 'patch'], ['map-water', 'water']]) {
+    const e = $(id); if (!e) continue;
+    e.addEventListener('input', () => { mapPrefs[f] = e.value.toLowerCase(); PAL = palFor(mapPrefs.theme, mapPrefs); theme = PAL.tone; patchCache = null; pathCache.ver = -1; });
+    e.addEventListener('change', () => setMap({[f]: e.value.toLowerCase()}));
+  }
+  const rs = $('map-reset'); if (rs) rs.addEventListener('click', () => setMap({theme: 'meadow', decor: 'auto', land: '', patch: '', water: ''}));
+}
 function bindSettings() {
-  bindUiTheme();
+  bindUiTheme(); bindMap();
   const sy = $('opt-symbols'); if (sy) sy.addEventListener('change', e => { showSymbols = e.target.checked; savePrefs(); });
   const rs = $('pal-reset'); if (rs) rs.addEventListener('click', () => { colorMode = 'standard'; customHex = PALETTES.standard.cols.map(c => c[1]); applyPalette(); savePrefs(); renderPaletteUI(); refreshHud(); drawMini(); });
 }
@@ -6121,10 +6415,8 @@ function frame(now) {
 
 /* ----------------------------------------------------------------- boot */
 function boot() {
-  let t = 'light';
-  try { t = localStorage.getItem('junction2-theme') || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); } catch (e) {}
-  setTheme(t);
   loadUiTheme();
+  loadMap();
   loadPrefs();
   buildToolbars(); bindInput(); showTab('city');
   applyLayout(); bindLayout();
