@@ -3667,7 +3667,7 @@ const MAP_KEY = 'junction-map-v1';
 const MAP_THEMES = {
   meadow:   {label: 'Meadow',   tone: 'light', decor: 'tree',    land: '#dde5cf', land2: '#d4dec4', patch: '#bdd49c', water: '#9dc9df'},
   night:    {label: 'Night',    tone: 'dark',  decor: 'tree',    land: '#23322f', land2: '#1f2d2b', patch: '#2e463a', water: '#1c4458'},
-  winter:   {label: 'Winter',   tone: 'light', decor: 'snowman', land: '#e2e9ee', land2: '#dae3e9', patch: '#f8fbfd', water: '#a6cde3', foam: '#eef7fb',
+  winter:   {label: 'Winter',   tone: 'light', decor: 'snowpine', land: '#e2e9ee', land2: '#dae3e9', patch: '#f8fbfd', water: '#a6cde3', foam: '#eef7fb',
              tree1: '#5f8f7a', tree2: '#46745f', grass: '#eff4f7', check: 'rgba(255,255,255,.35)'},
   desert:   {label: 'Desert',   tone: 'light', decor: 'cactus',  land: '#ead8ad', land2: '#e4cf9f', patch: '#d6b77b', water: '#79c3c4', foam: '#d2efe9',
              tree1: '#7fae5e', tree2: '#5f8f45', grass: '#d9c58f'},
@@ -3711,6 +3711,7 @@ function loadMap() {
     if (m && typeof m === 'object') {
       if (MAP_THEMES[m.theme]) mapPrefs.theme = m.theme;
       if (MAP_THEMES[m.lastDay]) mapPrefs.lastDay = m.lastDay;
+      if (m.decor === 'snowman') m.decor = 'snowpine';
       if (m.decor === 'auto' || DECOR[m.decor]) mapPrefs.decor = m.decor;
       for (const f of ['land', 'patch', 'water']) mapPrefs[f] = hexOk(m[f]) ? m[f].toLowerCase() : '';
     } else {                                           // first run on this version: keep the old light/dark choice
@@ -3787,7 +3788,7 @@ function drawPatches(vr) {
    k seeds any per-item variety. Shadows follow the same sun as everything else. */
 const DECOR = {
   tree: 'Trees', pine: 'Pines', bush: 'Bushes', blossom: 'Blossom', autumn: 'Autumn trees', palm: 'Palms', cactus: 'Cacti',
-  snowman: 'Snowmen', pumpkin: 'Pumpkins', mushroom: 'Mushrooms', flowers: 'Flowers', rock: 'Rocks'
+  snowpine: 'Snowy pines', pumpkin: 'Pumpkins', mushroom: 'Mushrooms', flowers: 'Flowers', rock: 'Rocks'
 };
 function drawDecor(g, kind, X, Y, R, sway, k) {
   const sh = (x, y, rx, ry, h) => { g.globalAlpha = SUN.a; g.fillStyle = PAL.treeSh; g.beginPath(); g.ellipse(x + SUN.x * h, y + SUN.y * h, rx, ry, 0, 0, 6.3); g.fill(); g.globalAlpha = 1; };
@@ -3802,7 +3803,6 @@ function drawDecor(g, kind, X, Y, R, sway, k) {
         g.closePath(); g.fill();
       };
       layer(R, '#2f6a4a', h1); layer(R * 0.68, '#3d8259', h1 + 0.2); layer(R * 0.36, '#55a06e', h1 + 0.4);
-      if (theme === 'light' && mapPrefs.theme === 'winter') { dot(X + sway - R * 0.2, Y - R * 0.25, R * 0.22, 'rgba(255,255,255,.85)'); dot(X + sway + R * 0.35, Y + R * 0.2, R * 0.16, 'rgba(255,255,255,.75)'); }
       break;
     }
     case 'bush': {
@@ -3845,19 +3845,21 @@ function drawDecor(g, kind, X, Y, R, sway, k) {
       if (h2 > 0.55) dot(X, Y - R * 0.95, R * 0.14, '#ff6f91');
       break;
     }
-    case 'snowman': {
-      sh(X, Y + R * 0.5, R * 0.7, R * 0.4, R * 0.6);
-      const white = '#fbfdff', edge = 'rgba(110,140,165,.55)';
-      g.lineWidth = Math.max(0.4, R * 0.06); g.strokeStyle = edge;
-      g.fillStyle = white; g.beginPath(); g.arc(X, Y + R * 0.3, R * 0.62, 0, 6.3); g.fill(); g.stroke();
-      g.beginPath(); g.arc(X + sway * 0.3, Y - R * 0.5, R * 0.42, 0, 6.3); g.fill(); g.stroke();
-      g.fillStyle = '#d8443a'; g.fillRect(X - R * 0.38, Y - R * 0.18, R * 0.76, R * 0.14);                 // scarf
-      g.fillRect(X + R * 0.12, Y - R * 0.12, R * 0.14, R * 0.34);
-      dot(X - R * 0.14 + sway * 0.3, Y - R * 0.56, R * 0.06, '#1d2328'); dot(X + R * 0.14 + sway * 0.3, Y - R * 0.56, R * 0.06, '#1d2328');
-      g.fillStyle = '#f08a24'; g.beginPath(); g.moveTo(X + sway * 0.3, Y - R * 0.47); g.lineTo(X + R * 0.38 + sway * 0.3, Y - R * 0.42); g.lineTo(X + sway * 0.3, Y - R * 0.38); g.closePath(); g.fill();
-      dot(X, Y + R * 0.15, R * 0.06, '#1d2328'); dot(X, Y + R * 0.38, R * 0.06, '#1d2328');
-      g.fillStyle = '#22282d'; g.fillRect(X - R * 0.36 + sway * 0.3, Y - R * 0.86, R * 0.72, R * 0.1);   // hat
-      g.fillRect(X - R * 0.22 + sway * 0.3, Y - R * 1.2, R * 0.44, R * 0.36);
+    case 'snowpine': {                                  // a pine with snow settled on every tier
+      sh(X, Y + R * 0.72, R * 0.78, R * 0.3, R * 0.35);
+      g.fillStyle = '#6b4a2e'; g.fillRect(X - R * 0.13, Y + R * 0.45, R * 0.26, R * 0.4);           // trunk
+      const tiers = [[0.62, 0.92, 0.82], [0.2, 0.72, 0.74], [-0.2, 0.5, 0.72]];               // [base y, half width, height] x R
+      tiers.forEach(([by, w, h], i) => {
+        const sx = sway * (0.3 + i * 0.35), bx = X + sx, base = Y + by * R, apex = base - h * R, hw_ = w * R;
+        g.fillStyle = '#2f6a4a'; g.beginPath(); g.moveTo(bx, apex); g.lineTo(bx + hw_, base); g.lineTo(bx - hw_, base); g.closePath(); g.fill();
+        g.fillStyle = '#3f8459'; g.beginPath(); g.moveTo(bx, apex); g.lineTo(bx + hw_, base); g.lineTo(bx + hw_ * 0.15, base); g.closePath(); g.fill();
+        // snow cap: the top part of the tier, with a soft scalloped lower edge
+        const sb = apex + h * R * 0.55, sw = hw_ * 0.55;
+        g.fillStyle = '#fbfdff'; g.beginPath(); g.moveTo(bx, apex - 0.2); g.lineTo(bx + sw, sb); g.lineTo(bx - sw, sb); g.closePath(); g.fill();
+        for (let j = 0; j < 3; j++) { const t = (j + 0.5) / 3; dot(bx - sw + sw * 2 * t, sb, sw * 0.36, '#fbfdff'); }
+        g.fillStyle = 'rgba(150,180,205,.35)'; g.beginPath(); g.moveTo(bx, apex); g.lineTo(bx + sw, sb); g.lineTo(bx + sw * 0.3, sb); g.closePath(); g.fill();
+      });
+      if (h1 > 0.5) dot(X + sway, Y - R * 0.95, R * 0.12, '#fbfdff');
       break;
     }
     case 'pumpkin': {
@@ -4634,95 +4636,146 @@ function drawSlots(c, x0, x1, h) {
 }
 function glass(x, y, w, h, r) { rr(x, y, w, h, r); ctx.fillStyle = 'rgba(24,44,58,.9)'; ctx.fill(); ctx.fillStyle = 'rgba(160,210,240,.35)'; ctx.fillRect(x + w * 0.15, y + 0.3, Math.max(0.3, w * 0.25), h - 0.6); }
 function wheel(x, y, w, h) { rr(x - w / 2, y - h / 2, w, h, h / 2); ctx.fillStyle = '#1b2125'; ctx.fill(); }
-/* Vehicles. The body is chosen by carry size (hatchback, estate, pickup, panel van, box truck);
-   the speed kit (sport, GT, racer) and loading upgrades are fitted on top. Front is +x. */
+/* Vehicles, seen from above with the front at +x. Every upgrade changes the look so models are easy to tell apart:
+     carry size picks the body: hatchback (short bubble), estate (long, square back, roof rack), pickup (cab and
+       open bed with a roll bar), panel van (white, coloured nose, roof vents), box truck (cab, then a tall box);
+     speed kits paint it: sport (white twin stripes and white trim), GT (black bonnet and roof edges, gold pin
+       stripes, spoiler, skirts, wide tyres), racer (chequered bonnet, gold trim and rims, big wing, flames);
+     loading fits an orange tail-lift, then amber roof beacons; fuel adds a green jerry can, then silver tanks. */
+const KIT_TRIM = [null, '#ffffff', '#ffc933', '#ffc933'];
 function drawCar(c, sizeBoost) {
   c.da = c.da === undefined ? c.ang : lerpAng(c.da, c.ang, 0.28);            // eased heading into turns
   const bi = bodyOf(c), B = BODY[bi], L = B.L, Wd = B.W, col = COLORS[c.color].hex;
-  const kit = carUp(c, 'spd'), ld = carUp(c, 'load'), hw = Wd / 2, f = L / 2, r = -L / 2;
-  const light = '#f2f0e8', dark = shade(col, -0.35), hi = 'rgba(255,255,255,.2)';
-  dropShadow(c.x, c.y, c.da, 1, bi >= 3 ? 2.6 : 1.9, [[r, -hw, L, Wd, 2.2]]);
+  const kit = carUp(c, 'spd'), ld = carUp(c, 'load'), fu = carUp(c, 'fuel'), hw = Wd / 2, f = L / 2, r = -L / 2;
+  const white = '#f4f2ec', dark = shade(col, -0.35), hi = 'rgba(255,255,255,.22)', black = '#1f262b';
+  dropShadow(c.x, c.y, c.da, 1, bi >= 3 ? 2.8 : 1.9, [[r, -hw, L, Wd, 2.2]]);
   ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.da);
-  // wheels peek out past the body; GT and racer kits sit on wider tyres
-  const tw = kit >= 2 ? 3.4 : 3, th = kit >= 2 ? 1.5 : 1.2, ax = [f - 2.9, r + 2.9];
-  if (bi === 4) ax.push(r + 5.8);
-  for (const x of ax) { wheel(x, -hw, tw, th); wheel(x, hw, tw, th); }
-  let bon0, bon1, roof0, roof1;                                                 // bonnet and roof spans, for kit parts and slots
-  if (bi === 0 || bi === 1) {
-    // hatchback / estate: one rounded coloured shell, glass front and back, roof carries the slots
-    rr(r, -hw, L, Wd, hw * 0.9); ctx.fillStyle = col; ctx.fill();
-    rr(r + 1, -hw + 0.5, L - 2, Wd * 0.3, 1); ctx.fillStyle = hi; ctx.fill();
-    const ws = f - (bi === 0 ? 4.2 : 4.4);
-    glass(ws, -hw + 0.9, 1.7, Wd - 1.8, 0.6);
-    const rw = bi === 0 ? r + 1.1 : r + 0.8;
-    glass(rw, -hw + 1.1, 1.1, Wd - 2.2, 0.5);
-    roof0 = rw + 1.6; roof1 = ws - 0.4;
-    rr(roof0, -hw + 0.8, roof1 - roof0, Wd - 1.6, 1.2); ctx.fillStyle = shade(col, 0.18); ctx.fill();
-    if (bi === 1) { ctx.fillStyle = 'rgba(30,30,30,.55)'; ctx.fillRect(roof0, -hw + 0.7, roof1 - roof0, 0.45); ctx.fillRect(roof0, hw - 1.15, roof1 - roof0, 0.45); }   // roof rails
-    drawSlots(c, roof0 + 0.4, roof1 - 0.4, Wd - 2.4);
-    bon0 = ws + 1.9; bon1 = f - 0.5;
-  } else if (bi === 2) {
-    // pickup: coloured cab up front, open load bed behind with the parcels in it
-    const cab = 6.2;
+  // wheels: GT and racer sit on wider tyres, the racer on gold rims; the box truck has a third axle
+  const tw = kit >= 2 ? 3.6 : 3, th = kit >= 2 ? 1.7 : 1.2, ax = [f - 2.9, r + 2.9];
+  if (bi === 4) ax.push(r + 5.9);
+  for (const x of ax) for (const sy of [-1, 1]) {
+    wheel(x, sy * hw, tw, th);
+    if (kit >= 3) { ctx.fillStyle = '#ffc933'; ctx.fillRect(x - 0.5, sy * hw - 0.3, 1, 0.6); }
+  }
+  // 1. the shell, and where its bonnet (paintable nose) and roof sit
+  let bon0, bon1, roof0, roof1, nose0;                     // bonnet span, roof span (slots), start of the coloured nose
+  if (bi === 0) {                                          // hatchback: a short rounded bubble
+    rr(r, -hw, L, Wd, hw); ctx.fillStyle = col; ctx.fill();
+    bon0 = f - 3.2; bon1 = f - 0.4; roof0 = r + 2.4; roof1 = f - 4.6; nose0 = r;
+  } else if (bi === 1) {                                   // estate: longer, squarer at the back
+    rr(r, -hw, L, Wd, 1.5); ctx.fillStyle = col; ctx.fill();
+    rr(f - 3, -hw, 3, Wd, hw * 0.85); ctx.fill();
+    bon0 = f - 3.4; bon1 = f - 0.4; roof0 = r + 1.8; roof1 = f - 4.9; nose0 = r;
+  } else if (bi === 2) {                                   // pickup: cab up front, open bed behind
+    const cab = 6.4;
     rr(f - cab, -hw, cab, Wd, 2); ctx.fillStyle = col; ctx.fill();
-    rr(f - cab + 0.6, -hw + 0.5, cab - 1.2, Wd * 0.3, 1); ctx.fillStyle = hi; ctx.fill();
-    glass(f - 3.4, -hw + 0.9, 1.6, Wd - 1.8, 0.6);
-    rr(r, -hw, L - cab - 0.4, Wd, 1.2); ctx.fillStyle = dark; ctx.fill();          // bed walls
-    rr(r + 0.7, -hw + 0.7, L - cab - 1.8, Wd - 1.4, 0.8); ctx.fillStyle = 'rgba(0,0,0,.42)'; ctx.fill();   // bed floor
-    roof0 = r + 0.9; roof1 = f - cab - 1.3;
-    drawSlots(c, roof0, roof1, Wd - 2);
-    bon0 = f - 1.7; bon1 = f - 0.4;
-  } else if (bi === 3) {
-    // panel van: tall pale body, coloured nose and livery stripe
-    rr(r, -hw, L, Wd, 1.8); ctx.fillStyle = light; ctx.fill();
-    ctx.lineWidth = 0.45; ctx.strokeStyle = 'rgba(0,0,0,.22)'; ctx.stroke();
-    ctx.fillStyle = col; ctx.fillRect(r + 0.5, -hw + 0.35, L - 4.5, 0.8); ctx.fillRect(r + 0.5, hw - 1.15, L - 4.5, 0.8);
-    rr(f - 3.6, -hw + 0.2, 3.6, Wd - 0.4, 1.8); ctx.fillStyle = col; ctx.fill();
-    glass(f - 2.6, -hw + 0.9, 1.4, Wd - 1.8, 0.5);
-    ctx.fillStyle = 'rgba(0,0,0,.12)'; ctx.fillRect(r + 1, -0.15, L - 5, 0.3);   // roof seam
-    roof0 = r + 1; roof1 = f - 4.2;
-    drawSlots(c, roof0, roof1, Wd - 2.6);
-    bon0 = f - 1.1; bon1 = f - 0.3;
-  } else {
-    // box truck: short coloured cab, gap, then a ribbed cargo box
-    const cab = 4.6;
-    rr(f - cab, -hw + 0.4, cab, Wd - 0.8, 1.6); ctx.fillStyle = col; ctx.fill();
-    glass(f - 1.9, -hw + 1.1, 1.3, Wd - 2.2, 0.5);
-    rr(r, -hw, L - cab - 0.6, Wd, 0.9); ctx.fillStyle = light; ctx.fill();
+    rr(r, -hw, L - cab - 0.3, Wd, 1.1); ctx.fillStyle = '#aab3b8'; ctx.fill();                 // bed walls
+    rr(r + 0.7, -hw + 0.7, L - cab - 1.7, Wd - 1.4, 0.7); ctx.fillStyle = '#3a4248'; ctx.fill();  // bed floor
+    ctx.fillStyle = 'rgba(255,255,255,.12)'; for (let x = r + 1.4; x < f - cab - 1; x += 1.4) ctx.fillRect(x, -hw + 0.8, 0.3, Wd - 1.6);
+    bon0 = f - 2.2; bon1 = f - 0.4; roof0 = r + 1; roof1 = f - cab - 1.3; nose0 = f - cab;
+  } else if (bi === 3) {                                   // panel van: tall white body with a coloured nose
+    rr(r, -hw, L, Wd, 1.8); ctx.fillStyle = white; ctx.fill();
     ctx.lineWidth = 0.45; ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.stroke();
-    ctx.fillStyle = 'rgba(0,0,0,.1)';
-    for (let x = r + 1.6; x < f - cab - 1; x += 1.6) ctx.fillRect(x, -hw + 0.3, 0.35, Wd - 0.6);        // box ribs
-    ctx.fillStyle = col; ctx.fillRect(r + 0.3, -hw + 0.3, L - cab - 1.2, 0.9); ctx.fillRect(r + 0.3, hw - 1.2, L - cab - 1.2, 0.9);
-    roof0 = r + 1; roof1 = f - cab - 1.4;
-    drawSlots(c, roof0, roof1, Wd - 2.8);
-    bon0 = f - 0.9; bon1 = f - 0.3;
+    rr(f - 4, -hw, 4, Wd, 1.8); ctx.fillStyle = col; ctx.fill();
+    bon0 = f - 1.4; bon1 = f - 0.3; roof0 = r + 1.2; roof1 = f - 5.4; nose0 = f - 4;
+  } else {                                                 // box truck: short cab, a gap, then a tall box
+    const cab = 4.9;
+    rr(f - cab, -hw + 0.4, cab, Wd - 0.8, 1.6); ctx.fillStyle = col; ctx.fill();
+    ctx.fillStyle = black; ctx.fillRect(f - cab - 0.7, -hw + 1.2, 0.7, Wd - 2.4);                 // the gap between cab and box
+    rr(r, -hw, L - cab - 0.7, Wd, 0.9); ctx.fillStyle = white; ctx.fill();
+    ctx.lineWidth = 0.45; ctx.strokeStyle = 'rgba(0,0,0,.28)'; ctx.stroke();
+    bon0 = f - 1.3; bon1 = f - 0.3; roof0 = r + 1; roof1 = f - cab - 1.6; nose0 = f - cab;
+  }
+  // 2. speed-kit paint, under the glass and roof
+  if (kit === 1) {                                         // sport: white twin racing stripes nose to tail
+    ctx.fillStyle = 'rgba(255,255,255,.95)';
+    const s0 = bi >= 2 ? nose0 : r + 0.3;
+    ctx.fillRect(s0, -1.35, f - 0.3 - s0, 0.8); ctx.fillRect(s0, 0.55, f - 0.3 - s0, 0.8);
+  } else if (kit === 2) {                                  // GT: black bonnet, gold pin stripes
+    ctx.fillStyle = black; rr(bon0 - 0.4, -hw + 0.5, bon1 - bon0 + 0.4, Wd - 1, 0.8); ctx.fill();
+    ctx.fillStyle = '#ffc933'; const s0 = bi >= 2 ? nose0 : r + 0.4;
+    ctx.fillRect(s0, -hw + 0.7, f - 0.6 - s0, 0.4); ctx.fillRect(s0, hw - 1.1, f - 0.6 - s0, 0.4);
+  } else if (kit >= 3) {                                   // racer: chequered bonnet
+    const cw = Math.max(0.8, (bon1 - bon0 + 0.4) / 3), y0 = -hw + 0.5, rows = 4, chh = (Wd - 1) / rows;
+    for (let i = 0; i < 3; i++) for (let j = 0; j < rows; j++) { ctx.fillStyle = (i + j) % 2 ? black : '#ffffff'; ctx.fillRect(bon0 - 0.4 + i * cw, y0 + j * chh, cw, chh); }
+  }
+  // 3. glass, roof and the details that make each body its own
+  if (bi === 0 || bi === 1) {
+    rr(r + 1, -hw + 0.5, L - 2, Wd * 0.28, 1); ctx.fillStyle = hi; ctx.fill();
+    glass(f - (bi === 0 ? 4.4 : 4.7), -hw + 0.8, 1.9, Wd - 1.6, 0.7);                       // windscreen
+    glass(r + (bi === 0 ? 1 : 0.6), -hw + 1, bi === 0 ? 1.3 : 1, Wd - 2, 0.5);              // rear window
+    rr(roof0, -hw + 0.8, roof1 - roof0, Wd - 1.6, 1.2); ctx.fillStyle = shade(col, kit === 2 ? -0.45 : 0.18); ctx.fill();
+    if (bi === 1) {                                        // estate: side windows and a roof rack
+      ctx.fillStyle = 'rgba(24,44,58,.75)'; ctx.fillRect(roof0, -hw + 0.15, roof1 - roof0, 0.5); ctx.fillRect(roof0, hw - 0.65, roof1 - roof0, 0.5);
+      ctx.fillStyle = '#2a3036'; ctx.fillRect(roof0 + 0.1, -hw + 0.9, roof1 - roof0 - 0.2, 0.45); ctx.fillRect(roof0 + 0.1, hw - 1.35, roof1 - roof0 - 0.2, 0.45);
+      for (const t of [0.12, 0.88]) ctx.fillRect(roof0 + (roof1 - roof0) * t - 0.2, -hw + 0.9, 0.45, Wd - 1.8);
+    }
+  } else if (bi === 2) {
+    rr(nose0 + 0.6, -hw + 0.5, 6.4 - 1.2, Wd * 0.28, 1); ctx.fillStyle = hi; ctx.fill();
+    glass(f - 3.6, -hw + 0.8, 1.7, Wd - 1.6, 0.6);
+    glass(nose0 + 0.4, -hw + 1.1, 0.9, Wd - 2.2, 0.4);
+    ctx.fillStyle = '#2a3036'; ctx.fillRect(nose0 - 1, -hw + 0.2, 0.7, Wd - 0.4);               // roll bar
+    ctx.fillStyle = '#8b9398'; ctx.fillRect(r, -hw + 0.4, 0.5, Wd - 0.8);                      // tailgate
+  } else if (bi === 3) {
+    glass(f - 3, -hw + 0.8, 1.6, Wd - 1.6, 0.5);
+    ctx.fillStyle = col; ctx.fillRect(r + 0.6, -hw + 0.3, L - 5, 1); ctx.fillRect(r + 0.6, hw - 1.3, L - 5, 1);   // livery bands
+    ctx.fillStyle = 'rgba(0,0,0,.14)'; ctx.fillRect(roof0 + (roof1 - roof0) * 0.5, -hw + 1.4, 0.35, Wd - 2.8);   // roof seam
+    ctx.fillStyle = '#c3c8cb'; rr(f - 5.3, -0.9, 1.4, 1.8, 0.3); ctx.fill();                   // roof vent
+  } else {
+    glass(f - 2, -hw + 1.1, 1.4, Wd - 2.2, 0.5);
+    ctx.fillStyle = 'rgba(0,0,0,.09)';
+    for (let x = r + 1.6; x < f - 5.6; x += 1.6) ctx.fillRect(x, -hw + 0.3, 0.35, Wd - 0.6);    // box ribs
+    ctx.fillStyle = col; ctx.fillRect(f - 6.6, -hw + 0.2, 1.1, Wd - 0.4);                       // coloured band on the box front
+    ctx.fillRect(r + 0.3, -hw + 0.25, L - 7, 0.8); ctx.fillRect(r + 0.3, hw - 1.05, L - 7, 0.8);
+  }
+  drawSlots(c, roof0 + 0.4, roof1 - 0.4, Wd - (bi >= 3 ? 2.8 : 2.4));
+  // trim around the painted nose shows the kit at a glance, even zoomed out
+  if (kit) {
+    ctx.strokeStyle = KIT_TRIM[kit]; ctx.lineWidth = 0.55;
+    if (bi <= 1) rr(r + 0.25, -hw + 0.25, L - 0.5, Wd - 0.5, bi === 0 ? hw - 0.25 : 1.3);
+    else rr(nose0 + 0.25, -hw + 0.25 + (bi === 4 ? 0.4 : 0), f - nose0 - 0.5, Wd - 0.5 - (bi === 4 ? 0.8 : 0), 1.5);
+    ctx.stroke();
   }
   // lights and mirrors
   ctx.fillStyle = '#fff4c4'; ctx.fillRect(f - 0.7, -hw + 0.7, 0.7, 1.2); ctx.fillRect(f - 0.7, hw - 1.9, 0.7, 1.2);
   ctx.fillStyle = c.brake ? '#ff3b30' : '#8f2a24'; ctx.fillRect(r, -hw + 0.7, 0.7, 1.2); ctx.fillRect(r, hw - 1.9, 0.7, 1.2);
-  const mx = bi <= 1 ? f - 4.2 : bi === 2 ? f - 3.4 : f - 2.6;
+  const mx = bi <= 1 ? f - 4.4 : bi === 2 ? f - 3.6 : f - 2.8;
   ctx.fillStyle = bi >= 3 ? col : dark; ctx.fillRect(mx, -hw - 0.7, 0.8, 0.7); ctx.fillRect(mx, hw, 0.8, 0.7);
-  // speed kits: sport stripes, GT spoiler and side skirts, racer wing, roundel and exhaust glow
-  if (kit >= 1) {
-    ctx.fillStyle = kit >= 3 ? '#ffd23a' : 'rgba(255,255,255,.9)';
-    const s0 = Math.min(bon0, roof0), s1 = bon1;
-    ctx.fillRect(s0, -1.1, s1 - s0, 0.5); ctx.fillRect(s0, 0.6, s1 - s0, 0.5);
+  // GT spoiler and skirts; racer wing and flames
+  if (kit === 2) {
+    ctx.fillStyle = black;
+    ctx.fillRect(r + 2, -hw - 0.4, L - 4, 0.5); ctx.fillRect(r + 2, hw - 0.1, L - 4, 0.5);     // side skirts
+    rr(r - 1.1, -hw + 0.3, 1.2, Wd - 0.6, 0.4); ctx.fill();                                     // spoiler
+  } else if (kit >= 3) {
+    rr(r - 2, -hw - 1, 1.5, Wd + 2, 0.5); ctx.fillStyle = '#ffc933'; ctx.fill();                 // big gold wing
+    ctx.fillStyle = black; ctx.fillRect(r - 0.6, -hw + 1.2, 0.7, 0.5); ctx.fillRect(r - 0.6, hw - 1.7, 0.7, 0.5);   // wing stays
+    if (c.v > 10 && !REDUCED_MOTION) {
+      const fl = 0.6 + 0.4 * Math.sin(animT * 30 + c.id);
+      ctx.fillStyle = 'rgba(255,140,30,' + fl.toFixed(2) + ')'; ctx.beginPath(); ctx.arc(r - 2.6, -hw + 1.6, 0.9, 0, 6.3); ctx.arc(r - 2.6, hw - 1.6, 0.9, 0, 6.3); ctx.fill();
+    }
   }
-  if (kit >= 2) {
-    ctx.fillStyle = '#20282e';
-    ctx.fillRect(r + 2, -hw - 0.35, L - 4, 0.45); ctx.fillRect(r + 2, hw - 0.1, L - 4, 0.45);           // side skirts
-    ctx.fillRect(r - 0.9, -hw + 0.4, 1, Wd - 0.8);                                                  // spoiler
-  }
-  if (kit >= 3) {
-    ctx.fillStyle = '#20282e'; ctx.fillRect(r - 1.6, -hw - 0.8, 1.2, Wd + 1.6);                      // big rear wing
-    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc((roof0 + roof1) / 2, 0, Math.min(1.5, hw - 1.3), 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = col; ctx.beginPath(); ctx.arc((roof0 + roof1) / 2, 0, Math.min(0.8, hw - 2), 0, Math.PI * 2); ctx.fill();
-    if (c.v > 12 && !REDUCED_MOTION) { ctx.fillStyle = 'rgba(255,150,40,' + (0.5 + 0.4 * Math.sin(animT * 30 + c.id)).toFixed(2) + ')'; ctx.beginPath(); ctx.arc(r - 2.1, -hw + 1.3, 0.8, 0, 6.3); ctx.arc(r - 2.1, hw - 1.3, 0.8, 0, 6.3); ctx.fill(); }
-  }
-  // loading upgrades: orange tail-lift, then side loading lights
+  // loading: an orange tail-lift with hazard marks, then amber roof beacons
   if (ld > 0) {
-    ctx.fillStyle = '#f39a1e'; ctx.fillRect(r - 0.7, -hw + 1.6, 0.8, Wd - 3.2);
-    if (ld >= 2) { ctx.fillRect(r + 0.9, -hw - 0.3, 1.6, 0.6); ctx.fillRect(r + 0.9, hw - 0.3, 1.6, 0.6); }
+    const tl = kit >= 2 ? 0 : 0.3;
+    ctx.fillStyle = '#f39a1e'; ctx.fillRect(r - 1.1 - tl, -hw + 1, 1.1, Wd - 2);
+    ctx.fillStyle = black; for (let y = -hw + 1.5; y < hw - 1.4; y += 1.4) ctx.fillRect(r - 1.1 - tl, y, 1.1, 0.5);
+    if (ld >= 2) {
+      const on = REDUCED_MOTION || Math.sin(animT * 9 + c.id) > -0.2;
+      ctx.fillStyle = on ? '#ffb020' : '#a8661a';
+      ctx.beginPath(); ctx.arc(roof1 + 0.1, -hw + 1.1, 0.75, 0, 6.3); ctx.arc(roof1 + 0.1, hw - 1.1, 0.75, 0, 6.3); ctx.fill();
+    }
+  }
+  // fuel: a green jerry can on the side, then long-range silver tanks down both sides
+  if (fu === 1) {
+    rr(r + 1.3, -hw - 1.1, 2.4, 1.2, 0.3); ctx.fillStyle = '#2f9a4a'; ctx.fill();
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(r + 1.6, -hw - 0.95, 0.5, 0.4);
+  } else if (fu >= 2) {
+    for (const sy of [-1, 1]) {
+      const y0 = sy < 0 ? -hw - 1.1 : hw - 0.1;
+      rr(r + L * 0.28, y0, L * 0.36, 1.2, 0.6); ctx.fillStyle = '#c9d1d6'; ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.fillRect(r + L * 0.3, y0 + 0.2, L * 0.32, 0.3);
+      ctx.fillStyle = '#ffc933'; ctx.fillRect(r + L * 0.28 + L * 0.36 - 1, y0 + 0.3, 0.6, 0.6);
+    }
   }
   if (c.broken > 0 && Math.sin(animT * 12) > 0) { ctx.fillStyle = '#ffab1a'; ctx.beginPath(); ctx.arc(r, -hw, 1.3, 0, 6.3); ctx.arc(r, hw, 1.3, 0, 6.3); ctx.arc(f, -hw, 1.3, 0, 6.3); ctx.arc(f, hw, 1.3, 0, 6.3); ctx.fill(); }
   ctx.restore();
