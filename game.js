@@ -3925,6 +3925,147 @@ let PAL = PALS.light;
    desert are allowed), and the ground, patch and water colours can be set by hand. theme stays 'light' or
    'dark' (the tone the rest of the drawing and the interface key off); mapPrefs.theme is the named theme. */
 const MAP_KEY = 'junction-map-v1';
+/* v1.10 designs: [key, name, price (old scale; 45+ is rare), 'U' for unique (crates only), settings for its renderer] */
+const GEN = {
+  car: [
+    ['polka', 'Polka dots', 30, '', {k: 'dots', c: ['#ffffff']}], ['bubbles', 'Bubbles', 35, '', {k: 'dots', c: ['#ff9ecb', '#9fd5f2', '#fff3a8'], big: 1}],
+    ['pinstripe', 'Pinstripe', 25, '', {k: 'stripe', c: ['#ffffff', 'rgba(0,0,0,0)', '#ffffff']}], ['tricolour', 'Tricolour', 35, '', {k: 'stripe', c: ['#2f7de1', '#ffffff', '#e0483e']}],
+    ['surf', 'Surf wave', 30, '', {k: 'wave', c: ['#ffffff']}], ['sunrise', 'Sunrise fade', 50, '', {k: 'fade', c: ['#ffd23a', '#ff6f61']}],
+    ['zebra', 'Zebra', 40, '', {k: 'zebra', c: ['#1f262b']}], ['minttop', 'Mint top', 30, '', {k: 'band', c: ['#7ff0c8'], roof: '#7ff0c8'}],
+    ['creamsides', 'Cream sides', 25, '', {k: 'band', c: ['#f4efe1']}], ['darknose', 'Dark nose', 30, '', {k: 'nose', c: ['#1f262b']}],
+    ['pinkglow', 'Pink glow', 55, '', {glow: '#ff3df2'}], ['candycane', 'Candy cane', 60, '', {k: 'zebra', c: ['#ffffff']}],
+    ['tidal', 'Tidal', 0, 'U', {k: 'wave', c: ['#7fe3ff'], glow: '#00e1ff'}], ['rainbowstripe', 'Rainbow stripe', 0, 'U', {k: 'stripe', c: ['#ff4d4d', '#ff9f1a', '#ffd23a', '#3fd16a', '#2f9bff', '#8a5bff']}]
+  ],
+  house: [
+    ['cabin', 'Log cabin', 35, '', {shape: 'box', roof: '#8a5a35', pat: 'logs', x: ['chimney']}], ['chalet', 'Alpine chalet', 40, '', {shape: 'box', roof: '#6b4a30', pat: 'ridge', x: ['chimney', 'flowers']}],
+    ['yurt', 'Yurt', 35, '', {shape: 'round', roof: '#f1e6cf', pat: 'rings'}], ['burrow', 'Hillside burrow', 45, '', {shape: 'round', roof: '#7cbf5e', pat: 'garden', door: 'col', noTrim: 1}],
+    ['greenhouse', 'Greenhouse', 40, '', {shape: 'box', roof: '#cfeef7', pat: 'glass'}], ['bungalow', 'Bungalow', 30, '', {shape: 'pill', roof: 'col', pat: 'tiles'}],
+    ['teahouse', 'Teahouse', 55, '', {shape: 'pill', roof: '#3a4a3f', pat: 'shingle', x: ['lantern']}], ['ecodome', 'Eco dome', 50, '', {shape: 'dome', roof: '#e8f1f6', pat: 'rings'}],
+    ['gardencottage', 'Garden cottage', 30, '', {shape: 'box', roof: 'col', pat: 'tiles', x: ['tree']}], ['solarhome', 'Solar home', 50, '', {shape: 'box', roof: '#ebebe6', pat: 'solar'}],
+    ['seaside', 'Seaside villa', 60, '', {shape: 'box', roof: '#fbf8f1', pat: 'stripes', x: ['pool']}], ['farmhouse', 'Farmhouse', 30, '', {shape: 'box', roof: 'col', pat: 'ridge', x: ['chimney', 'tree']}],
+    ['gingerbread', 'Gingerbread house', 0, 'U', {shape: 'box', roof: '#a0612e', pat: 'dots', acc: '#ffffff', x: ['flowers']}], ['observatory', 'Observatory', 0, 'U', {shape: 'dome', roof: '#cfd6dc', pat: 'slit', x: ['antenna']}]
+  ],
+  road: [
+    ['midnight', 'Midnight', 35, '', {road: '#1d2a3a', edge: '#0d1520', lane: '#ffd23a'}], ['mint', 'Mint', 30, '', {road: '#bfe8d6', edge: '#4fa688', lane: '#ffffff'}],
+    ['lavender', 'Lavender', 30, '', {road: '#cbbde8', edge: '#7a62b0', lane: '#ffffff'}], ['sandstone', 'Sandstone', 30, '', {road: '#dcc59a', edge: '#9c7f4e', lane: '#ffffff'}],
+    ['slate', 'Slate', 25, '', {road: '#6b7b8c', edge: '#3a4652', lane: '#e3e9ee'}], ['terracotta', 'Terracotta', 35, '', {road: '#c1592c', edge: '#7a3216', lane: '#ffe0c2'}],
+    ['ocean', 'Ocean', 40, '', {road: '#2a6f8f', edge: '#13405a', lane: '#bff3ff'}], ['forest', 'Forest track', 30, '', {road: '#6b7a4a', edge: '#3e4a26', lane: 'rgba(0,0,0,0)'}],
+    ['chalk', 'Chalk', 25, '', {road: '#f4f1ea', edge: '#c9c3b5', lane: '#7d8790'}], ['rose', 'Rose', 50, '', {road: '#e8a5b0', edge: '#a0184f', lane: '#ffffff'}],
+    ['ice', 'Ice', 55, '', {road: '#dff3fb', edge: '#7fc4e0', lane: '#ffffff'}], ['chocolate', 'Chocolate', 60, '', {road: '#54301c', edge: '#2a160c', lane: '#f0b26a'}],
+    ['galaxy', 'Galaxy', 0, 'U', {road: '#1a0f3d', edge: '#c59bff', lane: '#fff1a8'}]
+  ],
+  store: [
+    ['awning', 'Striped awning', 30, '', {base: '#fbf8f1', pat: 'stripes', acc: 'col'}], ['skylights', 'Skylights', 30, '', {base: '#c9ced2', pat: 'grid', acc: '#aee0f5'}],
+    ['garden', 'Rooftop garden', 40, '', {base: '#6fae55', pat: 'garden'}], ['solar', 'Solar farm', 35, '', {base: '#d9dde0', pat: 'solar', acc: '#1f3552'}],
+    ['pool', 'Rooftop pool', 55, '', {base: '#e9e4da', pat: 'pool', acc: '#5fc4e6'}], ['polka', 'Polka roof', 30, '', {base: 'dark', pat: 'dots', acc: '#ffffff'}],
+    ['target', 'Target', 35, '', {base: '#f4efe1', pat: 'rings', acc: 'col'}], ['chequer', 'Chequer', 50, '', {base: '#2b3036', pat: 'checker', acc: 'col'}],
+    ['terracotta', 'Terracotta', 30, '', {base: '#c1592c', pat: 'stripes', acc: '#d9774a'}], ['waves', 'Ocean waves', 40, '', {base: '#1a7ca6', pat: 'waves', acc: '#7fe3ff'}],
+    ['mint', 'Mint', 25, '', {base: '#bff0dc', pat: 'dots', acc: '#4fd1a5'}], ['candy', 'Candy', 55, '', {base: '#ffd1e3', pat: 'stripes', acc: '#ff6fb5'}],
+    ['golden', 'Golden roof', 0, 'U', {base: '#d4af37', pat: 'rings', acc: '#fff1a8'}]
+  ],
+  light: [
+    ['mint', 'Mint', 25, '', {h: '#bff0dc', ring: '#4fa688'}], ['coral', 'Coral', 25, '', {h: '#ff8a75'}], ['sky', 'Sky', 25, '', {h: '#9fd5f2'}],
+    ['lilac', 'Lilac', 25, '', {h: '#c9a3e0'}], ['cream', 'Cream', 25, '', {h: '#f4efe1', ring: '#c9c3b5'}], ['navy', 'Navy', 30, '', {h: '#25408f', shape: 'square'}],
+    ['forest', 'Forest', 30, '', {h: '#2e7d32', shape: 'square'}], ['rose', 'Rose', 30, '', {h: '#e3799d', shape: 'pill'}], ['copper', 'Copper', 35, '', {h: '#b57a4a', ring: '#e0a878'}],
+    ['chrome', 'Chrome', 40, '', {h: '#c9d3dc', ring: '#ffffff', shape: 'square'}], ['neonring', 'Neon ring', 50, '', {h: '#151a28', ring: '#00e1ff', glow: '#00e1ff'}],
+    ['sunflower', 'Sunflower', 35, '', {h: '#ffd23a', ring: '#7a5a10'}], ['pebble', 'Pebble', 25, '', {h: '#9aa3a8', shape: 'pill'}], ['bubble', 'Bubble', 35, '', {h: '#9fd5f2', ring: '#ffffff', shape: 'pill'}],
+    ['ember', 'Ember', 55, '', {h: '#3a1f18', ring: '#ff6a2b', glow: '#ff6a2b'}], ['candy', 'Candy', 50, '', {h: '#ff9ecb', ring: '#ffffff'}],
+    ['halo', 'Halo', 0, 'U', {h: '#f4f2ec', ring: '#fff1a8', glow: '#ffffff'}], ['nightowl', 'Night owl', 0, 'U', {h: '#151a28', ring: '#ffd23a', glow: '#ffd23a', shape: 'pill'}]
+  ],
+  round: [
+    ['rosegarden', 'Rose garden', 35, '', {fill: '#6fb35e', pat: 'petals', acc: '#ff6b8b', c2: '#ffd23a'}], ['sunflower', 'Sunflower', 35, '', {fill: '#86c46a', pat: 'petals', acc: '#ffd23a', c2: '#7a4a20'}],
+    ['target', 'Target', 30, '', {fill: '#ffffff', pat: 'rings', acc: '#e0483e'}], ['pebbles', 'Pebbles', 25, '', {fill: '#cfc8bb', pat: 'dots', acc: ['#9a9389', '#b4ada1', '#e3ddd2']}],
+    ['lawn', 'Lawn stripes', 25, '', {fill: '#6fb35e', pat: 'wedges', acc: ['#86c46a']}], ['spiral', 'Spiral', 40, '', {fill: '#f4efe1', pat: 'spiral', acc: '#2f7de1'}],
+    ['oak', 'Oak tree', 35, '', {fill: '#6fb35e', pat: 'tree'}], ['koi', 'Koi pond', 45, '', {fill: '#7cc9a6', pat: 'water', acc: '#ff9f1a'}],
+    ['lavender', 'Lavender', 30, '', {fill: '#6fb35e', pat: 'dots', acc: ['#a58bdb', '#c9a3e0']}], ['beachball', 'Beach ball', 50, '', {fill: '#ffffff', pat: 'wedges', acc: ['#e0483e', '#2f7de1', '#ffd23a', '#2fa66a']}],
+    ['pizza', 'Pizza', 55, '', {fill: '#f0b26a', pat: 'wedges', acc: ['#e8c06a'], dots: '#c8102e'}], ['compass', 'Compass', 40, '', {fill: '#f4efe1', pat: 'wedges', acc: ['#25408f']}],
+    ['snowglobe', 'Snow globe', 50, '', {fill: '#e8f1f6', pat: 'rings', acc: '#9fd5f2', dots: '#ffffff'}], ['lilypads', 'Lily pads', 35, '', {fill: '#7cc9a6', pat: 'water', acc: '#4f9b4f'}],
+    ['mosaic', 'Mosaic', 0, 'U', {fill: '#f4efe1', pat: 'dots', acc: ['#e0483e', '#2f7de1', '#ffd23a', '#2fa66a', '#8a5bd6', '#16a2b8']}], ['galaxy', 'Galaxy', 0, 'U', {fill: '#1a0f3d', pat: 'spiral', acc: '#c59bff', dots: '#ffffff'}]
+  ],
+  bridge: [
+    ['mint', 'Mint rails', 30, '', ['#4fd1a5', '#bff0dc', '#2a9670']], ['cherry', 'Cherry', 35, '', ['#c8102e', '#ff8a75', '#7a1830']], ['ocean', 'Ocean', 35, '', ['#1a7ca6', '#7fe3ff', '#0d5f82']],
+    ['sandstone', 'Sandstone', 30, '', ['#c9a876', '#efe3c8', '#8d6d48']], ['slate', 'Slate', 25, '', ['#5b6f86', '#9fb3c2', '#3a4a5a']], ['bamboo', 'Bamboo', 40, '', ['#93c47d', '#5f7a35', '#4e7a4a']],
+    ['copper', 'Copper', 40, '', ['#b57a4a', '#e0a878', '#6a2c20']], ['lilac', 'Lilac', 30, '', ['#a58bdb', '#e9e1f5', '#5c2f8e']], ['candycane', 'Candy cane', 55, '', ['#ffffff', '#e0483e', '#c8102e']],
+    ['night', 'Night', 50, '', ['#151a28', '#ffd23a', '#0b0f1f']], ['marble', 'Marble', 35, '', ['#e9e6e1', '#a59f96', '#c9c3ba']], ['jungle', 'Jungle vines', 40, '', ['#2e7d32', '#8cc63f', '#215030']],
+    ['gold', 'Gold', 0, 'U', ['#d4af37', '#fff1a8', '#8f6d10']], ['lava', 'Lava', 0, 'U', ['#2a1714', '#ff5a1a', '#ff8a3a']]
+  ],
+  moto: [
+    ['mint', 'Mint', 30, '', ['#bff0dc', '#4fd1a5']], ['peach', 'Peach', 30, '', ['#ffd9c2', '#f0b26a']], ['ocean', 'Ocean', 35, '', ['#7fe3ff', '#1a7ca6', '#0d5f82']],
+    ['forest', 'Forest', 30, '', ['#86c46a', '#2e7d32']], ['berry', 'Berry', 35, '', ['#ff8fb1', '#a0184f']], ['lilac', 'Lilac', 30, '', ['#e9e1f5', '#a58bdb']],
+    ['sand', 'Sand', 25, '', ['#efe3c8', '#c9a876']], ['slate', 'Slate', 25, '', ['#9fb3c2', '#5b6f86']], ['candy', 'Candy', 50, '', ['#ffffff', '#ff9ecb', '#ffffff']],
+    ['tropical', 'Tropical', 55, '', ['#ffd23a', '#3fbfad', '#1a7ca6']], ['ember', 'Ember', 55, '', ['#ffcf5c', '#ff6a2b', '#8a1a10']], ['neonnight', 'Neon night', 45, '', ['#ff3df2', '#151a28', '#00e1ff']],
+    ['chalk', 'Chalk', 25, '', ['#f4efe1', '#e3e9ee']], ['gold', 'Gold', 0, 'U', ['#fff1a8', '#d4af37', '#8f6d10']], ['galaxy', 'Galaxy', 0, 'U', ['#c59bff', '#5b2bff', '#1a0f3d']]
+  ]
+};
+const GEN_P = {}; for (const c in GEN) { GEN_P[c] = {}; for (const e of GEN[c]) GEN_P[c][e[0]] = e[4]; }
+/* a generated house: one rounded body (box, pill, round or dome), a roof pattern, a trim in the house's colour, a door and a few extras */
+function houseGen(p, b, col, model) {
+  const C = v => v === 'col' ? col : v === 'dark' ? shade(col, -0.35) : v === 'light' ? shade(col, 0.35) : v;
+  const roof = C(p.roof), acc = C(p.acc || 'col'), round = p.shape === 'round' || p.shape === 'dome';
+  const body = () => { if (round) { ctx.beginPath(); ctx.arc(0, -5, 9.5, 0, 6.3); } else if (p.shape === 'pill') rr(-11.5, -11.5, 23, 13, 6.5); else rr(-11, -13, 22, 16, 4); };
+  const dot = (x, y, r, c) => { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.3); ctx.fill(); };
+  body();
+  if (p.shape === 'dome') { const gr = ctx.createRadialGradient(-3, -8, 1, 0, -5, 10); gr.addColorStop(0, shade(roof, 0.25)); gr.addColorStop(1, shade(roof, -0.15)); ctx.fillStyle = gr; } else ctx.fillStyle = roof;
+  ctx.fill();
+  ctx.save(); body(); ctx.clip();
+  const pt = p.pat;
+  if (pt === 'tiles') { ctx.fillStyle = shade(roof, -0.14); for (let y = -12, j = 0; y < 4; y += 2.4, j++) for (let x = -12 + (j % 2) * 1.2; x < 12; x += 2.4) { ctx.beginPath(); ctx.arc(x, y, 1, 0, Math.PI); ctx.fill(); } }
+  else if (pt === 'stripes') { ctx.fillStyle = acc; for (let x = -11; x < 11; x += 3.4) sfr(x, -14, 1.7, 18); }
+  else if (pt === 'rings') { ctx.strokeStyle = acc; ctx.lineWidth = 1.1; for (const r_ of [3, 6.2]) { ctx.beginPath(); if (round) ctx.arc(0, -5, r_, 0, 6.3); else rr(-r_ * 1.5, -5 - r_, r_ * 3, r_ * 2, r_); ctx.stroke(); } }
+  else if (pt === 'garden') { for (let i = 0; i < 16; i++) dot(-9 + hash01(i, 31) * 18, -13 + hash01(i, 32) * 16, 1 + hash01(i, 33) * 1.4, i % 3 ? '#86c46a' : '#4f8d3f'); for (let i = 0; i < 5; i++) dot(-7 + hash01(i, 34) * 14, -11 + hash01(i, 35) * 12, 0.6, ['#ff6b8b', '#ffd23a', '#ffffff'][i % 3]); }
+  else if (pt === 'solar') { ctx.fillStyle = '#1f3552'; for (let y = -11; y < 0; y += 4) for (let x = -9; x < 9; x += 6) sfr(x, y, 5, 3); }
+  else if (pt === 'logs') { for (let y = -12.5, i = 0; y < 3; y += 2, i++) { ctx.fillStyle = i % 2 ? shade(roof, 0.12) : shade(roof, -0.1); sfr(-11, y, 22, 1.6); } }
+  else if (pt === 'dots') { for (let y = -11, j = 0; y < 2; y += 3.2, j++) for (let x = -9 + (j % 2) * 1.6; x < 10; x += 3.2) dot(x, y, 0.75, acc); }
+  else if (pt === 'glass') { ctx.fillStyle = 'rgba(255,255,255,.55)'; for (let y = -12; y < 2; y += 4) for (let x = -10; x < 10; x += 5) sfr(x, y, 4.2, 3.2); }
+  else if (pt === 'shingle') { ctx.fillStyle = shade(roof, 0.12); for (let y = -11, j = 0; y < 1; y += 2.6, j++) for (let x = -11 + (j % 2) * 1.6; x < 11; x += 3.2) sfr(x, y, 2.6, 1.8); }
+  else if (pt === 'ridge') { ctx.fillStyle = shade(roof, 0.14); ctx.fillRect(-12, -14, 24, 9); ctx.fillStyle = 'rgba(255,255,255,.5)'; sfr(-10.5, -5.6, 21, 0.8); }
+  else if (pt === 'slit') { ctx.fillStyle = '#2b3036'; sfr(-1.4, -14, 2.8, 9); dot(0, -5, 1.6, '#2b3036'); }
+  ctx.restore();
+  if (p.roof !== 'col' && !p.noTrim) { body(); ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.stroke(); }
+  const dy = round ? 1.4 : p.shape === 'pill' ? -1.6 : 0.2;
+  rr(-1.6, dy, 3.2, 3.2, 1.5); ctx.fillStyle = p.door ? C(p.door) : shade(col, -0.45); ctx.fill();
+  for (const xk of p.x || []) {
+    if (xk === 'chimney') { ctx.fillStyle = '#6b5f55'; sfr(5, -12.5, 2.8, 3.2); }
+    else if (xk === 'tree') { dotShadow(10.5, -11, 3, 3); dot(10.5, -11, 3, PAL.tree2); dot(9.8, -11.8, 1.8, PAL.tree1); }
+    else if (xk === 'pool') { ctx.fillStyle = '#5fc4e6'; sfr(-10.5, -12, 6, 3.4); ctx.fillStyle = 'rgba(255,255,255,.6)'; sfr(-9.8, -11.4, 3, 0.7); }
+    else if (xk === 'flowers' && model >= 1) for (let i = 0; i < 5; i++) dot(-8 + i * 4, 3.9, 0.7, ['#ff6b8b', '#ffd23a', '#ffffff', '#b07bff', '#ff6b8b'][i]);
+    else if (xk === 'lantern') { ctx.save(); ctx.globalCompositeOperation = 'lighter'; dot(8.5, 2, 2.4, 'rgba(255,200,120,.3)'); ctx.restore(); dot(8.5, 2, 1, '#ff6a3a'); }
+    else if (xk === 'antenna') { dot(6.5, -11, 2, '#e3e9ee'); dot(6.5, -11, 0.8, '#7d8790'); }
+  }
+  if (showSymbols) glyph(COLORS[b.color].glyph, 0, round ? -5 : -6, 2.3, roof.startsWith('#') && lum(roof) > 0.5 ? col : 'rgba(255,255,255,.92)');
+}
+/* a generated store roof: a base colour and a pattern (the store's colour can be the pattern's) */
+function storeGen(p, Bx, By, Bw, Bh, col) {
+  const C = v => v === 'col' ? col : v === 'dark' ? shade(col, -0.4) : v;
+  const acc = C(p.acc || 'col'), dot = (x, y, r, c) => { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.3); ctx.fill(); };
+  ctx.fillStyle = C(p.base); ctx.fillRect(Bx, By, Bw, Bh);
+  const pt = p.pat;
+  if (pt === 'stripes') { ctx.fillStyle = acc; for (let x = Bx + 2; x < Bx + Bw; x += 8) sfr(x, By, 4, Bh); }
+  else if (pt === 'grid') { ctx.fillStyle = acc; for (let y = By + 6; y < By + Bh - 8; y += 10) for (let x = Bx + 6; x < Bx + Bw - 8; x += 10) sfr(x, y, 6, 6); }
+  else if (pt === 'dots') { for (let y = By + 5, j = 0; y < By + Bh - 3; y += 7, j++) for (let x = Bx + 5 + (j % 2) * 3.5; x < Bx + Bw - 3; x += 7) dot(x, y, 1.8, acc); }
+  else if (pt === 'rings') { ctx.strokeStyle = acc; ctx.lineWidth = 2.2; for (let i = 1; i <= 3; i++) { const m = i * 6; rr(Bx + m, By + m, Bw - m * 2, Bh - m * 2, 6); ctx.stroke(); } }
+  else if (pt === 'garden') { for (let i = 0; i < 34; i++) dot(Bx + hash01(i, 81) * Bw, By + hash01(i, 82) * Bh, 1.4 + hash01(i, 83) * 1.8, i % 3 ? '#86c46a' : '#4f8d3f'); for (let i = 0; i < 8; i++) dot(Bx + hash01(i, 84) * Bw, By + hash01(i, 85) * Bh, 0.9, ['#ff6b8b', '#ffd23a', '#ffffff'][i % 3]); }
+  else if (pt === 'solar') { ctx.fillStyle = acc; for (let y = By + 5; y < By + Bh - 8; y += 9) for (let x = Bx + 5; x < Bx + Bw - 10; x += 13) sfr(x, y, 11, 6); }
+  else if (pt === 'pool') { ctx.fillStyle = acc; sfr(Bx + 5, By + 6, Bw * 0.55, Bh * 0.42); ctx.fillStyle = 'rgba(255,255,255,.55)'; sfr(Bx + 8, By + 9, Bw * 0.3, 1.6); dot(Bx + Bw - 10, By + Bh * 0.7, 3, '#ff6f61'); }
+  else if (pt === 'checker') { ctx.fillStyle = acc; for (let y = By + 3, j = 0; y < By + Bh - 3; y += 6, j++) for (let x = Bx + 3 + (j % 2) * 6; x < Bx + Bw - 3; x += 12) sfr(x, y, 5.2, 5.2); }
+  else if (pt === 'waves') { ctx.strokeStyle = acc; ctx.lineWidth = 1.6; ctx.lineCap = 'round'; ctx.beginPath(); for (let y = By + 6; y < By + Bh; y += 7) for (let x = Bx; x <= Bx + Bw; x += 1) { const yy = y + Math.sin(x * 0.35) * 1.6; x === Bx ? ctx.moveTo(x, yy) : ctx.lineTo(x, yy); } ctx.stroke(); }
+}
+/* a generated roundabout middle: a fill and a pattern */
+function roundGen(p, x, y, IR) {
+  const R0 = IR + 0.5, cs = [].concat(p.acc || '#ffffff'), dot = (px, py, r, c) => { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(px, py, r, 0, 6.3); ctx.fill(); };
+  dot(x, y, R0, p.fill);
+  ctx.save(); ctx.beginPath(); ctx.arc(x, y, R0, 0, 6.3); ctx.clip();
+  const pt = p.pat;
+  if (pt === 'rings') { ctx.strokeStyle = cs[0]; ctx.lineWidth = 1; for (const r of [R0 * 0.72, R0 * 0.4]) { ctx.beginPath(); ctx.arc(x, y, r, 0, 6.3); ctx.stroke(); } dot(x, y, 0.9, cs[0]); }
+  else if (pt === 'petals') { ctx.fillStyle = cs[0]; for (let i = 0; i < 8; i++) { const a = i * 0.785; ctx.beginPath(); ctx.ellipse(x + Math.cos(a) * R0 * 0.48, y + Math.sin(a) * R0 * 0.48, R0 * 0.3, R0 * 0.17, a, 0, 6.3); ctx.fill(); } dot(x, y, R0 * 0.24, p.c2 || '#7a4a20'); }
+  else if (pt === 'dots') { for (let i = 0; i < 12; i++) { const a = i * 2.4, d = Math.sqrt((i + 0.5) / 12) * R0 * 0.85; dot(x + Math.cos(a) * d, y + Math.sin(a) * d, 0.8, cs[i % cs.length]); } }
+  else if (pt === 'wedges') { for (let i = 1; i < 8; i += 2) { ctx.fillStyle = cs[(i >> 1) % cs.length]; ctx.beginPath(); ctx.moveTo(x, y); ctx.arc(x, y, R0, i * 0.785, (i + 1) * 0.785); ctx.closePath(); ctx.fill(); } }
+  else if (pt === 'spiral') { ctx.strokeStyle = cs[0]; ctx.lineWidth = 0.9; ctx.lineCap = 'round'; ctx.beginPath(); const a0 = REDUCED_MOTION ? 0 : animT * 0.5; for (let t = 0; t <= 12.6; t += 0.2) { const r = t / 12.6 * R0 * 0.88, a = t + a0; t ? ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r) : ctx.moveTo(x, y); } ctx.stroke(); }
+  else if (pt === 'tree') { dot(x + SUN.x * 1.5, y + SUN.y * 1.5, R0 * 0.62, 'rgba(0,0,0,.18)'); dot(x, y, R0 * 0.62, '#3f8a4a'); dot(x - R0 * 0.18, y - R0 * 0.18, R0 * 0.36, '#5cab5f'); }
+  else if (pt === 'water') { dot(x, y, R0 - 1, '#5fb4d6'); for (const [dx, dy] of [[-2, -1.4], [2, 1], [0.2, 2.4]]) { ctx.fillStyle = cs[0]; ctx.beginPath(); ctx.ellipse(x + dx, y + dy, 1.1, 0.6, dx, 0, 6.3); ctx.fill(); } }
+  if (p.dots) for (let i = 0; i < 7; i++) { const a = i * 2.4 + 0.5, d = Math.sqrt((i + 0.5) / 7) * R0 * 0.75; dot(x + Math.cos(a) * d, y + Math.sin(a) * d, 0.6, p.dots); }
+  ctx.restore();
+}
 const MAP_THEMES = {
   meadow:   {label: 'Meadow',   tone: 'light', decor: 'tree',    land: '#dde5cf', land2: '#d4dec4', patch: '#bdd49c', water: '#9dc9df'},
   night:    {label: 'Night',    tone: 'dark',  decor: 'tree',    land: '#23322f', land2: '#1f2d2b', patch: '#2e463a', water: '#1c4458'},
@@ -3970,6 +4111,7 @@ function palFor(id, custom) {
   else if (rd === 'gold') { P.road = '#efc23a'; P.roadWet = '#d9ad27'; P.edge = '#8a6a10'; P.lane = 'rgba(255,255,255,.75)'; }
   else if (rd === 'marble') { P.road = '#e9e6e1'; P.roadWet = '#dcd8d2'; P.edge = '#a59f96'; P.lane = '#c9a24a'; }
   else if (rd === 'lava') { P.road = '#2a1714'; P.roadWet = '#24130f'; P.edge = '#ff5a1a'; P.lane = '#ffc23a'; }
+  else if (GEN_P.road[rd]) { const q = GEN_P.road[rd]; P.road = q.road; P.roadWet = mixHex(q.road, '#000000', 0.08); P.edge = q.edge; P.lane = q.lane; }
   if (cu.road) {                                     // road surface; its kerb and the wet look follow it
     P.road = cu.road; P.roadWet = mixHex(cu.road, '#000000', 0.09);
     P.edge = mixHex(cu.road, '#000000', lum(cu.road) > 0.3 ? 0.72 : 0.6);
@@ -3983,6 +4125,7 @@ function palFor(id, custom) {
   else if (md === 'glass') { P.deck = 'rgba(170,220,245,.55)'; P.deckEdge = 'rgba(70,140,175,.85)'; }
   else if (md === 'skyline') { P.deck = '#151a28'; P.deckEdge = '#00e1ff'; }
   else if (md === 'aurora') { P.deck = '#2fd6ff'; P.deckEdge = '#1a2a4a'; }
+  else if (GEN_P.moto[md]) { const q = GEN_P.moto[md]; P.deck = q[0]; P.deckEdge = mixHex(q[q.length - 1], '#000000', 0.45); }
   if (cu.moto) { P.deck = cu.moto; P.deckEdge = mixHex(cu.moto, '#000000', 0.55); }
   P.tone = tone;
   return P;
@@ -4488,7 +4631,9 @@ function paintMoto(path, dash, pillars) {
   const md = design('moto'), custom = !!mapPrefs.moto;
   ctx.save(); ctx.lineCap = 'round';
   ctx.strokeStyle = PAL.deckEdge; ctx.lineWidth = 15; ctx.stroke(path);
-  if (md === 'rainbow' && !custom) {
+  const mg = GEN_P.moto[md];
+  if (mg && !custom) mg.forEach((c, i) => { ctx.strokeStyle = c; ctx.lineWidth = 12.6 - i * 12.6 / (mg.length + 0.7); ctx.stroke(path); });
+  else if (md === 'rainbow' && !custom) {
     ['#ff4d4d', '#ff9f1a', '#ffd23a', '#3fd16a', '#2f9bff', '#8a5bff'].forEach((c, i) => { ctx.strokeStyle = c; ctx.lineWidth = 12.6 - i * 2.1; ctx.stroke(path); });
   } else if (md === 'sunset' && !custom) {
     ['#ffcf5c', '#ff8a5c', '#e3527a', '#8a4fb0'].forEach((c, i) => { ctx.strokeStyle = c; ctx.lineWidth = 12.6 - i * 3; ctx.stroke(path); });
@@ -4570,7 +4715,12 @@ function roadTexture(path, bridgePath) {
 function bridgeParapet(path) {
   const RW = CFG.roadWidth, bd = design('bridge');
   ctx.save(); ctx.lineCap = 'round';
-  if (bd === 'wood') {
+  const bg = GEN_P.bridge[bd];
+  if (bg) {
+    ctx.strokeStyle = bg[0]; ctx.lineWidth = RW + 7.5; ctx.stroke(path);
+    ctx.strokeStyle = bg[1]; ctx.setLineDash([1.6, 3.4]); ctx.lineCap = 'butt'; ctx.stroke(path);
+    ctx.setLineDash([]); ctx.lineCap = 'round'; ctx.strokeStyle = bg[2]; ctx.lineWidth = RW + 3.6; ctx.stroke(path);
+  } else if (bd === 'wood') {
     ctx.strokeStyle = '#7a4f2b'; ctx.lineWidth = RW + 7; ctx.stroke(path);
     ctx.strokeStyle = '#a0703f'; ctx.lineWidth = RW + 4.4; ctx.setLineDash([1.1, 2.4]); ctx.lineCap = 'butt'; ctx.stroke(path);
   } else if (bd === 'steel') {
@@ -4645,7 +4795,9 @@ function drawRoundAt(x, y) {
   const R = 15, IR = 6.2, wet = rain.amt > 0.2, rd = design('round');
   dotShadow(x, y, R, 1.8);
   ctx.fillStyle = wet ? PAL.roadWet : PAL.road; ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.fill();
-  if (rd === 'stone') {
+  const rg = GEN_P.round[rd];
+  if (rg) roundGen(rg, x, y, IR);
+  else if (rd === 'stone') {
     ctx.fillStyle = '#b4ada1'; ctx.beginPath(); ctx.arc(x, y, IR + 0.6, 0, 6.3); ctx.fill();
     ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = 0.6;
     for (let r = 2; r < IR; r += 2) { ctx.beginPath(); ctx.arc(x, y, r, 0, 6.3); ctx.stroke(); }
@@ -4704,7 +4856,15 @@ function drawLightHeads(x, y, ls, dem) {
   }
   for (const [hx, hy, g] of heads) {
     const green = !ls.allRed && ls.ph === g, lamp = green ? '#48e08a' : '#ff5a4a', X = x + hx, Y = y + hy;
-    if (ld === 'modern') {
+    const lg = GEN_P.light[ld];
+    if (lg) {                                              // a generated head: a housing of some colour and shape, maybe a ring and a glow
+      if (lg.glow) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = rgba(lg.glow, 0.22); ctx.beginPath(); ctx.arc(X, Y, 4.8, 0, 6.3); ctx.fill(); ctx.restore(); }
+      ctx.fillStyle = lg.h;
+      if (lg.shape === 'square') rr(X - 2.9, Y - 2.9, 5.8, 5.8, 1.8); else if (lg.shape === 'pill') rr(X - 3.6, Y - 2.3, 7.2, 4.6, 2.3); else { ctx.beginPath(); ctx.arc(X, Y, 3, 0, 6.3); }
+      ctx.fill(); if (lg.ring) { ctx.strokeStyle = lg.ring; ctx.lineWidth = 0.6; ctx.stroke(); }
+      ctx.fillStyle = '#1a1f24'; ctx.beginPath(); ctx.arc(X, Y, 1.95, 0, 6.3); ctx.fill();
+      ctx.fillStyle = lamp; ctx.beginPath(); ctx.arc(X, Y, 1.5, 0, 6.3); ctx.fill();
+    } else if (ld === 'modern') {
       rr(X - 3.4, Y - 1.3, 6.8, 2.6, 1.3); ctx.fillStyle = '#11161a'; ctx.fill();
       rr(X - 2.7, Y - 0.6, 5.4, 1.2, 0.6); ctx.fillStyle = lamp; ctx.fill();
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = green ? 'rgba(72,224,138,.25)' : 'rgba(255,90,74,.22)'; rr(X - 4, Y - 2, 8, 4, 2); ctx.fill(); ctx.restore();
@@ -4878,6 +5038,7 @@ function drawHouse(b) {
 }
 /* House designs, drawn in the house's own frame (front at +y). Bigger houses (more cars bought) get extras. */
 function drawHouseDesign(hd, b, col, model) {
+  if (GEN_P.house[hd]) { houseGen(GEN_P.house[hd], b, col, model); return; }
   if (hd === 'mushroom') {                                 // a toadstool cottage: a spotted cap in the house colour on a cream stalk
     ctx.fillStyle = '#efe4cc'; rr(-4.5, -4, 9, 7.5, 2); ctx.fill();
     rr(-1.4, 0.3, 2.8, 3.2, 1.2); ctx.fillStyle = '#8a5a35'; ctx.fill();
@@ -5217,6 +5378,7 @@ function drawStore(b) {
 }
 /* store designs re-roof the building (drawn clipped to the roof, in the store's own frame) */
 function storeRoofDesign(sdz, Bx, By, Bw, Bh, col) {
+  if (GEN_P.store[sdz]) { storeGen(GEN_P.store[sdz], Bx, By, Bw, Bh, col); return; }
   if (sdz === 'arcade') {                                  // a dark roof lit by a chasing grid of neon tiles
     ctx.fillStyle = '#16122a'; sfr(Bx, By, Bw, Bh);
     const t = REDUCED_MOTION ? 0 : Math.floor(animT * 2);
@@ -5408,9 +5570,10 @@ function drawCar(c, sizeBoost) {
   dropShadow(c.x, c.y, c.da, 1, bi >= 3 ? 2.8 : 1.9, [[r, -hw, L, Wd, 2.2]]);
   ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.da);
   const cd = design('car');
-  if (cd === 'neon') {                                     // neon underglow in the car's own colour
+  const cg = GEN_P.car[cd], glowC = cd === 'neon' ? col : cg && cg.glow;
+  if (glowC) {                                             // underglow: in the car's own colour (neon), or the design's
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
-    const gl = ctx.createRadialGradient(0, 0, 1, 0, 0, L * 0.85); gl.addColorStop(0, rgba(col, 0.55)); gl.addColorStop(1, rgba(col, 0));
+    const gl = ctx.createRadialGradient(0, 0, 1, 0, 0, L * 0.85); gl.addColorStop(0, rgba(glowC, 0.55)); gl.addColorStop(1, rgba(glowC, 0));
     ctx.fillStyle = gl; ctx.beginPath(); ctx.ellipse(0, 0, L * 0.85, Wd * 1.25, 0, 0, 6.3); ctx.fill(); ctx.restore();
   }
   // wheels: GT and racer sit on wider tyres, the racer on gold rims; the box truck has a third axle
@@ -5480,6 +5643,18 @@ function drawCar(c, sizeBoost) {
   if (cd === 'police') {                                   // white doors on the car's own colour
     ctx.save(); rr(r, -hw, L, Wd, bi === 0 ? hw : 1.5); ctx.clip(); ctx.fillStyle = '#f4f2ec'; sfr(r + L * 0.3, -hw, L * 0.36, Wd); ctx.restore();
   }
+  if (cg && cg.k) {                                        // a generated paint job, kept inside the body
+    ctx.save(); rr(r, -hw, L, Wd, bi === 0 ? hw : 1.5); ctx.clip();
+    const cs = cg.c || ['#ffffff'];
+    if (cg.k === 'dots') { for (let x = r + 1.2, i = 0; x < f - 0.6; x += cg.big ? 2.6 : 2, i++) for (const yy of [-hw * 0.5, hw * 0.5]) { ctx.fillStyle = cs[(i + (yy > 0 ? 1 : 0)) % cs.length]; ctx.beginPath(); ctx.arc(x + (yy > 0 ? 1 : 0), yy, cg.big ? 0.75 + hash01(i, yy > 0 ? 7 : 8) * 0.4 : 0.5, 0, 6.3); ctx.fill(); } }
+    else if (cg.k === 'stripe') { const n = cs.length, sw = Math.min(0.9, Wd * 0.55 / n); cs.forEach((cc, i) => { ctx.fillStyle = cc; sfr(r + 0.3, -n * sw / 2 + i * sw, L - 0.6, sw * 0.82); }); }
+    else if (cg.k === 'band') { ctx.fillStyle = cs[0]; sfr(r + 1, -hw + 0.2, L - 2, 0.95); sfr(r + 1, hw - 1.15, L - 2, 0.95); }
+    else if (cg.k === 'nose') { ctx.fillStyle = cs[0]; ctx.beginPath(); ctx.ellipse(f, 0, L * 0.26, hw * 1.15, 0, 0, 6.3); ctx.fill(); }
+    else if (cg.k === 'fade') { const gg = ctx.createLinearGradient(r, 0, f, 0); gg.addColorStop(0, rgba(cs[0], 0.8)); gg.addColorStop(0.55, rgba(cs[1], 0.3)); gg.addColorStop(1, rgba(cs[1], 0)); ctx.fillStyle = gg; ctx.fillRect(r, -hw, L, Wd); }
+    else if (cg.k === 'zebra') { ctx.strokeStyle = cs[0]; ctx.lineWidth = 0.8; ctx.lineCap = 'round'; ctx.beginPath(); for (let x = r - Wd; x < f; x += 2.1) { ctx.moveTo(x, hw + 0.5); ctx.lineTo(x + Wd * 0.8, -hw - 0.5); } ctx.stroke(); }
+    else if (cg.k === 'wave') { ctx.strokeStyle = cs[0]; ctx.lineWidth = 0.75; ctx.lineCap = 'round'; ctx.beginPath(); for (let x = r; x <= f + 0.01; x += 0.4) { const yy = Math.sin((x - r) * 1.1) * hw * 0.45; x === r ? ctx.moveTo(x, yy) : ctx.lineTo(x, yy); } ctx.stroke(); }
+    ctx.restore();
+  }
   if (cd === 'pastel') {                                   // a soft pastel wash over the paint, with a white roof
     ctx.save(); rr(r, -hw, L, Wd, bi === 0 ? hw : 1.5); ctx.clip(); ctx.fillStyle = 'rgba(255,255,255,.42)'; sfr(r, -hw, L, Wd); ctx.restore();
   }
@@ -5540,6 +5715,7 @@ function drawCar(c, sizeBoost) {
     ctx.fillStyle = col; sfr(f - 6.6, -hw + 0.2, 1.1, Wd - 0.4);                       // coloured band on the box front
     sfr(r + 0.3, -hw + 0.25, L - 7, 0.8); sfr(r + 0.3, hw - 1.05, L - 7, 0.8);
   }
+  if (cg && cg.roof && bi <= 1) { rr(roof0, -hw + 0.8, roof1 - roof0, Wd - 1.6, 1.2); ctx.fillStyle = cg.roof; ctx.fill(); }
   if (cd === 'police') {                                   // a light bar across the roof, flashing red and blue
     const on = REDUCED_MOTION ? 0 : Math.floor(animT * 5 + c.id) % 2, mx = (roof0 + roof1) / 2;
     ctx.fillStyle = '#1f262b'; sfr(mx - 0.8, -hw + 0.8, 1.6, Wd - 1.6);
@@ -6612,13 +6788,45 @@ function openModal(id) {
   $(id).hidden = false; modalOpen = true;
   if (id === 'm-start') {
     if (!started || over || tutorialMode) startDemo();      // nothing to come back to: put the background city on
-    $('app').classList.add('in-menu'); showMM(null);
+    $('app').classList.add('in-menu'); showMM(null); renderNews();
   }
 }
 /* ---- the main menu: Play, Saves, Friends, Customise, Settings and Account on the left; Leaderboard, Store,
    Weeklys, Tutorial, Feedback and Watch a player on the right; your balance top left. The middle shows
    whichever section is picked. */
-let mmPane = null, playMode = 'standard';
+let mmPane = null, playMode = 'standard', cusTab = 'mine';
+function setCusTab(t) {
+  cusTab = t;
+  document.querySelectorAll('[data-cus]').forEach(b => b.setAttribute('aria-pressed', b.dataset.cus === t ? 'true' : 'false'));
+  $('mm-custom').hidden = t !== 'mine'; $('mm-coll').hidden = t !== 'coll'; $('mm-cus-lead').hidden = t !== 'mine';
+  if (t === 'coll') renderCollection($('mm-coll')); else renderShop($('mm-custom'), 'owned');
+}
+/* what's new, sliding by above the weekly tile */
+const NEWS = [
+  {tag: 'New designs', title: 'Over 100 new designs', text: 'At least 24 of every kind: cars, houses, roads, stores, lights, roundabouts, bridges and motorways.', go: 'store', art: ['car', 'tidal']},
+  {tag: 'Collection', title: 'Track your collection', text: 'See everything you own and how to get the rest, in Customise and Account.', go: 'coll', art: ['house', 'observatory']},
+  {tag: 'Weekly', title: 'See this week\u2019s map', text: 'A seed makes the same map for everyone. Look it over before you play.', go: 'weekly', art: 'seed'},
+  {tag: 'Crates', title: 'Mystery crates', text: 'Colour, item and object crates hold unique designs the Store never sells.', go: 'store', art: ['store', 'golden']},
+  {tag: 'Store', title: 'Fresh stock every hour', text: '6 items and 6 colours each hour, and a daily special for R#.', go: 'store', art: ['moto', 'galaxy']}
+];
+let newsAt = 0, newsHover = false;
+function renderNews() {
+  const tr = $('news-track'); if (!tr) return;
+  if (!tr.childElementCount) {
+    tr.innerHTML = NEWS.map((n, i) => '<button type="button" class="news-s" data-n="' + i + '"><span class="news-t"><em>' + n.tag + '</em><b>' + n.title + '</b><small>' + n.text + '</small></span><canvas width="' + (n.art === 'seed' ? 120 : 132) + '" height="' + (n.art === 'seed' ? 120 : 88) + '"></canvas></button>').join('');
+    $('news-dots').innerHTML = NEWS.map((n, i) => '<button type="button" data-nd="' + i + '" aria-label="' + n.title + '"></button>').join('');
+    tr.querySelectorAll('.news-s').forEach(b => b.addEventListener('click', () => { const n = NEWS[+b.dataset.n]; if (n.go === 'coll') { showMM('custom'); setCusTab('coll'); } else showMM(n.go); }));
+    $('news-dots').querySelectorAll('[data-nd]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); newsAt = +b.dataset.nd; showNews(); }));
+    $('mm-news').addEventListener('mouseenter', () => { newsHover = true; }); $('mm-news').addEventListener('mouseleave', () => { newsHover = false; });
+  }
+  tr.querySelectorAll('canvas').forEach((c, i) => { const a = NEWS[i].art; if (a === 'seed') drawSeedMap(c, 0, false); else designPreview(c.getContext('2d'), a[0], a[1], c.width, c.height); });
+  showNews();
+}
+function showNews() {
+  document.querySelectorAll('#news-track .news-s').forEach((s2, i) => { s2.classList.toggle('on', i === newsAt); s2.setAttribute('aria-hidden', i === newsAt ? 'false' : 'true'); s2.tabIndex = i === newsAt ? 0 : -1; });
+  document.querySelectorAll('#news-dots [data-nd]').forEach((d, i) => d.setAttribute('aria-pressed', i === newsAt ? 'true' : 'false'));
+}
+setInterval(() => { if (!newsHover && !REDUCED_MOTION && $('m-start') && !$('m-start').hidden && !mmPane) { newsAt = (newsAt + 1) % NEWS.length; showNews(); } }, 6000);
 const MM_TITLES = {play: 'Play', saves: 'Saves', friends: 'Friends', custom: 'Customise', store: 'Store', weekly: 'Weeklys'};
 function showMM(pane) {
   mmPane = pane || null;
@@ -6632,6 +6840,7 @@ function showMM(pane) {
   if (mmPane === 'saves') { renderSlotsFor($('mm-slots'), playMode, true); $('mm-resume').hidden = !hasSave(); }
   if (mmPane === 'friends') { if (on && on.renderFriends) on.renderFriends($('mm-friends')); else $('mm-friends').innerHTML = '<p class="mini">Friends need the online service, which isn\u2019t available right now.</p>'; }
   if (mmPane === 'weekly') { renderExpertCard(); renderWeekly(); }
+  if (mmPane === 'custom') setCusTab(cusTab);
   renderLook();
 }
 /* The map a seed makes. An Expert city's water comes from genWater() run on that week's seeded stream, so the
@@ -6815,6 +7024,10 @@ function bindMainMenu() {
   $('sm-play').addEventListener('click', () => { closeModal('m-seedmap'); $('btn-expert').click(); });
   $('m-start').addEventListener('click', e => { if (e.target === $('m-start') && $('m-start').classList.contains('center-pane')) showMM(null); });   // the dimmed backdrop closes the Store or Weeklys
   bindCrates();
+  document.querySelectorAll('[data-cus]').forEach(b => b.addEventListener('click', () => setCusTab(b.dataset.cus)));
+  // the game's HUD hides while the menu shows: follow the menu however it's opened or closed (some paths just hide it)
+  new MutationObserver(() => { const on = !$('m-start').hidden; $('app').classList.toggle('in-menu', on); if (!on) $('app').classList.remove('menu-over'); })
+    .observe($('m-start'), {attributes: true, attributeFilter: ['hidden']});
 }
 /* the seed of the week on its tile */
 function renderMenuTiles() { const t = $('tile-seed'); if (t) { const sd = expertSeed(); t.textContent = sd.name; $('tile-seedwk').textContent = sd.label; } }
@@ -7430,6 +7643,7 @@ Object.assign(DESIGNS.light.items, {disco: ['Disco', 0, 'U']});
 Object.assign(DESIGNS.round.items, {carousel: ['Carousel', 0, 'U']});
 Object.assign(DESIGNS.bridge.items, {crystal: ['Ice crystal', 0, 'U']});
 Object.assign(DESIGNS.moto.items, {aurora: ['Aurora', 0, 'U']});
+for (const cat in GEN) for (const [k, n, pr, cur] of GEN[cat]) DESIGNS[cat].items[k] = cur ? [n, pr, cur] : [n, pr];
 const SPECIAL_R = {'car:gold': 200, 'house:castle': 250, 'road:gold': 150, 'store:crystal': 300, 'bridge:rainbow': 200, 'moto:rainbow': 150};
 for (const k in SPECIAL_R) { const [c, i] = k.split(':'); DESIGNS[c].items[i][1] = SPECIAL_R[k]; }
 const COSMETICS = {
@@ -7661,6 +7875,40 @@ function bindCrates() {
   $('crate-use').addEventListener('click', () => { const it = shopItemById(crateGot); if (it && it.apply) it.apply(); closeModal('m-crate'); renderLook(); });
   $('crate-again').addEventListener('click', () => openCrate(crateKind, true));
 }
+/* the Collection: every look, design and colour, with what you own and how to get the rest. Each group draws its
+   previews only when it's opened. Used on the main menu (Customise) and in Account. */
+function collIds(cat) { return cat === 'colour' ? Object.keys(COLOUR_PRICE).map(h => 'colour:' + h) : shopItems(cat).map(it => it.id); }
+function howToGet(id) {
+  const i = itemInfo(id); if (!i) return 'Free';
+  if (owns(id)) return 'Owned';
+  if (i[2] === 'A') return '\ud83c\udfc6 ' + achName(i[3]);
+  if (i[2] === 'U') return 'Crates only';
+  if (i[2] === 'R') return 'Daily special \u00b7 R#' + i[0];
+  return (inStock(id) ? 'In the Store now \u00b7 #' : 'Store or crates \u00b7 #') + i[0];
+}
+function renderCollection(box) {
+  if (!box) return;
+  ensureRotation();
+  let own = 0, all = 0;
+  const groups = SHOP_CATS.map(([cat, label]) => { const ids = collIds(cat), n = ids.filter(owns).length; own += n; all += ids.length; return [cat, label, ids, n]; });
+  const open = box._open || {};
+  box.innerHTML = '<div class="coll-top"><b>' + own + ' of ' + all + ' collected</b><span class="tut-track"><i style="width:' + Math.round(own / all * 100) + '%"></i></span></div>' +
+    '<p class="mini">Everything in Junction. Things you own are in colour; the rest show how to get them. Tap an owned item to use it.</p>' +
+    groups.map(([cat, label, ids, n]) => '<details class="coll-g" data-cat="' + cat + '"' + (open[cat] ? ' open' : '') + '><summary><b>' + label + '</b><span>' + n + ' / ' + ids.length + '</span><i style="--p:' + Math.round(n / ids.length * 100) + '%"></i></summary><div class="coll-grid"></div></details>').join('');
+  const fill = det => {
+    const cat = det.dataset.cat, grid = det.querySelector('.coll-grid'); if (grid.childElementCount) return;
+    const items = cat === 'colour' ? null : shopItems(cat);
+    grid.innerHTML = collIds(cat).map((id, i) => {
+      const r = rarityOf(id), o = owns(id), info = itemInfo(id), name = cat === 'colour' ? colourName(id.slice(7)) : items[i].name;
+      const pv = cat === 'colour' ? '<span class="csw" style="background:' + id.slice(7) + '"></span>' : items[i].html || '<canvas data-i="' + i + '"></canvas>';
+      return '<div class="coll-i r-' + r + (o ? ' own' : ' lock') + '" data-id="' + id + '"' + (o && cat !== 'colour' ? ' role="button" tabindex="0"' : '') + '>' + pv + '<b>' + name + '</b>' +
+        (info ? '<em class="rar r-' + r + '">' + RARITY[r] + '</em>' : '') + '<small>' + howToGet(id) + '</small></div>';
+    }).join('');
+    grid.querySelectorAll('canvas[data-i]').forEach(c => { const it = items[+c.dataset.i]; c.width = it.canvas[0]; c.height = it.canvas[1]; it.canvas[2](c); });
+  };
+  box.querySelectorAll('details').forEach(det => { if (det.open) fill(det); det.addEventListener('toggle', () => { open[det.dataset.cat] = det.open; box._open = open; if (det.open) fill(det); }); });
+  box.onclick = e => { const el = e.target.closest('.coll-i.own'); if (!el || el.dataset.id.startsWith('colour:')) return; const it = shopItemById(el.dataset.id); if (it && it.apply) { it.apply(); hint(it.name + ' is on.'); } };
+}
 /* the Store page: crates, the daily special, this hour's items and colours */
 function storeCard(it, canvases) {
   const r = rarityOf(it.id), own = owns(it.id), info = itemInfo(it.id);
@@ -7871,7 +8119,7 @@ function renderLook(light) {
   }
   if ($('cust-panel') && !$('cust-panel').hidden) renderShop($('cust-list'), 'quick', light);
   if ($('m-start') && !$('m-start').hidden) {
-    if (mmPane === 'custom') renderShop($('mm-custom'), 'owned', light);
+    if (mmPane === 'custom' && cusTab === 'mine') renderShop($('mm-custom'), 'owned', light);
     if (mmPane === 'store') renderShop($('mm-store'), 'store', light);
   }
   renderBucks();
@@ -8284,7 +8532,7 @@ if (typeof window !== 'undefined' && (location.hostname === 'localhost' || locat
       if (spectating) this.spectate.exit(); else { running = false; }
       showStartBest(); $('btn-resume').hidden = !hasSave(); openModal('m-start'); refreshUI();
     },
-    toast, openModal, closeModal,
+    toast, openModal, closeModal, renderCollection,
     spectate: {
       enter(d, meta, keepCam) {
         const was = spectating, c0 = {x: cam.x, y: cam.y, z: cam.z, auto: cam.auto};

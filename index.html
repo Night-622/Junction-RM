@@ -332,8 +332,10 @@
           </div>
           <div class="mm-pane" data-mm="friends" hidden><div id="mm-friends"></div></div>
           <div class="mm-pane" data-mm="custom" hidden>
-            <p class="mini">Everything you own. Tap to use it. <button class="linkbtn inl" type="button" data-mm-go="store">Get more in the Store</button></p>
+            <div class="seg cus-tabs"><button type="button" data-cus="mine" aria-pressed="true">My stuff</button><button type="button" data-cus="coll" aria-pressed="false">Collection</button></div>
+            <p class="mini" id="mm-cus-lead">Everything you own. Tap to use it. <button class="linkbtn inl" type="button" data-mm-go="store">Get more in the Store</button></p>
             <div class="shoplist" id="mm-custom"></div>
+            <div class="coll" id="mm-coll" hidden></div>
           </div>
           <div class="mm-pane" data-mm="store" hidden>
             <b id="mm-store-bal" hidden>#0</b>
@@ -365,6 +367,7 @@
       </section>
       <!-- event tiles, bottom right -->
       <aside class="rl-tiles" aria-label="More">
+        <div class="rl-news" id="mm-news" aria-roledescription="carousel" aria-label="What's new"><div class="news-track" id="news-track"></div><div class="news-dots" id="news-dots"></div></div>
         <button type="button" class="rl-tile wide t-weekly" data-mm="weekly" aria-pressed="false"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M9.5 14.5l1.8 1.8 3.5-3.5"/></svg> Weekly · Expert Survival</small><b id="tile-seed">—</b><span id="tile-seedwk"></span></button>
         <button type="button" class="rl-tile t-store" data-mm="store" aria-pressed="false"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h16l-1.5 11h-13z"/><path d="M8 9V7a4 4 0 018 0v2"/></svg> Store</small><b>New designs</b></button>
         <button type="button" class="rl-tile t-board" id="btn-board-s"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 01-10 0z"/><path d="M7 6H4v2a3 3 0 003 3M17 6h3v2a3 3 0 01-3 3"/></svg> Leaderboard</small><b>Top cities</b></button>
@@ -444,6 +447,7 @@
           <button type="button" data-pane="profile" aria-pressed="true">Profile</button>
           <button type="button" data-pane="stats" aria-pressed="false">Stats</button>
           <button type="button" data-pane="ach" aria-pressed="false">Achievements</button>
+          <button type="button" data-pane="coll" aria-pressed="false">Collection</button>
           <button type="button" data-pane="saves" aria-pressed="false">Save files</button>
           <button type="button" data-pane="watch" aria-pressed="false">Watch</button>
           <button type="button" data-pane="msgs" aria-pressed="false">Messages <span class="tabbadge" id="msg-tabbadge" hidden></span></button>
@@ -463,6 +467,7 @@
           </div>
           <p class="mini">Be kind — messages are between players only. Find someone to message from the Expert leaderboard.</p>
         </div>
+        <div class="acct-pane" data-pane="coll" hidden><div class="coll" id="acct-coll"></div></div>
         <div class="acct-pane" data-pane="watch" hidden>
           <p class="mini">Type the 6-digit live code another player shared with you (it's in their Settings) to watch their city as they play.</p>
           <input class="codein" id="acct-watch-code" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="000000" aria-label="Live code">

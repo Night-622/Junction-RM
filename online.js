@@ -409,6 +409,7 @@ function acctPaneOpened() {
     renderSlots($('acct-slots'), SAVE_MODES.includes(API.startDiff) ? API.startDiff : 'standard', true);
   }
   if (acctPane === 'msgs') { Promise.all([loadSent(), loadFriends()]).then(renderMsgs); renderMsgs(); }
+  if (acctPane === 'coll' && API.renderCollection) API.renderCollection($('acct-coll'));
   if (acctPane === 'watch') { $('acct-watch-err').textContent = ''; $('acct-watch-code').value = ''; setTimeout(() => $('acct-watch-code').focus(), 50); }
 }
 $('acct-close').addEventListener('click', () => closeM('m-acct'));
