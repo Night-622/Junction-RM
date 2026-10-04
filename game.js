@@ -293,8 +293,8 @@ const COLOR_LIBRARY = [
   ]},
   {group: 'Soft', cols: [['cream', '#f4efe1'], ['mist', '#e3e9ee'], ['sage', '#d7e3cc'], ['pale blush', '#f6dfe6'], ['pale sky', '#dceefa'], ['pale sand', '#efe3c8'],
     ['pale lilac', '#e9e1f5'], ['pale mint', '#dcf3e8'], ['deep charcoal', '#1d2226'], ['deep navy', '#142235'], ['deep forest', '#16291f'], ['deep plum', '#2a1a33']]},
-  {group: 'Rare', cols: [['gold', '#d4af37', 80], ['neon pink', '#ff2bd6', 75], ['electric lime', '#b6ff00', 70], ['ultraviolet', '#5b2bff', 75], ['arctic', '#bff3ff', 60],
-    ['obsidian', '#0b0b10', 90], ['pearl', '#f3efe6', 65], ['chrome', '#c9d3dc', 85], ['lava', '#ff4d1a', 70], ['aurora teal', '#00d1b2', 65]]}
+  {group: 'Premium', cols: [['gold', '#d4af37', 60], ['neon pink', '#ff2bd6', 55], ['electric lime', '#b6ff00', 55], ['ultraviolet', '#5b2bff', 55], ['arctic', '#bff3ff', 50],
+    ['obsidian', '#0b0b10', 70], ['pearl', '#f3efe6', 50], ['chrome', '#c9d3dc', 65], ['lava', '#ff4d1a', 55], ['aurora teal', '#00d1b2', 50]]}
 ]
 const LIB_NAME = {}; for (const g of COLOR_LIBRARY) for (const [n, h] of g.cols) LIB_NAME[h] = n;
 /* Colour modes. Each palette fills the same six slots, so saves and colour indices never change —
@@ -3738,10 +3738,19 @@ function palFor(id, custom) {
   if (rd === 'cobble') { P.road = '#bdb5a8'; P.roadWet = '#a69f93'; P.edge = '#6f665b'; P.lane = 'rgba(255,255,255,.55)'; }
   else if (rd === 'dirt') { P.road = '#c8a274'; P.roadWet = '#ad8a60'; P.edge = '#7a5f40'; P.lane = 'rgba(0,0,0,0)'; }
   else if (rd === 'neon') { P.road = '#1c1f2e'; P.roadWet = '#171a27'; P.edge = '#00e1ff'; P.lane = '#ff3df2'; }
+  else if (rd === 'concrete') { P.road = '#d3d1cb'; P.roadWet = '#bebcb5'; P.edge = '#8d8b85'; P.lane = '#e2b022'; }
+  else if (rd === 'brick') { P.road = '#b4644a'; P.roadWet = '#9b533c'; P.edge = '#6c3426'; P.lane = 'rgba(255,240,220,.7)'; }
+  else if (rd === 'snowy') { P.road = '#e9eef2'; P.roadWet = '#dfe6ea'; P.edge = '#9fb3c2'; P.lane = 'rgba(110,140,160,.45)'; }
+  else if (rd === 'gold') { P.road = '#efc23a'; P.roadWet = '#d9ad27'; P.edge = '#8a6a10'; P.lane = 'rgba(255,255,255,.75)'; }
   if (cu.road) {                                     // road surface; its kerb and the wet look follow it
     P.road = cu.road; P.roadWet = mixHex(cu.road, '#000000', 0.09);
     P.edge = mixHex(cu.road, '#000000', lum(cu.road) > 0.3 ? 0.72 : 0.6);
   }
+  let md = 'standard'; try { md = design('moto'); } catch (e) {}
+  if (md === 'concrete') { P.deck = '#a9adb0'; P.deckEdge = '#6b7074'; }
+  else if (md === 'ivy') { P.deck = '#4f8f4a'; P.deckEdge = '#2c5629'; }
+  else if (md === 'lights') { P.deck = '#2b3240'; P.deckEdge = '#141921'; }
+  else if (md === 'rainbow') { P.deck = '#8a5bff'; P.deckEdge = '#3b2a6b'; }
   if (cu.moto) { P.deck = cu.moto; P.deckEdge = mixHex(cu.moto, '#000000', 0.55); }
   P.tone = tone;
   return P;
@@ -4213,13 +4222,31 @@ function drawRoads() {
   ctx.strokeStyle = PAL.lane; ctx.lineWidth = 1.3; ctx.setLineDash([4.5, 5]); ctx.globalAlpha = 0.85; ctx.stroke(P.dash);
   ctx.setLineDash([]); ctx.globalAlpha = 1;
   ctx.strokeStyle = PAL.stop; ctx.lineWidth = 1.8; ctx.lineCap = 'butt'; ctx.stroke(P.stop); ctx.lineCap = 'round';
-  if (motorways.length && showMoto) {
-    ctx.strokeStyle = PAL.deckEdge; ctx.lineWidth = 15; ctx.stroke(P.moto);
-    ctx.strokeStyle = PAL.deck; ctx.lineWidth = 12.6; ctx.stroke(P.moto);
-    ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 1.4; ctx.setLineDash([7, 6]); ctx.stroke(P.motoDash); ctx.setLineDash([]);
-    ctx.fillStyle = PAL.deckEdge; ctx.fill(P.pillars);
-  }
+  if (motorways.length && showMoto) paintMoto(P.moto, P.motoDash, P.pillars);
   // unlinked road stubs and bridges' little posts are implicit in the passes above
+}
+/* a motorway deck, per motorway design (custom colours still win over the design's own colours) */
+function paintMoto(path, dash, pillars) {
+  const md = design('moto'), custom = !!mapPrefs.moto;
+  ctx.save(); ctx.lineCap = 'round';
+  ctx.strokeStyle = PAL.deckEdge; ctx.lineWidth = 15; ctx.stroke(path);
+  if (md === 'rainbow' && !custom) {
+    ['#ff4d4d', '#ff9f1a', '#ffd23a', '#3fd16a', '#2f9bff', '#8a5bff'].forEach((c, i) => { ctx.strokeStyle = c; ctx.lineWidth = 12.6 - i * 2.1; ctx.stroke(path); });
+  } else { ctx.strokeStyle = PAL.deck; ctx.lineWidth = 12.6; ctx.stroke(path); }
+  if (md === 'ivy') {                                      // leafy hedges along both edges
+    ctx.strokeStyle = '#6fb35e'; ctx.lineWidth = 14.5; ctx.setLineDash([1.6, 2.4]); ctx.lineCap = 'round'; ctx.stroke(path);
+    ctx.setLineDash([]); ctx.strokeStyle = PAL.deck; ctx.lineWidth = 10.4; ctx.stroke(path);
+  }
+  if (md === 'concrete') { ctx.strokeStyle = 'rgba(0,0,0,.14)'; ctx.lineWidth = 12.6; ctx.setLineDash([0.6, 9]); ctx.lineCap = 'butt'; ctx.stroke(path); ctx.setLineDash([]); ctx.lineCap = 'round'; }
+  ctx.strokeStyle = md === 'lights' ? 'rgba(255,214,120,.95)' : 'rgba(255,255,255,.9)'; ctx.lineWidth = 1.4; ctx.setLineDash([7, 6]); ctx.stroke(dash); ctx.setLineDash([]);
+  if (md === 'lights') {                                   // a row of street lamps glowing along the deck
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = 'rgba(255,220,140,.35)'; ctx.lineWidth = 6; ctx.setLineDash([0.1, 22]); ctx.stroke(dash);
+    ctx.strokeStyle = 'rgba(255,240,200,.9)'; ctx.lineWidth = 2; ctx.stroke(dash); ctx.setLineDash([]);
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  if (pillars) { ctx.fillStyle = PAL.deckEdge; ctx.fill(pillars); }
+  ctx.restore();
 }
 /* the surface texture each road design adds on top of its colour */
 function roadTexture(path, bridgePath) {
@@ -4234,10 +4261,21 @@ function roadTexture(path, bridgePath) {
     ctx.strokeStyle = PAL.road; ctx.lineWidth = RW * 0.3; ctx.stroke(path);
     ctx.strokeStyle = 'rgba(70,45,20,.22)'; ctx.lineWidth = RW - 6; ctx.setLineDash([0.8, 4.6]); ctx.stroke(path);
     ctx.restore();
+  } else if (rd === 'concrete') {                          // expansion joints between slabs
+    ctx.save(); ctx.lineCap = 'butt'; ctx.strokeStyle = 'rgba(0,0,0,.16)'; ctx.lineWidth = RW; ctx.setLineDash([0.7, 11]); ctx.stroke(path); ctx.restore();
+  } else if (rd === 'brick' || rd === 'gold') {            // pavers laid in rows, the yellow brick road with a shimmer
+    ctx.save(); ctx.lineCap = 'butt';
+    ctx.strokeStyle = rd === 'gold' ? 'rgba(120,85,10,.35)' : 'rgba(255,235,215,.28)'; ctx.lineWidth = RW - 2; ctx.setLineDash([0.6, 2.6]); ctx.stroke(path);
+    ctx.lineWidth = RW - 9; ctx.lineDashOffset = 1.6; ctx.stroke(path);
+    if (rd === 'gold' && !REDUCED_MOTION) { ctx.setLineDash([2, 40]); ctx.lineDashOffset = -animT * 30; ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = RW - 6; ctx.stroke(path); }
+    ctx.restore();
+  } else if (rd === 'snowy') {                             // packed snow with grey tyre tracks
+    ctx.save(); ctx.strokeStyle = 'rgba(120,140,155,.28)'; ctx.lineWidth = RW * 0.55; ctx.stroke(path);
+    ctx.strokeStyle = PAL.road; ctx.lineWidth = RW * 0.28; ctx.stroke(path); ctx.restore();
   } else if (rd === 'neon') {                              // a soft glow running down the middle
     ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = 'rgba(0,225,255,.08)'; ctx.lineWidth = RW - 6; ctx.stroke(path); ctx.restore();
   }
-  if (bridgePath && design('bridge') === 'wood') {           // a wooden bridge shows its planks
+  if (bridgePath && (design('bridge') === 'wood' || design('bridge') === 'rope')) {   // wooden and rope bridges show their planks
     ctx.save(); ctx.lineCap = 'butt'; ctx.strokeStyle = 'rgba(90,55,25,.35)'; ctx.lineWidth = RW; ctx.setLineDash([0.8, 2.6]); ctx.stroke(bridgePath); ctx.restore();
   }
 }
@@ -4252,6 +4290,17 @@ function bridgeParapet(path) {
     ctx.strokeStyle = '#a93226'; ctx.lineWidth = RW + 8; ctx.stroke(path);
     ctx.strokeStyle = '#d24a3a'; ctx.lineWidth = RW + 8; ctx.setLineDash([2, 4]); ctx.lineCap = 'butt'; ctx.stroke(path);
     ctx.setLineDash([]); ctx.strokeStyle = '#7b1f17'; ctx.lineWidth = RW + 3.6; ctx.stroke(path);
+  } else if (bd === 'rope') {
+    ctx.strokeStyle = '#c9a46a'; ctx.lineWidth = RW + 6; ctx.stroke(path);
+    ctx.strokeStyle = '#7d5a2e'; ctx.lineWidth = RW + 6; ctx.setLineDash([0.9, 3.2]); ctx.lineCap = 'butt'; ctx.stroke(path);
+    ctx.setLineDash([]); ctx.strokeStyle = '#a07a45'; ctx.lineWidth = RW + 2.4; ctx.stroke(path);
+  } else if (bd === 'glass') {
+    ctx.strokeStyle = 'rgba(160,215,240,.75)'; ctx.lineWidth = RW + 8; ctx.stroke(path);
+    ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = RW + 8; ctx.setLineDash([6, 10]); ctx.lineCap = 'butt'; ctx.stroke(path);
+    ctx.setLineDash([]); ctx.strokeStyle = 'rgba(70,140,170,.55)'; ctx.lineWidth = RW + 3.6; ctx.stroke(path);
+  } else if (bd === 'rainbow') {
+    const rb = ['#ff4d4d', '#ff9f1a', '#ffd23a', '#3fd16a', '#2f9bff', '#8a5bff'];
+    rb.forEach((c, i) => { ctx.strokeStyle = c; ctx.lineWidth = RW + 10 - i * 1.4; ctx.stroke(path); });
   } else if (bd === 'suspension') {
     ctx.strokeStyle = '#e9edf0'; ctx.lineWidth = RW + 7.5; ctx.stroke(path);
     ctx.strokeStyle = '#5d6b75'; ctx.lineWidth = RW + 7.5; ctx.setLineDash([1.2, 9]); ctx.lineCap = 'butt'; ctx.stroke(path);
@@ -4437,6 +4486,8 @@ function drawHouse(b) {
   dropShadow(x, y, b.face || 0, s, 0.6, [[-12.5, 2.5, 25, 13.5, 3]]);                              // forecourt kerb
   const hd = design('house');
   if (hd === 'tower') dropShadow(x, y, b.face || 0, s, 7, [[-8.5, -13, 17, 17, 8.5]]);
+  else if (hd === 'igloo') dropShadow(x, y, b.face || 0, s, 3.6, [[-9, -12.5, 18, 15, 7.5]]);
+  else if (hd === 'castle') dropShadow(x, y, b.face || 0, s, 6.5, [[-12, -14, 24, 18, 3]]);
   else if (hd !== 'standard') dropShadow(x, y, b.face || 0, s, hd === 'modern' ? 3.4 : 4.2, [[-11, -13, 22, 16, 2]]);
   else dropShadow(x, y, b.face || 0, s, model === 2 ? 4.4 : 3.6, model === 0 ? [[-9, -12, 18, 15.5, 2.6]] : model === 1 ? [[-11.5, -13, 14.5, 16.5, 2.6], [3.4, -8.5, 8.1, 12, 1.4]] : [[-11.5, -13.5, 23, 17, 2.6]]);
   ctx.save(); ctx.translate(x, y); ctx.rotate(b.face || 0); ctx.scale(s, s);
@@ -4482,7 +4533,56 @@ function drawHouse(b) {
 }
 /* House designs, drawn in the house's own frame (front at +y). Bigger houses (more cars bought) get extras. */
 function drawHouseDesign(hd, b, col, model) {
-  if (hd === 'barn') {                                     // a gambrel-roofed barn in the house colour with white trim and a cross-braced door
+  if (hd === 'thatch') {                                   // a cottage under a deep golden thatch, door and shutters in the house colour
+    rr(-11, -13, 22, 16, 5); ctx.fillStyle = '#b9893d'; ctx.fill();
+    ctx.fillStyle = '#d9ad5c'; rr(-11, -13, 22, 7.5, 5); ctx.fill();
+    ctx.strokeStyle = 'rgba(110,75,25,.35)'; ctx.lineWidth = 0.35; ctx.beginPath();
+    for (let xx = -10; xx < 11; xx += 1.6) { ctx.moveTo(xx, -12.5); ctx.lineTo(xx + 0.6, -6); ctx.moveTo(xx, -5.2); ctx.lineTo(xx + 0.6, 2.4); } ctx.stroke();
+    ctx.fillStyle = 'rgba(255,240,200,.6)'; ctx.fillRect(-10.5, -5.6, 21, 0.7);                                  // ridge
+    rr(-1.6, 0.2, 3.2, 3.4, 1.4); ctx.fillStyle = col; ctx.fill();
+    for (const wx of [-7.5, 4.5]) { ctx.fillStyle = col; ctx.fillRect(wx - 0.8, 0.8, 0.7, 2); ctx.fillRect(wx + 3.1, 0.8, 0.7, 2); win(wx, 0.8, 3, 2); }
+    if (model >= 1) { ctx.fillStyle = '#e8455a'; for (const fx of [-9, -8, 8, 9]) { ctx.beginPath(); ctx.arc(fx, 3.4, 0.6, 0, 6.3); ctx.fill(); } }   // window boxes
+    if (model >= 2) { ctx.fillStyle = '#7a6a58'; ctx.fillRect(5, -12, 2.4, 3); }                                                                 // chimney
+    if (showSymbols) glyph(COLORS[b.color].glyph, 0, -8, 2.4, 'rgba(255,255,255,.92)');
+  } else if (hd === 'beach') {                             // a striped beach hut on stilts with a little deck
+    rr(-11, -13, 22, 16, 1.5); ctx.fillStyle = '#fbf8f1'; ctx.fill();
+    ctx.save(); rr(-11, -13, 22, 16, 1.5); ctx.clip();
+    for (let xx = -11, i = 0; xx < 11; xx += 3.2, i++) if (i % 2 === 0) { ctx.fillStyle = col; ctx.fillRect(xx, -13, 3.2, 16); }
+    ctx.restore();
+    ctx.fillStyle = 'rgba(0,0,0,.14)'; ctx.fillRect(-11, -5.4, 22, 0.6);                                          // roof ridge
+    ctx.fillStyle = '#c99a62'; ctx.fillRect(-7, 2.4, 14, 1.4); ctx.fillStyle = 'rgba(0,0,0,.2)'; for (let xx = -6.5; xx < 7; xx += 1.4) ctx.fillRect(xx, 2.4, 0.3, 1.4);   // deck
+    rr(-1.6, -0.2, 3.2, 2.8, 0.6); ctx.fillStyle = shade(col, -0.45); ctx.fill();
+    if (model >= 1) { ctx.fillStyle = '#ff6f61'; ctx.beginPath(); ctx.arc(-8.5, 3.5, 1.6, Math.PI, 0); ctx.fill(); }          // parasol
+    if (model >= 2) { ctx.fillStyle = '#ffd23a'; ctx.beginPath(); ctx.arc(8.5, 3.5, 1.6, Math.PI, 0); ctx.fill(); }
+    if (showSymbols) glyph(COLORS[b.color].glyph, 0, -9, 2.4, 'rgba(255,255,255,.92)');
+  } else if (hd === 'igloo') {                             // a snow-block dome with an entrance tunnel; a flag in the house colour
+    const gr = ctx.createRadialGradient(-3, -8, 1, 0, -5, 9); gr.addColorStop(0, '#ffffff'); gr.addColorStop(1, '#cfe1ec');
+    ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(0, -5, 8.5, 0, 6.3); ctx.fill();
+    ctx.strokeStyle = 'rgba(120,150,175,.45)'; ctx.lineWidth = 0.4; ctx.beginPath();
+    for (const r_ of [3, 5.8]) { ctx.moveTo(r_, -5); ctx.arc(0, -5, r_, 0, 6.3); }
+    for (let i = 0; i < 8; i++) { const a = i * 0.785; ctx.moveTo(Math.cos(a) * 3, -5 + Math.sin(a) * 3); ctx.lineTo(Math.cos(a) * 8.5, -5 + Math.sin(a) * 8.5); } ctx.stroke();
+    rr(-2.6, 1, 5.2, 3.2, 1.6); ctx.fillStyle = '#e8f1f6'; ctx.fill(); ctx.fillStyle = '#2f4250'; rr(-1.4, 2, 2.8, 2.2, 1.1); ctx.fill();
+    ctx.strokeStyle = '#6b6f72'; ctx.lineWidth = 0.5; ctx.beginPath(); ctx.moveTo(5, -9); ctx.lineTo(5, -15); ctx.stroke();
+    ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(5, -15); ctx.lineTo(8.6, -13.9); ctx.lineTo(5, -12.8); ctx.closePath(); ctx.fill();
+    if (model >= 1) { ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(-9.5, 1.5, 1.6, 0, 6.3); ctx.fill(); ctx.beginPath(); ctx.arc(-9.5, -0.6, 1.1, 0, 6.3); ctx.fill(); }   // a tiny snowman
+    if (showSymbols) glyph(COLORS[b.color].glyph, 0, -5, 2.2, col);
+  } else if (hd === 'castle') {                            // a stone keep with four turrets, roofs and banners in the house colour
+    rr(-10, -12, 20, 15, 1); ctx.fillStyle = '#a8a397'; ctx.fill();
+    ctx.fillStyle = '#bdb8ac'; ctx.fillRect(-10, -12, 20, 3);
+    ctx.fillStyle = 'rgba(0,0,0,.16)'; for (let xx = -9; xx < 10; xx += 2.5) ctx.fillRect(xx, -12, 1.2, 1.2);   // battlements
+    ctx.strokeStyle = 'rgba(0,0,0,.12)'; ctx.lineWidth = 0.3; ctx.beginPath(); for (let yy = -8; yy < 3; yy += 2) { ctx.moveTo(-10, yy); ctx.lineTo(10, yy); } ctx.stroke();
+    for (const [tx_, ty_] of [[-10, -12], [10, -12], [-10, 3], [10, 3]]) {
+      ctx.fillStyle = '#9a9589'; ctx.beginPath(); ctx.arc(tx_, ty_, 3.2, 0, 6.3); ctx.fill();
+      const g2 = ctx.createRadialGradient(tx_ - 1, ty_ - 1, 0.3, tx_, ty_, 2.8); g2.addColorStop(0, shade(col, 0.3)); g2.addColorStop(1, shade(col, -0.3));
+      ctx.fillStyle = g2; ctx.beginPath(); ctx.arc(tx_, ty_, 2.6, 0, 6.3); ctx.fill();
+      ctx.fillStyle = '#f2d36b'; ctx.beginPath(); ctx.arc(tx_, ty_, 0.6, 0, 6.3); ctx.fill();
+    }
+    rr(-2, 0, 4, 3, 2); ctx.fillStyle = '#4a3622'; ctx.fill();                                                    // gate
+    ctx.strokeStyle = '#6b6f72'; ctx.lineWidth = 0.5; ctx.beginPath(); ctx.moveTo(0, -6); ctx.lineTo(0, -16); ctx.stroke();
+    const wv = REDUCED_MOTION ? 0 : Math.sin(animT * 4 + b.k) * 0.8;
+    ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(0, -16); ctx.lineTo(5, -15 + wv); ctx.lineTo(0, -13.4); ctx.closePath(); ctx.fill();
+    if (showSymbols) glyph(COLORS[b.color].glyph, 0, -6, 2.4, col);
+  } else if (hd === 'barn') {                                     // a gambrel-roofed barn in the house colour with white trim and a cross-braced door
     rr(-11, -13, 22, 16, 2); ctx.fillStyle = shade(col, -0.18); ctx.fill();
     ctx.fillStyle = shade(col, 0.08); ctx.fillRect(-11, -13, 22, 4); ctx.fillRect(-11, -1, 22, 4);
     ctx.fillStyle = shade(col, -0.05); ctx.fillRect(-11, -9, 22, 8);
@@ -4647,38 +4747,60 @@ function drawStore(b) {
     for (const [gx, gy, gr, sd] of [[-27.5, -43, 3.2, 1], [27.5, -42.5, 3.4, 2], [-27.5, -14, 2.9, 3], [27.5, 2, 3, 4]]) drawDecor(ctx, dk, gx, gy, gr, 0, b.k * 7 + sd);
   }
   ctx.restore();
-  // The building stands up inside its own footprint: the wall facing you fills the bottom H of it and the roof
-  // the rest, drawn slightly foreshortened, so nothing spills over the car park, kerb or neighbours.
+  // The building is a solid block standing in its own footprint, seen a little from the front and left: you see its
+  // roof, the wall facing you and its left-hand wall. The sun is up and to the left, so the left wall is lit and the
+  // front wall is in shade. Roof and walls together fill exactly the footprint, so nothing spills over the car park.
   const cs = [[Bx, By], [Bx + Bw, By], [Bx + Bw, By + Bh], [Bx, By + Bh]].map(([lx, ly]) => rot(x, y, th, lx * s, ly * s));
   const wx0 = Math.min(...cs.map(q => q.x)), wx1 = Math.max(...cs.map(q => q.x)), wy0 = Math.min(...cs.map(q => q.y)), wy1 = Math.max(...cs.map(q => q.y));
-  const bw = wx1 - wx0, bh = wy1 - wy0, Hh = Math.min(H, bh * 0.36);
+  const bw = wx1 - wx0, bh = wy1 - wy0, Hh = Math.min(H, bh * 0.34), Dx = Math.min(Hh * 0.75, bw * 0.15);
+  const bx1 = wx1 - Dx, by0 = wy0 + Hh;              // the base on the ground: wx0..bx1 by by0..wy1
+  const rx0 = wx0 + Dx, ry1 = wy1 - Hh;              // the roof: the base lifted by Hh and nudged right by Dx
   const frontFaces = Math.abs(((th % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) < 0.1;    // the shopfront is the wall you see
-  const sdz = storeDesign(), wallCol = sdz === 'warehouse' ? '#4d575e' : sdz === 'glass' ? '#6fa3bb' : shade(PAL.roofBase, -0.26);
+  const sdz = storeDesign();
+  const wallCol = ({warehouse: '#4d575e', glass: '#6fa3bb', brick: '#9b4a36', eco: '#7d8f6a', neon: '#262833', crystal: '#a395dc', market: '#d9cdb8'})[sdz] || shade(PAL.roofBase, -0.18);
   {
-    rr(wx0, wy1 - Hh, bw, Hh, 2.5); ctx.fillStyle = wallCol; ctx.fill();
-    const gr = ctx.createLinearGradient(0, wy1 - Hh, 0, wy1); gr.addColorStop(0, 'rgba(255,255,255,.12)'); gr.addColorStop(1, 'rgba(0,0,0,.22)');
-    ctx.fillStyle = gr; rr(wx0, wy1 - Hh, bw, Hh, 2.5); ctx.fill();
-    ctx.fillStyle = col; ctx.fillRect(wx0 + 1, wy1 - Hh, bw - 2, Math.max(1, Hh * 0.16));                 // a band of the store's colour under the roof
-    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(wx0 + 2, wy1 - 1, bw - 4, 1);                           // where the wall meets the ground
-    const dh = Hh * 0.72, dy = wy1 - dh;
+    ctx.fillStyle = 'rgba(0,0,0,.24)'; ctx.fillRect(wx0 - 0.6, wy1 - 1, bx1 - wx0 + 1.2, 2.4);                    // where the block meets the ground
+    // the left-hand wall, catching the sun
+    ctx.beginPath(); ctx.moveTo(wx0, by0); ctx.lineTo(rx0, wy0); ctx.lineTo(rx0, ry1); ctx.lineTo(wx0, wy1); ctx.closePath();
+    ctx.fillStyle = shade(wallCol, 0.1); ctx.fill();
+    const g2 = ctx.createLinearGradient(0, wy0, 0, wy1); g2.addColorStop(0, 'rgba(255,255,255,.18)'); g2.addColorStop(1, 'rgba(0,0,0,.14)'); ctx.fillStyle = g2; ctx.fill();
+    // the wall facing you, in shade
+    ctx.beginPath(); ctx.moveTo(wx0, wy1); ctx.lineTo(bx1, wy1); ctx.lineTo(wx1, ry1); ctx.lineTo(rx0, ry1); ctx.closePath();
+    ctx.fillStyle = shade(wallCol, -0.16); ctx.fill();
+    const g1 = ctx.createLinearGradient(0, ry1, 0, wy1); g1.addColorStop(0, 'rgba(255,255,255,.1)'); g1.addColorStop(1, 'rgba(0,0,0,.3)'); ctx.fillStyle = g1; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(wx0, wy1); ctx.lineTo(rx0, ry1); ctx.stroke();   // the corner between them
+    ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 0.6; ctx.beginPath(); ctx.moveTo(wx1 - 0.3, ry1); ctx.lineTo(bx1 - 0.3, wy1); ctx.stroke();  // the far corner
+    const dh = Hh * 0.7;
+    // front wall details, sheared to follow it (x along the wall, y upwards negative)
+    ctx.save(); ctx.transform(1, 0, -Dx / Hh, 1, wx0, wy1);
+    const fw = bx1 - wx0;
+    ctx.fillStyle = col; ctx.fillRect(0, -Hh, fw, Math.max(1.2, Hh * 0.17));                                     // the store's colour band under the roof
+    ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fillRect(0, -Hh + Math.max(1.2, Hh * 0.17), fw, 0.6);
     if (frontFaces) {                                                                                    // shopfront: two garage doors and a glass entrance
-      for (const gx of [-18, 18]) rollerDoor(x + (gx - 6) * s, dy, 12 * s, dh, col);
-      rr(x - 7 * s, dy, 14 * s, dh, 1); ctx.fillStyle = 'rgba(24,44,58,.88)'; ctx.fill();
-      ctx.fillStyle = 'rgba(170,215,240,.42)'; ctx.fillRect(x - 6 * s, dy + 1, 5 * s, dh - 1.5); ctx.fillRect(x + 1 * s, dy + 1, 5 * s, dh - 1.5);
+      for (const gx of [-18, 18]) rollerDoor(x + (gx - 6) * s - wx0, -dh, 12 * s, dh, col);
+      rr(x - 7 * s - wx0, -dh, 14 * s, dh, 1); ctx.fillStyle = 'rgba(24,44,58,.88)'; ctx.fill();
+      ctx.fillStyle = 'rgba(170,215,240,.42)'; ctx.fillRect(x - 6 * s - wx0, -dh + 1, 5 * s, dh - 1.5); ctx.fillRect(x + 1 * s - wx0, -dh + 1, 5 * s, dh - 1.5);
     } else {                                                                                             // a row of windows along any other wall
-      for (let wx = wx0 + 5; wx < wx1 - 7; wx += 8) {
-        ctx.fillStyle = 'rgba(24,44,58,.62)'; ctx.fillRect(wx, dy + dh * 0.15, 4.5, dh * 0.5);
-        ctx.fillStyle = 'rgba(170,215,240,.32)'; ctx.fillRect(wx + 0.5, dy + dh * 0.18, 1.3, dh * 0.44);
+      for (let wx = 5; wx < fw - 7; wx += 8) {
+        ctx.fillStyle = 'rgba(24,44,58,.62)'; ctx.fillRect(wx, -dh * 0.88, 4.5, dh * 0.5);
+        ctx.fillStyle = 'rgba(170,215,240,.32)'; ctx.fillRect(wx + 0.5, -dh * 0.85, 1.3, dh * 0.44);
       }
     }
+    ctx.restore();
+    // windows down the left-hand wall (x up the wall, y upwards negative)
+    ctx.save(); ctx.transform(0, -1, -Dx / Hh, 1, wx0, wy1);
+    for (let d = 5; d < (wy1 - by0) - 5; d += 8) { ctx.fillStyle = 'rgba(16,30,40,.55)'; ctx.fillRect(d, -dh * 0.88, 4, dh * 0.5); ctx.fillStyle = 'rgba(170,215,240,.16)'; ctx.fillRect(d + 0.4, -dh * 0.85, 1.1, dh * 0.44); }
+    ctx.restore();
   }
-  // the roof: the building's own frame, squeezed into the footprint above the wall
-  ctx.save(); ctx.translate((wx0 + wx1) / 2, (wy0 + wy1 - Hh) / 2); ctx.scale(1, (bh - Hh) / bh); ctx.rotate(th); ctx.scale(s, s);
+  // the roof: the building's own frame, fitted into the footprint above the walls
+  const sxR = (wx1 - rx0) / bw, syR = (ry1 - wy0) / bh;
+  ctx.save(); ctx.translate((rx0 + wx1) / 2, (wy0 + ry1) / 2); ctx.scale(sxR, syR); ctx.rotate(th); ctx.scale(s, s);
   ctx.translate(-(Bx + Bw / 2), -(By + Bh / 2));
+  const so = (() => { const vx = 1.6 / sxR, vy = 1.6 / syR, c_ = Math.cos(th), s_ = Math.sin(th); return [(c_ * vx + s_ * vy) / s, (-s_ * vx + c_ * vy) / s]; })();   // a small shadow offset, in roof space
   // walls and roof
   rr(Bx, By, Bw, Bh, 4); ctx.fillStyle = shade(roof, -0.14); ctx.fill();
-  rr(Bx + 2, By + 2, Bw - 4, Bh - 9, 3); ctx.fillStyle = roof; ctx.fill();
-  ctx.save(); rr(Bx + 2, By + 2, Bw - 4, Bh - 9, 3); ctx.clip();
+  rr(Bx + 2.5, By + 2.5, Bw - 5, Bh - 5, 3); ctx.fillStyle = roof; ctx.fill();
+  ctx.save(); rr(Bx + 2.5, By + 2.5, Bw - 5, Bh - 5, 3); ctx.clip();
   if (sdz !== 'standard') storeRoofDesign(sdz, Bx, By, Bw, Bh, col);
   else if (tier === 2) {                                                                       // depot: sawtooth roof
     for (let yy = By + 2; yy < front; yy += 8) { ctx.fillStyle = 'rgba(0,0,0,.12)'; ctx.fillRect(Bx, yy, Bw, 4); ctx.fillStyle = 'rgba(170,215,240,.5)'; ctx.fillRect(Bx, yy + 4, Bw, 0.8); }
@@ -4689,7 +4811,9 @@ function drawStore(b) {
     ctx.fillStyle = 'rgba(170,215,240,.45)'; ctx.fillRect(Bx + Bw - 8, By + 13, 2, Bh - 30); ctx.fillRect(Bx + Bw - 5, By + 13, 2, Bh - 30);
   }
   ctx.restore();
+  ctx.fillStyle = 'rgba(0,0,0,.24)'; rr(Bx + Bw - 13 + so[0], By + 3 + so[1], 9, 8, 1.5); ctx.fill();
   ctx.fillStyle = '#9aa3a8'; rr(Bx + Bw - 13, By + 3, 9, 8, 1.5); ctx.fill();                   // rooftop plant
+  ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(Bx + Bw - 13, By + 3, 9, 1);
   ctx.fillStyle = '#6f777c'; ctx.beginPath(); ctx.arc(Bx + Bw - 8.5, By + 7, 2.2, 0, 6.3); ctx.fill();
   if (tier === 3) { ctx.strokeStyle = '#5a646a'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(Bx + 6, By + 11); ctx.lineTo(Bx + 6, By + 3); ctx.stroke(); ctx.fillStyle = '#ff5a4a'; ctx.beginPath(); ctx.arc(Bx + 6, By + 3, 1.3, 0, 6.3); ctx.fill(); }
   // parcels waiting, stacked in the middle of the roof
@@ -4715,6 +4839,7 @@ function drawStore(b) {
   if (showSymbols) glyph(COLORS[b.color].glyph, -12, front - 3.5, 2.2, '#fff');
   // paid upgrades: 1 a lit sign on the roof, 2 solar panels, 3 flags and gold trim
   if (lvl >= 1) {
+    ctx.fillStyle = 'rgba(0,0,0,.24)'; rr(-11 + so[0] * 1.5, By + 3 + so[1] * 1.5, 22, 6, 1.4); ctx.fill();
     rr(-11, By + 3, 22, 6, 1.4); ctx.fillStyle = '#12303f'; ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = 0.9; ctx.stroke();
     if (showSymbols) glyph(COLORS[b.color].glyph, 0, By + 6, 1.8, col); else { ctx.fillStyle = col; ctx.fillRect(-7, By + 5.3, 14, 1.4); }
   }
@@ -4732,11 +4857,43 @@ function drawStore(b) {
   ctx.strokeStyle = col; ctx.lineWidth = 1.4 + tier * 0.8; rr(Bx + 1, By + 1, Bw - 2, Bh - 2, 3.5); ctx.stroke();   // thicker outline = busier tier
   if (lvl >= 3) { ctx.strokeStyle = '#ffc933'; ctx.lineWidth = 0.9; rr(Bx - 1, By - 1, Bw + 2, Bh + 2, 5); ctx.stroke(); }
   ctx.restore();
+  {
+    const rw = wx1 - rx0, rh = ry1 - wy0;
+    ctx.fillStyle = 'rgba(0,0,0,.16)'; ctx.fillRect(rx0 + 2.5, wy0 + 2.5, rw - 5, 2); ctx.fillRect(rx0 + 2.5, wy0 + 4.5, 2, rh - 7);   // the parapet's shadow on the roof
+    const g = ctx.createLinearGradient(rx0, wy0, wx1, ry1); g.addColorStop(0, 'rgba(255,255,255,.16)'); g.addColorStop(0.55, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(0,0,0,.14)');
+    rr(rx0, wy0, rw, rh, 3.5); ctx.fillStyle = g; ctx.fill();
+    ctx.lineWidth = 1.1; ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.beginPath(); ctx.moveTo(rx0 + 0.8, ry1 - 2); ctx.lineTo(rx0 + 0.8, wy0 + 0.8); ctx.lineTo(wx1 - 2, wy0 + 0.8); ctx.stroke();   // sunlit rim
+    ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.moveTo(wx1 - 0.6, wy0 + 2); ctx.lineTo(wx1 - 0.6, ry1 - 0.6); ctx.lineTo(rx0 + 2, ry1 - 0.6); ctx.stroke();   // shaded rim
+  }
   if (b.acc < 0) drawUnlinked(x, y, b);
 }
 /* store designs re-roof the building (drawn clipped to the roof, in the store's own frame) */
 function storeRoofDesign(sdz, Bx, By, Bw, Bh, col) {
-  if (sdz === 'warehouse') {                               // dark corrugated metal
+  if (sdz === 'brick') {                                   // a tar roof inside a red-brick parapet
+    ctx.fillStyle = '#4b4f52'; ctx.fillRect(Bx, By, Bw, Bh);
+    ctx.fillStyle = 'rgba(255,255,255,.05)'; for (let i = 0; i < 40; i++) ctx.fillRect(Bx + hash01(i, 71) * Bw, By + hash01(i, 72) * Bh, 1, 1);
+    ctx.strokeStyle = '#a5523b'; ctx.lineWidth = 4; ctx.strokeRect(Bx + 2, By + 2, Bw - 4, Bh - 4);
+    ctx.strokeStyle = 'rgba(255,225,200,.35)'; ctx.lineWidth = 0.4; ctx.setLineDash([1.6, 1]); ctx.strokeRect(Bx + 2, By + 2, Bw - 4, Bh - 4); ctx.setLineDash([]);
+  } else if (sdz === 'eco') {                              // a living green roof with planters and a row of solar panels
+    ctx.fillStyle = '#6fae55'; ctx.fillRect(Bx, By, Bw, Bh);
+    for (let i = 0; i < 30; i++) { ctx.fillStyle = i % 3 ? '#86c46a' : '#4f8d3f'; ctx.beginPath(); ctx.arc(Bx + hash01(i, 81) * Bw, By + hash01(i, 82) * Bh, 1.2 + hash01(i, 83) * 1.6, 0, 6.3); ctx.fill(); }
+    ctx.fillStyle = '#1f3552'; for (let i = 0; i < 5; i++) ctx.fillRect(Bx + 4 + i * 6, By + 4, 5, 3.4);
+    ctx.fillStyle = '#c9b089'; ctx.fillRect(Bx + Bw / 2 - 0.8, By, 1.6, Bh);                                    // a gravel path
+  } else if (sdz === 'neon') {                             // a black roof outlined in glowing neon of the store colour
+    ctx.fillStyle = '#1d1f27'; ctx.fillRect(Bx, By, Bw, Bh);
+    ctx.save(); ctx.shadowColor = col; ctx.shadowBlur = 6; ctx.strokeStyle = shade(col, 0.35); ctx.lineWidth = 1.4;
+    ctx.strokeRect(Bx + 4, By + 4, Bw - 8, Bh - 8); ctx.strokeRect(Bx + 8, By + 8, Bw - 16, 4); ctx.restore();
+  } else if (sdz === 'crystal') {                          // an iridescent crystal roof that shifts colour slowly
+    const t = REDUCED_MOTION ? 0 : animT * 0.25;
+    const g = ctx.createLinearGradient(Bx, By, Bx + Bw, By + Bh);
+    for (let i = 0; i <= 4; i++) g.addColorStop(i / 4, 'hsl(' + (((t * 360) + i * 70) % 360).toFixed(0) + ',80%,78%)');
+    ctx.fillStyle = g; ctx.fillRect(Bx, By, Bw, Bh);
+    ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 0.6; ctx.beginPath();
+    const cxr = Bx + Bw / 2, cyr = By + Bh / 2;
+    for (const [px, py] of [[Bx, By], [Bx + Bw, By], [Bx + Bw, By + Bh], [Bx, By + Bh], [cxr, By], [Bx + Bw, cyr], [cxr, By + Bh], [Bx, cyr]]) { ctx.moveTo(cxr, cyr); ctx.lineTo(px, py); }
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.beginPath(); ctx.moveTo(cxr, cyr); ctx.lineTo(Bx, By); ctx.lineTo(cxr, By); ctx.closePath(); ctx.fill();
+  } else if (sdz === 'warehouse') {                               // dark corrugated metal
     ctx.fillStyle = '#5b666e'; ctx.fillRect(Bx, By, Bw, Bh);
     for (let xx = Bx; xx < Bx + Bw; xx += 3) { ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.fillRect(xx, By, 1, Bh); ctx.fillStyle = 'rgba(0,0,0,.14)'; ctx.fillRect(xx + 1.5, By, 0.8, Bh); }
     ctx.fillStyle = 'rgba(170,215,240,.45)'; for (let j = 0; j < 3; j++) ctx.fillRect(Bx + Bw - 10, By + 8 + j * 12, 5, 6);
@@ -4936,6 +5093,24 @@ function drawCar(c, sizeBoost) {
     const cw = Math.max(0.8, (bon1 - bon0 + 0.4) / 3), y0 = -hw + 0.5, rows = 4, chh = (Wd - 1) / rows;
     for (let i = 0; i < 3; i++) for (let j = 0; j < rows; j++) { ctx.fillStyle = (i + j) % 2 ? black : '#ffffff'; ctx.fillRect(bon0 - 0.4 + i * cw, y0 + j * chh, cw, chh); }
   }
+  if (cd === 'checker') {                                  // a taxi-style chequered band down each side
+    ctx.save(); rr(r, -hw, L, Wd, 1.5); ctx.clip();
+    const cw = 1.3;
+    for (let x = r + 1.5, i = 0; x < f - 1.5; x += cw, i++) for (const [y0, j] of [[-hw, 0], [hw - 1.4, 1]]) {
+      ctx.fillStyle = (i + j) % 2 ? '#1f262b' : '#ffffff'; ctx.fillRect(x, y0, cw, 0.7); ctx.fillStyle = (i + j) % 2 ? '#ffffff' : '#1f262b'; ctx.fillRect(x, y0 + 0.7, cw, 0.7);
+    }
+    ctx.restore();
+  }
+  if (cd === 'flames') {                                   // hot-rod flames licking back from the nose
+    ctx.save(); rr(r, -hw, L, Wd, 1.5); ctx.clip();
+    const fl = (c1, sc) => {
+      ctx.fillStyle = c1; ctx.beginPath(); ctx.moveTo(f, -hw * sc);
+      for (let i = 0; i <= 4; i++) { const t = i / 4, yy = -hw * sc + 2 * hw * sc * t; ctx.lineTo(f - L * (0.32 + (i % 2) * 0.18) * sc, yy - hw * 0.22 * sc); ctx.lineTo(f - L * 0.08, yy); }
+      ctx.lineTo(f, hw * sc); ctx.closePath(); ctx.fill();
+    };
+    fl('#ff7a1a', 1); fl('#ffd23a', 0.65);
+    ctx.restore();
+  }
   if (cd === 'livery') {                                   // a bold white swoosh along the body
     ctx.save(); rr(r, -hw, L, Wd, 1.5); ctx.clip();
     ctx.fillStyle = 'rgba(255,255,255,.92)'; ctx.beginPath(); ctx.moveTo(r, hw); ctx.lineTo(r + L * 0.35, hw); ctx.lineTo(r + L * 0.7, -hw); ctx.lineTo(r + L * 0.5, -hw); ctx.closePath(); ctx.fill();
@@ -4970,6 +5145,18 @@ function drawCar(c, sizeBoost) {
     for (let x = r + 1.6; x < f - 5.6; x += 1.6) ctx.fillRect(x, -hw + 0.3, 0.35, Wd - 0.6);    // box ribs
     ctx.fillStyle = col; ctx.fillRect(f - 6.6, -hw + 0.2, 1.1, Wd - 0.4);                       // coloured band on the box front
     ctx.fillRect(r + 0.3, -hw + 0.25, L - 7, 0.8); ctx.fillRect(r + 0.3, hw - 1.05, L - 7, 0.8);
+  }
+  if (cd === 'retro') {                                    // chrome everywhere: bumpers, a roof trim line and whitewall tyres
+    ctx.fillStyle = '#e6eaee'; ctx.fillRect(f - 0.8, -hw - 0.2, 0.8, Wd + 0.4); ctx.fillRect(r, -hw - 0.2, 0.8, Wd + 0.4);
+    ctx.strokeStyle = 'rgba(235,240,245,.9)'; ctx.lineWidth = 0.35; rr(roof0 - 0.4, -hw + 0.4, roof1 - roof0 + 0.8, Wd - 0.8, 1.4); ctx.stroke();
+    ctx.fillStyle = '#f4f2ec'; for (const x of [f - 2.9, r + 2.9]) for (const sy of [-1, 1]) ctx.fillRect(x - 0.9, sy * hw - 0.25, 1.8, 0.5);
+  }
+  if (cd === 'gold') {                                     // gold plated: gold trim, gold wheels and a little sparkle (the body keeps its colour)
+    const gg = ctx.createLinearGradient(r, -hw, f, hw); gg.addColorStop(0, '#fff1a8'); gg.addColorStop(0.5, '#d4af37'); gg.addColorStop(1, '#9c7a12');
+    ctx.strokeStyle = gg; ctx.lineWidth = 0.75; rr(r + 0.35, -hw + 0.35, L - 0.7, Wd - 0.7, bi === 0 ? hw - 0.35 : 1.4); ctx.stroke();
+    ctx.fillStyle = gg; ctx.fillRect(f - 0.7, -hw + 0.3, 0.7, Wd - 0.6); ctx.fillRect(r, -hw + 0.3, 0.7, Wd - 0.6);
+    for (const x of [f - 2.9, r + 2.9]) for (const sy of [-1, 1]) { ctx.fillStyle = '#e8c547'; ctx.fillRect(x - 1.1, sy * hw - 0.35, 2.2, 0.7); }
+    if (!REDUCED_MOTION) { const tw_ = (animT * 1.3 + c.id * 0.37) % 1; if (tw_ < 0.25) { const sx = r + L * tw_ * 4, a = 1 - Math.abs(tw_ * 8 - 1); ctx.fillStyle = 'rgba(255,255,255,' + a.toFixed(2) + ')'; ctx.beginPath(); ctx.arc(sx, -hw * 0.3, 0.6, 0, 6.3); ctx.fill(); } }
   }
   if (cd === 'twotone') {                                  // a white roof and chrome bumpers (vans and trucks get a coloured roof stripe)
     if (bi <= 2) { rr(roof0 - 0.2, -hw + 0.6, roof1 - roof0 + 0.4, Wd - 1.2, 1.3); ctx.fillStyle = '#f6f4ee'; ctx.fill(); }
@@ -6540,15 +6727,23 @@ function loadModes() {
    decorations, designs for cars, houses, roads, stores, traffic lights, roundabouts and bridges, and colours, one
    colour at a time. A colour can also be hired for 3 hours. Buying takes two taps, so nothing goes by accident.
    The standard light and dark looks and the colour-blind colour modes are always free. Saved on this browser. */
-const SHOP_KEY = 'junction-shop-v1', HIRE_PRICE = 20, HIRE_MS = 3 * 3600 * 1000, RARE_AT = 50;
+const SHOP_KEY = 'junction-shop-v1', HIRE_PRICE = 20, HIRE_MS = 3 * 3600 * 1000;
+const R_EVERY = 20;                                    // parcels delivered in a Frantic city for each R#
+/* [name, price, currency] — currency 'R' means R# (rare bucks, only from Frantic games): the super-rare few */
 const DESIGNS = {
-  car:    {label: 'Car designs',          one: 'car design',          items: {standard: ['Standard', 0], twotone: ['Two-tone', 35], livery: ['Racing livery', 40], neon: ['Neon underglow', 80]}},
-  house:  {label: 'House designs',        one: 'house design',        items: {standard: ['Standard', 0], barn: ['Barn', 35], modern: ['Modern', 40], tower: ['Tower', 85]}},
-  road:   {label: 'Road designs',         one: 'road design',         items: {standard: ['Asphalt', 0], dirt: ['Dirt track', 30], cobble: ['Cobblestone', 40], neon: ['Neon', 80]}},
-  store:  {label: 'Store designs',        one: 'store design',        items: {standard: ['Standard', 0], warehouse: ['Warehouse', 40], market: ['Market hall', 45], glass: ['Glass tower', 80]}},
+  car:    {label: 'Car designs', one: 'car design', items: {standard: ['Standard', 0], twotone: ['Two-tone', 35], checker: ['Checker band', 35], livery: ['Racing livery', 40],
+           retro: ['Retro chrome', 40], flames: ['Flames', 45], neon: ['Neon underglow', 60], gold: ['Gold plated', 10, 'R']}},
+  house:  {label: 'House designs', one: 'house design', items: {standard: ['Standard', 0], barn: ['Barn', 35], thatch: ['Thatched cottage', 35], beach: ['Beach hut', 35],
+           modern: ['Modern', 40], igloo: ['Igloo', 40], tower: ['Tower', 60], castle: ['Castle', 10, 'R']}},
+  road:   {label: 'Road designs', one: 'road design', items: {standard: ['Asphalt', 0], dirt: ['Dirt track', 30], concrete: ['Concrete slabs', 30], brick: ['Red brick', 35],
+           snowy: ['Snowy', 35], cobble: ['Cobblestone', 40], neon: ['Neon', 60], gold: ['Yellow brick road', 10, 'R']}},
+  store:  {label: 'Store designs', one: 'store design', items: {standard: ['Standard', 0], brick: ['Brick', 35], warehouse: ['Warehouse', 40], market: ['Market hall', 45],
+           eco: ['Eco roof', 45], neon: ['Neon', 50], glass: ['Glass tower', 60], crystal: ['Crystal', 10, 'R']}},
   light:  {label: 'Traffic light designs', one: 'traffic light design', items: {standard: ['Standard', 0], modern: ['LED bars', 30], retro: ['Retro', 30]}},
-  round:  {label: 'Roundabout designs',   one: 'roundabout design',   items: {standard: ['Standard', 0], stone: ['Paved', 30], garden: ['Garden', 35], fountain: ['Fountain', 70]}},
-  bridge: {label: 'Bridge designs',       one: 'bridge design',       items: {standard: ['Stone', 0], wood: ['Wooden', 30], steel: ['Steel truss', 40], suspension: ['Suspension', 80]}}
+  round:  {label: 'Roundabout designs', one: 'roundabout design', items: {standard: ['Standard', 0], stone: ['Paved', 30], garden: ['Garden', 35], fountain: ['Fountain', 55]}},
+  bridge: {label: 'Bridge designs', one: 'bridge design', items: {standard: ['Stone', 0], wood: ['Wooden', 30], rope: ['Rope bridge', 35], steel: ['Steel truss', 40],
+           glass: ['Glass', 45], suspension: ['Suspension', 55], rainbow: ['Rainbow', 10, 'R']}},
+  moto:   {label: 'Motorway designs', one: 'motorway design', items: {standard: ['Blue deck', 0], concrete: ['Concrete', 30], ivy: ['Ivy', 35], lights: ['Night lights', 40], rainbow: ['Rainbow', 12, 'R']}}
 };
 const COSMETICS = {
   'ui:midnight': [30, 'Midnight theme'], 'ui:graphite': [25, 'Graphite theme'], 'ui:forest': [30, 'Forest theme'], 'ui:plum': [35, 'Plum theme'],
@@ -6561,7 +6756,7 @@ const COSMETICS = {
   'decor:cactus': [30, 'Cacti'], 'decor:blossom': [35, 'Blossom trees'], 'decor:palm': [35, 'Palms'], 'decor:snowpine': [45, 'Snowy pines'],
   'decor:mushroom': [55, 'Mushrooms'], 'decor:pumpkin': [60, 'Pumpkins']
 };
-for (const cat in DESIGNS) for (const k in DESIGNS[cat].items) { const [n, pr] = DESIGNS[cat].items[k]; if (pr) COSMETICS['design:' + cat + ':' + k] = [pr, n + ' ' + DESIGNS[cat].one]; }
+for (const cat in DESIGNS) for (const k in DESIGNS[cat].items) { const [n, pr, cur] = DESIGNS[cat].items[k]; if (pr) COSMETICS['design:' + cat + ':' + k] = [pr, n + ' ' + DESIGNS[cat].one, cur || '#']; }
 /* every library colour is its own item: Standard #25, Classic #30, Creative #35-45, Soft #30, Rare #60-90 */
 const COLOUR_PRICE = {};
 for (const g of COLOR_LIBRARY) g.cols.forEach(([n, h, pr], i) => {
@@ -6569,12 +6764,12 @@ for (const g of COLOR_LIBRARY) g.cols.forEach(([n, h, pr], i) => {
 });
 const colourName = hex => LIB_NAME[hex] || hueName(hex);
 const colourPrice = hex => COLOUR_PRICE[hex] || 40;
-let jb = {v: 2, bucks: 0, toward: 0, owned: {}, hired: {}, designs: {}}, jbFirstRun = false, buyPending = null;
+let jb = {v: 2, bucks: 0, toward: 0, rbucks: 0, rtoward: 0, owned: {}, hired: {}, designs: {}}, jbFirstRun = false, buyPending = null;
 const design = cat => (jb.designs && DESIGNS[cat] && DESIGNS[cat].items[jb.designs[cat]]) ? jb.designs[cat] : 'standard';
 const storeDesign = () => design('store');
 function itemInfo(id) {                                // [price, name] for anything that can be bought
-  if (id.startsWith('colour:')) { const h = id.slice(7); return [colourPrice(h), colourName(h).replace(/^./, c => c.toUpperCase()) + ' colour']; }
-  return COSMETICS[id] || null;
+  if (id.startsWith('colour:')) { const h = id.slice(7); return [colourPrice(h), colourName(h).replace(/^./, c => c.toUpperCase()) + ' colour', '#']; }
+  const c = COSMETICS[id]; return c ? [c[0], c[1], c[2] || '#'] : null;
 }
 const ownsColour = hex => { const id = 'colour:' + String(hex).toLowerCase(); return !!jb.owned[id] || (jb.hired[id] || 0) > Date.now(); };
 const owns = id => id.startsWith('colour:') ? ownsColour(id.slice(7)) : (!COSMETICS[id] || !!jb.owned[id]);
@@ -6584,6 +6779,7 @@ function loadShop() {
   let d = null; try { d = JSON.parse(localStorage.getItem(SHOP_KEY)); } catch (e) {}
   if (!d || typeof d !== 'object') { jbFirstRun = true; return; }
   jb.bucks = Math.max(0, Math.floor(+d.bucks || 0)); jb.toward = clamp(Math.floor(+d.toward || 0), 0, 9);
+  jb.rbucks = Math.max(0, Math.floor(+d.rbucks || 0)); jb.rtoward = clamp(Math.floor(+d.rtoward || 0), 0, R_EVERY - 1);
   jb.owned = {}; const old = d.owned && typeof d.owned === 'object' ? d.owned : {};
   for (const k in old) if (COSMETICS[k] || /^colour:#[0-9a-f]{6}$/.test(k)) jb.owned[k] = 1;
   jb.hired = {}; if (d.hired && typeof d.hired === 'object') for (const k in d.hired) if (/^colour:#[0-9a-f]{6}$/.test(k) && +d.hired[k] > Date.now()) jb.hired[k] = +d.hired[k];
@@ -6611,37 +6807,44 @@ function grantInUse() {
   delete jb.migrateColours; delete jb.refunded; jbFirstRun = false; saveShop();
 }
 function earnBucks(n, at) {
-  jb.toward += n; let got = 0;
+  jb.toward += n; let got = 0, rgot = 0;
   while (jb.toward >= 10) { jb.toward -= 10; got++; }
-  if (got) {
-    jb.bucks += got; sfx('buck');
-    if (at) popText(bX(at), bY(at) - 38, '+' + got + ' #', '#ffd23a');
-    bump('v-jb');
+  if (diffKey === 'frantic' && !tutorialMode) {          // R# (rare bucks) only come from Frantic cities
+    jb.rtoward += n;
+    while (jb.rtoward >= R_EVERY) { jb.rtoward -= R_EVERY; rgot++; }
   }
+  if (got) { jb.bucks += got; sfx('buck'); if (at) popText(bX(at), bY(at) - 38, '+' + got + ' #', '#ffd23a'); bump('v-jb'); }
+  if (rgot) { jb.rbucks += rgot; sfx('upgrade'); if (at) popText(bX(at), bY(at) - 52, '+' + rgot + ' R#', '#d58cff'); toast('+' + rgot + ' R# — a rare buck for your Frantic run', 'good'); }
   saveShop(); renderBucks();
 }
 function renderBucks() {
   const set = (id, t) => { const e = $(id); if (e && e.textContent !== t) e.textContent = t; };
   const b = '#' + jb.bucks.toLocaleString('en-US');
-  set('v-jb', b); set('v-jbnext', jb.toward + '/10 to next'); set('jb-bal', b + ' Junc Bucks'); set('jb-pill', b); set('cust-bal', b);
+const r = 'R#' + jb.rbucks;
+  set('v-jb', b); set('v-jbnext', r + ' · ' + jb.toward + '/10'); set('jb-bal', b + ' Junc Bucks · ' + r); set('jb-pill', b + ' · ' + r); set('cust-bal', b + ' · ' + r);
 }
 const fmtLeft = ms => { const m = Math.ceil(ms / 60000); return m >= 60 ? Math.floor(m / 60) + 'h ' + (m % 60) + 'm' : m + 'm'; };
 /* two taps: the first asks, the second spends. kind is 'buy' or 'hire' (colours only) */
 function purchase(id, kind, fn) {
   const info = itemInfo(id); if (!info) return;
-  const price = kind === 'hire' ? HIRE_PRICE : info[0], name = info[1];
-  if (jb.bucks < price) { hint(name + (kind === 'hire' ? ' costs #' + HIRE_PRICE + ' to hire' : ' costs #' + price) + ' — you have #' + jb.bucks + '. You earn one Junc Buck for every 10 parcels delivered.'); buyPending = null; renderLook(); return; }
+  const price = kind === 'hire' ? HIRE_PRICE : info[0], name = info[1], rare = kind !== 'hire' && info[2] === 'R';
+  const sym = rare ? 'R#' : '#', have = rare ? jb.rbucks : jb.bucks;
+  if (have < price) {
+    hint(name + (kind === 'hire' ? ' costs #' + HIRE_PRICE + ' to hire' : ' costs ' + sym + price) + ' — you have ' + sym + have + '. ' +
+      (rare ? 'R# (rare bucks) only come from Frantic cities: one for every ' + R_EVERY + ' parcels.' : 'You earn one Junc Buck for every 10 parcels delivered.'));
+    buyPending = null; renderLook(); return;
+  }
   const nowMs = performance.now();
   if (!buyPending || buyPending.id !== id || buyPending.kind !== kind || nowMs - buyPending.t > 4000) {
     buyPending = {id, kind, t: nowMs};
-    hint((kind === 'hire' ? 'Hire ' + name + ' for 3 hours for #' + HIRE_PRICE : 'Buy ' + name + ' for #' + price) + '? Tap again to confirm.');
+    hint((kind === 'hire' ? 'Hire ' + name + ' for 3 hours for #' + HIRE_PRICE : 'Buy ' + name + ' for ' + sym + price) + '? Tap again to confirm.');
     renderLook();
     setTimeout(() => { if (buyPending && buyPending.id === id && performance.now() - buyPending.t >= 4000) { buyPending = null; renderLook(); } }, 4100);
     return;
   }
-  buyPending = null; jb.bucks -= price;
+  buyPending = null; if (rare) jb.rbucks -= price; else jb.bucks -= price;
   if (kind === 'hire') { jb.hired[id] = Math.max(Date.now(), jb.hired[id] || 0) + HIRE_MS; toast('Hired ' + name + ' for 3 hours (#' + HIRE_PRICE + ')', 'good'); }
-  else { jb.owned[id] = 1; delete jb.hired[id]; toast('Bought ' + name + ' for #' + price, 'good'); }
+  else { jb.owned[id] = 1; delete jb.hired[id]; toast('Bought ' + name + ' for ' + sym + price, 'good'); }
   saveShop(); sfx('upgrade'); renderBucks(); if (fn) fn(); renderLook();
 }
 /* buy-then-run, used where an item is picked directly (it simply runs if you already own it) */
@@ -6667,7 +6870,7 @@ setInterval(() => { if (typeof jb !== 'undefined') { checkHires(); if (!$('menu'
 function designPreview(g, cat, key, w, h) {
   const keepD = jb.designs[cat]; jb.designs[cat] = key;
   const keepPal = PAL, keepSun = Object.assign({}, SUN); SUN.x = 0.55; SUN.y = 0.8; SUN.a = 1;
-  if (cat === 'road' || cat === 'bridge') PAL = palFor(mapPrefs.theme, mapPrefs);
+  if (cat === 'road' || cat === 'bridge' || cat === 'moto') PAL = palFor(mapPrefs.theme, Object.assign({}, mapPrefs, cat === 'moto' ? {moto: ''} : {}));
   g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, w, h); g.fillStyle = PAL.land2; g.fillRect(0, 0, w, h);
   withCtx(g, () => {
     if (cat === 'car') {
@@ -6684,6 +6887,11 @@ function designPreview(g, cat, key, w, h) {
       const P = new Path2D(); P.moveTo(-10, h * 0.7); P.bezierCurveTo(w * 0.3, h * 0.7, w * 0.6, h * 0.25, w + 10, h * 0.3);
       if (cat === 'bridge') { g.fillStyle = PAL.water; g.fillRect(w * 0.28, 0, w * 0.44, h); }
       paintRoadPath(P, cat === 'bridge');
+    } else if (cat === 'moto') {
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      const P = new Path2D(); P.moveTo(-10, h * 0.75); P.bezierCurveTo(w * 0.35, h * 0.75, w * 0.55, h * 0.2, w + 10, h * 0.25);
+      g.save(); g.translate(SUN.x * 6, SUN.y * 6); g.strokeStyle = PAL.sh; g.lineWidth = 16; g.lineCap = 'round'; g.stroke(P); g.restore();
+      paintMoto(P, P, null);
     } else if (cat === 'light') {
       g.setTransform(2, 0, 0, 2, w / 2, h / 2);
       const P = new Path2D(); P.moveTo(-40, 0); P.lineTo(40, 0); P.moveTo(0, -30); P.lineTo(0, 30); paintRoadPath(P, false, true);
@@ -6734,11 +6942,11 @@ function shopItems(cat) {
   if (DESIGNS[cat]) for (const k in DESIGNS[cat].items) out.push({id: 'design:' + cat + ':' + k, name: DESIGNS[cat].items[k][0], active: design(cat) === k,
     apply: () => setDesign(cat, k), canvas: [120, 80, c => designPreview(c.getContext('2d'), cat, k, 120, 80)]});
   if (cat === 'colour') for (const g of COLOR_LIBRARY) for (const [n, h] of g.cols) out.push({id: 'colour:' + h, name: n, hex: h, group: g.group});
-  return out.map(it => { const info = itemInfo(it.id); it.price = info ? info[0] : 0; it.rare = it.price >= RARE_AT; return it; });
+  return out.map(it => { const info = itemInfo(it.id); it.price = info ? info[0] : 0; it.rare = !!info && info[2] === 'R'; return it; });
 }
 function setDesign(cat, k) {
   jb.designs[cat] = k; saveShop();
-  if (cat === 'road' || cat === 'bridge') { PAL = palFor(mapPrefs.theme, mapPrefs); pathCache.ver = -1; }
+  if (cat === 'road' || cat === 'bridge' || cat === 'moto') { PAL = palFor(mapPrefs.theme, mapPrefs); pathCache.ver = -1; }
   renderLook();
 }
 /* custom colour slots: where an owned colour can go */
@@ -6750,11 +6958,11 @@ const slotShown = f => slotValue(f) || ({plate: uiColours().plate, btn: uiColour
 function setSlot(f, hex) { if (COLOUR_SLOTS.find(s => s[0] === f)[2] === 'ui') setUi({[f]: hex}); else setMap({[f]: hex}); }
 
 const SHOP_CATS = [['ui', 'Interface themes'], ['style', 'Panel styles'], ['map', 'Map themes'], ['decor', 'Decorations'], ['car', 'Car designs'], ['house', 'House designs'],
-  ['road', 'Road designs'], ['store', 'Store designs'], ['light', 'Traffic light designs'], ['round', 'Roundabout designs'], ['bridge', 'Bridge designs'], ['colour', 'Colours']];
+  ['road', 'Road designs'], ['store', 'Store designs'], ['light', 'Traffic light designs'], ['round', 'Roundabout designs'], ['bridge', 'Bridge designs'], ['moto', 'Motorway designs'], ['colour', 'Colours']];
 function priceTag(id, price, kind) {
-  const conf = buyPending && buyPending.id === id && buyPending.kind === (kind || 'buy');
+  const conf = buyPending && buyPending.id === id && buyPending.kind === (kind || 'buy'), info = itemInfo(id), rare = !!info && info[2] === 'R' && kind !== 'hire';
   if (kind === 'hire') return '<span class="lock hire' + (conf ? ' confirm' : '') + '">' + (conf ? 'Tap to hire' : 'Hire 3h #' + HIRE_PRICE) + '</span>';
-  return '<span class="lock' + (price >= RARE_AT ? ' rare' : '') + (conf ? ' confirm' : '') + '">' + (conf ? 'Tap to buy' : (price >= RARE_AT ? '★ ' : '') + '#' + price) + '</span>';
+  return '<span class="lock' + (rare ? ' rare' : '') + (conf ? ' confirm' : '') + '">' + (conf ? 'Tap to buy' : rare ? '★ R#' + price : '#' + price) + '</span>';
 }
 /* one list for all three views: 'store' (things to buy), 'owned' (things to wear) and 'quick' (the Customise drawer) */
 function renderShop(box, mode, light) {

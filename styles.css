@@ -1199,3 +1199,7 @@ ol.board b{font-weight:800}
 /* account: save files and watch tabs */
 #m-acct .acct-pane .codein{margin-top:8px}
 #m-acct .livecode{margin-top:12px}
+
+.rtag{display:inline;font-weight:900;color:#c58bff}
+.lock.rare{background:linear-gradient(90deg,#f5c542,#c058ff);color:#fff;text-shadow:0 1px 1px rgba(0,0,0,.35)}
+.shopcard.rare{border-color:rgba(214,150,255,.7);background:linear-gradient(160deg,rgba(245,197,66,.12),rgba(192,88,255,.12))}
