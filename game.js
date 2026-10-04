@@ -1948,9 +1948,9 @@ const TUT_LESSONS = [
 /* the guided steps; TUT_STEPS[tutStage] is always the active one */
 const TUT_STEPS = [
   {t: 'Connect the red store and house', done: 'Parcels are flowing.',
-   active: 'Drag a road between them \u2014 starting right on either building works. Store \u2192 road \u2192 house \u2192 paid: that\u2019s the whole loop.'},
+   active: 'Follow the glowing ghost road: drag from the end of the red store\u2019s car park (where the arrow is) to the side of the red house. Stores only join a road at the ends of their car park.'},
   {t: 'Connect the amber store and house', done: 'You built your first intersection.',
-   active: 'Connect the amber store to the amber house so its road crosses or joins the red road. Where two roads share a tile, that tile becomes an intersection.'},
+   active: 'Connect the amber store (from an end of its car park) to the amber house so the new road crosses the red one. Where two roads share a tile, that tile becomes an intersection \u2014 and cars have to take turns there.'},
   {t: 'See how junctions work', done: 'You know a give-way from a light from a roundabout.',
    active: 'What you just made is a give-way \u2014 the simplest, free control. Open the guide to see the others.'},
   {t: 'Turn a junction into a light', done: 'That crossing now runs on a timed cycle.',
@@ -2061,7 +2061,30 @@ function drawTutorialBeacons() {
   const live = tutLive && tutLive.at && tutLive.at.length;
   const ks = (live ? tutLive.at : co.at.map(p => tutAt(p[0], p[1]))).slice(0, 4);
   const line = live ? !!tutLive.line : !!co.line;
-  if (line && ks.length >= 2) {
+  if (tutGhost && tutGhost.length > 1) {                 // the ghost road and a hand showing the drag
+    const pts = tutGhost.map(k => [tx(k), ty(k)]);
+    ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+    ctx.strokeStyle = 'rgba(255,200,40,.35)'; ctx.lineWidth = CFG.roadWidth + 6; ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = CFG.roadWidth - 2; ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,180,20,.95)'; ctx.lineWidth = 2; ctx.setLineDash([5, 6]); ctx.lineDashOffset = REDUCED_MOTION ? 0 : -animT * 22; ctx.stroke();
+    ctx.restore();
+    // the hand travels the route, then lifts and starts again
+    const seg = []; let tot = 0; for (let i = 1; i < pts.length; i++) { const l = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); seg.push(l); tot += l; }
+    const cyc = REDUCED_MOTION ? 0.5 : (animT * 0.28) % 1.25, u = Math.min(1, cyc);
+    let d = u * tot, i = 0; while (i < seg.length - 1 && d > seg[i]) { d -= seg[i]; i++; }
+    const t = seg[i] ? d / seg[i] : 0, hx = pts[i][0] + (pts[i + 1][0] - pts[i][0]) * t, hy = pts[i][1] + (pts[i + 1][1] - pts[i][1]) * t;
+    const press = cyc <= 1, lift = press ? 0 : (cyc - 1) * 40;
+    ctx.save(); ctx.translate(hx + 6, hy + 8 - lift);
+    if (press) { ctx.strokeStyle = 'rgba(255,200,40,.85)'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(-6, -8, 6 + Math.sin(animT * 8) * 1.2, 0, 6.3); ctx.stroke(); }
+    ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(2, 3, 7, 4, 0, 0, 6.3); ctx.fill();
+    ctx.fillStyle = '#ffffff'; ctx.strokeStyle = '#1d2b33'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(-6, -8); ctx.lineTo(-3.5, -10.5); ctx.lineTo(-1, -8); ctx.lineTo(-1, -1); ctx.lineTo(4, -2); ctx.lineTo(7, 1); ctx.lineTo(6, 8); ctx.lineTo(-3, 8); ctx.lineTo(-7, 2); ctx.lineTo(-6, -8); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.restore();
+    const [sx, sy] = pts[0];
+    ctx.save(); ctx.font = '800 10px Overpass, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(10,25,35,.8)'; ctx.fillStyle = '#ffd23a';
+    const ly = sy + 26; ctx.strokeText('Drag from here', sx, ly); ctx.fillText('Drag from here', sx, ly); ctx.restore();
+  } else if (line && ks.length >= 2) {
     const a = ks[0], b = ks[1];
     ctx.save(); ctx.strokeStyle = 'rgba(255,200,40,.75)'; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
     ctx.setLineDash([5, 6]); ctx.lineDashOffset = REDUCED_MOTION ? 0 : -animT * 18;
@@ -2108,8 +2131,36 @@ function renderTutorialPanel() {
     if (pb) pb.style.width = '100%';
   }
 }
+/* For a step that needs a connection, a suggested route from an open end of the store's car park to the house:
+   drawn on the map as a ghost road with a hand tracing the drag. */
+const TUT_CONNECT = {0: 0, 1: 2, 3: 1, 4: 3};
+let tutGhost = null, tutFollowDone = false;
+function tutGhostPath(col) {
+  const {s: st, h} = tutPair(col); if (!st || !h) return null;
+  const starts = isBig(st) ? storeDoors(st) : ORTH.map(d => [nbr(st.k, d), st.k]);
+  const goal = new Set(ORTH.map(d => nbr(h.k, d)).filter(k => k >= 0));
+  const ok = k => k >= 0 && inPlay(k) && !water[k] && (road[k] || !occupied(k));
+  const prev = new Map(), from = new Map(), q = [];
+  for (const [t, f] of starts) if (ok(t) && !prev.has(t)) { prev.set(t, -1); from.set(t, f); q.push(t); }
+  while (q.length) {
+    const k = q.shift();
+    if (goal.has(k)) {                                     // walk back to the store, then add its car-park tile and the house
+      const path = [h.k]; let c = k;
+      while (c !== -1) { path.push(c); if (prev.get(c) === -1) { path.push(from.get(c)); break; } c = prev.get(c); }
+      return path.reverse();
+    }
+    for (const d of ORTH) { const n = nbr(k, d); if (!prev.has(n) && ok(n)) { prev.set(n, k); q.push(n); } }
+  }
+  return null;
+}
 function checkTutorial() {
   if (!tutorialMode) return;
+  if (tutStage in TUT_CONNECT) { const col = TUT_CONNECT[tutStage], r = tutRoute(col); tutGhost = r.state === 'ok' ? null : tutGhostPath(col); } else tutGhost = null;
+  if (tutStage === 0 && !tutFollowDone) {                // the first trip: follow a red car out and back
+    const c = cars.find(x => x.color === 0 && (x.state === 'driving' || x.state === 'exiting') && x.job === 'fetch');
+    if (c && !(sel && sel.ref === c)) { sel = {type: 'car', ref: c}; follow = true; cam.auto = false; toast(tcol('Watch this red car: it drives to the store, loads a parcel, and brings it home. That\u2019s one delivery.'), 'tip'); }
+    if (stats.delivered >= 1) { tutFollowDone = true; follow = false; cam.auto = true; closeInspector(); toast('Delivered! +1 point and cash. Each parcel delivered also earns towards Junc Bucks (#).', 'good'); }
+  }
   if (tutStage < TUT_STEPS.length) {
     let st = null; try { st = tutStatus(); } catch (e) { console.error(e); st = {ok: false}; }
     tutLive = st; renderTutLive();
@@ -2138,6 +2189,67 @@ function renderTutLive() {
   const card = $('tut-coach'); if (card) card.classList.toggle('has-live', !!msg);
 }
 function tutOpenExplainer() { openModal('m-explain'); }
+/* ---- the tutorial's opening: five short animated cards on how the game works, drawn with the real artwork ---- */
+const TI_CARDS = [
+  {t: 'Stores make parcels', b: 'Each store fills up with parcels of its colour. The number over it shows how full it is \u2014 if it overflows for too long, the city fails (not in the tutorial, though).'},
+  {t: 'Houses send cars', b: 'Houses send their cars to fetch parcels from stores of the <b>same colour</b>, then bring them home. Each parcel delivered scores a point and pays cash.'},
+  {t: 'You draw the roads', b: 'Drag to lay road. Houses connect on any side; stores only at the <b>ends of their car park</b> (the white arrows). Some stores open at both ends, some at one.'},
+  {t: 'Keep traffic moving', b: 'Where roads cross, cars take turns. Lights, roundabouts, signs, one-way streets and motorways stop jams before they start.'},
+  {t: 'Grow, earn and customise', b: 'Each week the map grows and you pick a reward. Upgrade cars, stores and junctions with cash. Every 10 parcels earns a Junc Buck (#) to spend on looks in the Store.'}
+];
+let tiCard = 0, tiRaf = 0, tiT0 = 0;
+function openTutIntro() {
+  tiCard = 0; openModal('m-tutintro'); running = false; renderTutIntro();
+  cancelAnimationFrame(tiRaf); tiT0 = performance.now();
+  const loop = now => { if ($('m-tutintro').hidden) return; drawTutIntro((now - tiT0) / 1000); tiRaf = requestAnimationFrame(loop); };
+  tiRaf = requestAnimationFrame(loop);
+}
+function closeTutIntro() { if ($('m-tutintro').hidden) return; closeModal('m-tutintro'); cancelAnimationFrame(tiRaf); running = true; toast(tcol('Your turn: connect the red store to the red house. Follow the ghost road.'), 'good'); }
+function renderTutIntro() {
+  const c = TI_CARDS[tiCard];
+  $('ti-stage').innerHTML = '<canvas id="ti-cv" width="560" height="250"></canvas><h3>' + (tiCard + 1) + '. ' + c.t + '</h3><p>' + c.b + '</p>';
+  $('ti-dots').innerHTML = TI_CARDS.map((_, i) => '<i class="' + (i === tiCard ? 'a' : i < tiCard ? 'd' : '') + '"></i>').join('');
+  $('ti-back').disabled = tiCard === 0;
+  $('ti-next').textContent = tiCard === TI_CARDS.length - 1 ? 'Let\u2019s build' : 'Next';
+}
+function drawTutIntro(t) {
+  const cv2 = $('ti-cv'); if (!cv2) return;
+  const g = cv2.getContext('2d'), W2 = cv2.width, H2 = cv2.height, keepSun = Object.assign({}, SUN);
+  SUN.x = 0.55; SUN.y = 0.8; SUN.a = 1;
+  g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = PAL.land2; g.fillRect(0, 0, W2, H2);
+  const keepAnim = animT; animT = t;
+  withCtx(g, () => {
+    const at = (wx, wy, z) => g.setTransform(z, 0, 0, z, W2 / 2 - wx * z, H2 / 2 - wy * z);
+    const store = {type: 'store', k: idx(6, 6), sd: 2, ends: 0, tier: 1, lvl: 0, pins: 0, color: 0, face: sdFace(2), acc: 0, park: 0, docks: []};
+    const house = {k: idx(10, 6), face: Math.PI / 2, extra: 0, color: 0, acc: 0, cars: [], carsN: 2};
+    const road = () => { const P = new Path2D(); P.moveTo(tx(idx(7, 4)), ty(idx(7, 4))); P.lineTo(tx(idx(9, 4)), ty(idx(9, 4))); P.lineTo(tx(idx(9, 6)), ty(idx(9, 6))); return P; };
+    const car = (x, y, a, load) => drawCar({x, y, ang: a, da: a, color: 0, up: {cap: 0, spd: 0, load: 0, fuel: 0}, van: false, load: load || 0, state: 'driving', v: 0, id: 3, brake: false, broken: 0, stopT: 0});
+    if (tiCard === 0) { store.pins = Math.floor((t * 1.6) % 9); at(bX(store), bY(store), 1.9); drawStore(store);
+      g.font = '800 15px Overpass, system-ui, sans-serif'; g.textAlign = 'center'; g.fillStyle = '#12303f'; g.fillText(store.pins + ' / 8', bX(store), bY(store) - 56); }
+    else if (tiCard === 1) { at(tx(house.k), ty(house.k), 3.2); drawHouse(house);
+      const u = (t * 0.35) % 1, x = tx(house.k) - 28 + u * 56; car(x, ty(house.k) + 22, 0, u > 0.5 ? 1 : 0); }
+    else if (tiCard === 2) {
+      at((tx(idx(6, 6)) + tx(idx(10, 6))) / 2, ty(idx(5, 5)), 1.5);
+      drawStore(store); drawHouse(house);
+      const u = Math.min(1, (t * 0.45) % 1.6);
+      const P = road(); g.save(); g.setLineDash([u * 200, 400]); paintRoadPath(P, false); g.restore();
+      if (u >= 1) { const v = ((t * 0.45) % 1.6 - 1) / 0.6; car(tx(idx(7, 4)) + v * 64, ty(idx(7, 4)) + 4, 0, 1); }
+    } else if (tiCard === 3) {
+      at(tx(idx(8, 8)), ty(idx(8, 8)), 2.2);
+      const P = new Path2D(); P.moveTo(tx(idx(4, 8)), ty(idx(4, 8))); P.lineTo(tx(idx(12, 8)), ty(idx(12, 8))); P.moveTo(tx(idx(6, 6)), ty(idx(6, 6))); P.lineTo(tx(idx(6, 10)), ty(idx(6, 10)));
+      P.moveTo(tx(idx(10, 6)), ty(idx(10, 6))); P.lineTo(tx(idx(10, 10)), ty(idx(10, 10))); paintRoadPath(P, false, true);
+      drawLightHeads(tx(idx(6, 8)), ty(idx(6, 8)), {ph: Math.floor(t / 2) % 2, allRed: false}, [0, 0]);
+      drawRoundAt(tx(idx(10, 8)), ty(idx(10, 8)));
+      const a = t * 1.2; car(tx(idx(10, 8)) + Math.cos(a) * 10.6, ty(idx(10, 8)) + Math.sin(a) * 10.6, a + Math.PI / 2, 0);
+    } else {
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      const coin = (x, y, txt, c1, c2) => { const gr = g.createRadialGradient(x - 8, y - 8, 2, x, y, 30); gr.addColorStop(0, c1); gr.addColorStop(1, c2); g.fillStyle = gr; g.beginPath(); g.arc(x, y + Math.sin(t * 2 + x) * 6, 30, 0, 6.3); g.fill(); g.fillStyle = '#4a3400'; g.font = '900 26px Overpass, system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(txt, x, y + Math.sin(t * 2 + x) * 6); };
+      coin(W2 * 0.3, H2 / 2, '$', '#d6ffe2', '#43d17a'); coin(W2 * 0.5, H2 / 2, '#', '#fff1a8', '#d4a017'); coin(W2 * 0.7, H2 / 2, '\u2191', '#e0ecff', '#5b8cff');
+    }
+  });
+  animT = keepAnim; Object.assign(SUN, keepSun);
+  g.setTransform(1, 0, 0, 1, 0, 0);
+}
 function tutStartBuilding() {
   closeModal('m-explain');
   if (tutStage === 2) tutGoto(3); else renderTutorialPanel();
@@ -2194,7 +2306,9 @@ function startTutorial() {
   let n0 = 0; for (let k = 0; k < N; k++) if (road[k]) n0++; tutRoadBaseline = n0;
   setTutorialUI(true);
   setTutMin(compactUI() || window.innerHeight < 900, true);
+  tutGhost = null; tutFollowDone = false;
   renderTutorialPanel();
+  openTutIntro();
   toast(tcol('Welcome \u2014 connect the red store to the red house to get started.'), 'good');
 }
 function exitTutorial() {
@@ -6350,7 +6464,39 @@ function selectAt(sx, sy) {
 
 /* -------------------------------------------------------------- modals */
 let modalOpen = false, rerollLeft = 1, lastGrew = false;
-function openModal(id) { $(id).hidden = false; modalOpen = true; }
+function openModal(id) { $(id).hidden = false; modalOpen = true; if (id === 'm-start') showMM(mmPane); }
+/* ---- the main menu: Play, Saves, Friends, Customise, Settings and Account on the left; Leaderboard, Store,
+   Weeklys, Tutorial, Feedback and Watch a player on the right; your balance top left. The middle shows
+   whichever section is picked. */
+let mmPane = 'play';
+function showMM(pane) {
+  mmPane = pane || 'play';
+  document.querySelectorAll('#m-start .mm-btn[data-mm]').forEach(b => b.setAttribute('aria-pressed', b.dataset.mm === mmPane ? 'true' : 'false'));
+  document.querySelectorAll('#m-start .mm-pane').forEach(p => { p.hidden = p.dataset.mm !== mmPane; });
+  const on = window.JunctionOnline;
+  if (mmPane === 'saves') {
+    const ok = on && on.renderSlots && on.renderSlots($('mm-slots'));
+    if (!ok) $('mm-slots').innerHTML = '<p class="mini">Cloud save slots need the online service, which is still connecting or unavailable. Your city on this device is always kept.</p>';
+    $('mm-resume').hidden = !hasSave();
+  }
+  if (mmPane === 'friends') { if (on && on.renderFriends) on.renderFriends($('mm-friends')); else $('mm-friends').innerHTML = '<p class="mini">Friends need the online service, which isn\u2019t available right now.</p>'; }
+  if (mmPane === 'weekly') { renderExpertCard(); renderWeeks(); }
+  renderLook();
+}
+/* past weeks' seeds, each with its own leaderboard */
+function renderWeeks() {
+  const box = $('mm-weeks'); if (!box) return;
+  box.innerHTML = '<h3>Earlier seeds</h3>' + [1, 2, 3].map(w => { const sd = expertSeed(w); return '<div class="mm-week"><div><b>' + sd.name + '</b><small>' + sd.label + ' \u00b7 code ' + sd.code + '</small></div><button class="act small" type="button" data-wk="' + w + '">Leaderboard</button></div>'; }).join('');
+  box.querySelectorAll('[data-wk]').forEach(b => b.onclick = () => { if (window.JunctionOnline && window.JunctionOnline.openExpert) window.JunctionOnline.openExpert(+b.dataset.wk); else toast('Leaderboards need the online service.', 'warn'); });
+}
+function bindMainMenu() {
+  document.querySelectorAll('#m-start .mm-btn[data-mm]').forEach(b => b.addEventListener('click', () => showMM(b.dataset.mm)));
+  document.querySelectorAll('#m-start [data-mm-go]').forEach(b => b.addEventListener('click', () => { if (b.dataset.mmGo === 'tutorial') $('btn-try-tutorial').click(); else showMM(b.dataset.mmGo); }));
+  $('mm-settings').addEventListener('click', () => { $('app').classList.add('menu-over'); openMenu('settings'); });
+  $('mm-account').addEventListener('click', () => { if (window.__junctionAccount) window.__junctionAccount(); else toast('Accounts need the online service, which isn\u2019t available right now.', 'warn'); });
+  $('mm-resume').addEventListener('click', () => $('btn-resume').click());
+  for (const id of ['mm-custom', 'mm-store']) $(id).addEventListener('click', shopClick);
+}
 function closeModal(id) { $(id).hidden = true; modalOpen = !!document.querySelector('.modal:not([hidden])'); }
 function offerUpgrade(grew) {
   lastGrew = grew; rerollLeft = 1; running = false; openModal('m-upgrade'); renderUpgrade();
@@ -6625,7 +6771,7 @@ function bindInput() {
     if (window.JunctionOnline && window.JunctionOnline.ready) { window.JunctionOnline.openSaves('new'); return; }
     closeModal('m-start'); resetGame(startDiff); running = true; refreshHud(); layout();
   });
-  renderExpertCard();
+  renderExpertCard(); bindMainMenu();
   $('btn-expert').addEventListener('click', () => {
     if (startDiff !== 'expert') prevDiff = startDiff;
     startDiff = 'expert';
@@ -6636,6 +6782,9 @@ function bindInput() {
   $('btn-resume').addEventListener('click', () => { if (loadGame()) { closeModal('m-start'); running = true; refreshHud(); layout(); } else toast('No saved city found', 'warn'); });
   $('btn-try-tutorial').addEventListener('click', () => { closeModal('m-start'); startTutorial(); refreshHud(); layout(); });
   $('tut-exit').addEventListener('click', exitTutorial);
+  $('ti-next').addEventListener('click', () => { if (tiCard < TI_CARDS.length - 1) { tiCard++; renderTutIntro(); } else closeTutIntro(); });
+  $('ti-back').addEventListener('click', () => { if (tiCard > 0) { tiCard--; renderTutIntro(); } });
+  $('ti-skip').addEventListener('click', closeTutIntro);
   $('tut-open-explain').addEventListener('click', tutOpenExplainer);
   $('explain-start').addEventListener('click', tutStartBuilding);
   $('tut-rush').addEventListener('click', tutTriggerRush);
@@ -7025,6 +7174,7 @@ function renderBucks() {
   const set = (id, t) => { const e = $(id); if (e && e.textContent !== t) e.textContent = t; };
   const b = '#' + jb.bucks.toLocaleString('en-US');
 const r = 'R#' + jb.rbucks;
+  set('mm-bucks', b); set('mm-rbucks', r); set('mm-next', jb.toward + '/10'); set('mm-store-bal', b + ' Junc Bucks \u00b7 ' + r);
   set('v-jb', b); set('v-jbnext', r + ' · ' + jb.toward + '/10'); set('jb-bal', b + ' Junc Bucks · ' + r); set('jb-pill', b + ' · ' + r); set('cust-bal', b + ' · ' + r);
 }
 const fmtLeft = ms => { const m = Math.ceil(ms / 60000); return m >= 60 ? Math.floor(m / 60) + 'h ' + (m % 60) + 'm' : m + 'm'; };
@@ -7242,6 +7392,10 @@ function renderLook(light) {
     if (menuTab === 'owned') renderShop($('owned-list'), 'owned', light);
   }
   if ($('cust-panel') && !$('cust-panel').hidden) renderShop($('cust-list'), 'quick', light);
+  if ($('m-start') && !$('m-start').hidden) {
+    if (mmPane === 'custom') renderShop($('mm-custom'), 'owned', light);
+    if (mmPane === 'store') renderShop($('mm-store'), 'store', light);
+  }
   renderBucks();
 }
 function openMenu(tab) {
@@ -7249,7 +7403,7 @@ function openMenu(tab) {
   m.hidden = false; $('btn-menu').setAttribute('aria-expanded', 'true');
   renderPaletteUI(); renderLook();
 }
-function closeMenu() { $('menu').hidden = true; $('btn-menu').setAttribute('aria-expanded', 'false'); }
+function closeMenu() { $('menu').hidden = true; $('btn-menu').setAttribute('aria-expanded', 'false'); $('app').classList.remove('menu-over'); }
 function toggleCust(on) {
   const p = $('cust-panel'); if (!p) return;
   p.hidden = on === undefined ? !p.hidden : !on;

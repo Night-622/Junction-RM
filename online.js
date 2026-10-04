@@ -6,7 +6,7 @@
 
    Firestore layout
      users/{uid}                 name, nameLower, star, liveCode (accounts only)
-     users/{uid}/saves/{1|2|3}   data (serialized city, as a string), score, week, diffKey, over, updatedAt
+     users/{uid}/saves/{1-5}   data (serialized city, as a string), score, week, diffKey, over, updatedAt
      usernames/{nameLower}       uid, perm, at — every player's name is reserved here, so no two players share one.
                                  Accounts keep theirs for good; a guest name frees up after 30 days unused.
      boards/{mode}/players/{uid} one leaderboard per mode (chill, standard, frantic: parcels, weeks, goalsSec;
@@ -14,6 +14,7 @@
      expert/{week}/players/{uid}  each player's best run on that ISO week's seeded Expert Survival city, with a
                                  compact copy of their layout so others can see who placed what
      messages/{id}               player-to-player messages: from, fromName, to, toName, text, at, read
+     users/{uid}/friends/{fuid}  the players someone has added as friends: name, at
      live/{6-digit code}         uid, name, star, playing, state, meta, watchT — the live view channel
      feedback/{bugs|ideas|other}/entries/{id}   guest feedback: uid, name, message, details, replyTo, createdAt
      (signed-in accounts' feedback is emailed by a Google Apps Script on the support Gmail — see apps-script/)
@@ -46,7 +47,7 @@ const API = window.JunctionAPI;
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 const NAME_RE = /^[A-Za-z0-9_-]{3,16}$/;
-const SLOTS = ['1', '2', '3'];
+const SLOTS = ['1', '2', '3', '4', '5'];
 const CLOUD_SAVE_EVERY = 30e3;      // ms between routine cloud autosaves (local autosave still runs every 12s)
 const LIVE_SEND_EVERY = 4e3;        // ms between live snapshots while someone is watching
 const LIVE_HEARTBEAT = 60e3;        // ms between "I'm online" pings when nobody is watching
@@ -402,10 +403,10 @@ function renderAch() {
 $('acct-tabs').addEventListener('click', e => { const b = e.target.closest('button[data-pane]'); if (b) { acctPane = b.dataset.pane; renderAcct(); acctPaneOpened(); } });
 function acctPaneOpened() {
   if (acctPane === 'saves') {
-    $('acct-saves-lead').textContent = isPerm() ? 'Three cloud save slots, kept with your account on any device.' : 'Three cloud save slots for this browser. Make a permanent account to keep them everywhere.';
+    $('acct-saves-lead').textContent = isPerm() ? 'Five cloud save slots, kept with your account on any device.' : 'Five cloud save slots for this browser. Make a permanent account to keep them everywhere.';
     renderSlots($('acct-slots'));
   }
-  if (acctPane === 'msgs') { loadSent().then(renderMsgs); renderMsgs(); }
+  if (acctPane === 'msgs') { Promise.all([loadSent(), loadFriends()]).then(renderMsgs); renderMsgs(); }
   if (acctPane === 'watch') { $('acct-watch-err').textContent = ''; $('acct-watch-code').value = ''; setTimeout(() => $('acct-watch-code').focus(), 50); }
 }
 $('acct-close').addEventListener('click', () => closeM('m-acct'));
@@ -559,8 +560,8 @@ async function openSaves(mode) {
   $('menu').hidden = true;
   $('saves-title').textContent = savesMode === 'new' ? 'Pick a slot for your new city' : 'Save files';
   $('saves-lead').textContent = isPerm()
-    ? 'Three cloud save slots, kept with your account on any device.'
-    : 'Three cloud save slots for this browser. Make a permanent account to keep them everywhere.';
+    ? 'Five cloud save slots, kept with your account on any device.'
+    : 'Five cloud save slots for this browser. Make a permanent account to keep them everywhere.';
   $('saves-diff').textContent = 'New cities use the difficulty picked on the start screen: ' + API.diffLabel(API.startDiff) + '.';
   openM('m-saves');
   await renderSlots($('save-slots'));
@@ -825,10 +826,13 @@ function openRun(wk, uid) {
     stat((d.trips || 0).toLocaleString(), 'trips') + stat(d.cars || 0, 'cars') + stat(d.roads || 0, 'road tiles') + stat(d.tows || 0, 'tow-truck rescues') + stat(hm(d.playSec || 0), 'played');
   $('run-note').textContent = ok ? 'Their city at their best moment on this seed: roads, motorways, lights (red dots), roundabouts (green dots), houses and stores.' : 'No map saved for this run.';
   $('run-msg').hidden = !O.user || uid === O.user.uid;
+  loadFriends().then(renderRunFriend);
   $('run-msg').textContent = 'Message ' + (d.name || 'them');
   openM('m-run');
 }
 $('run-close').addEventListener('click', () => closeM('m-run'));
+$('run-friend').addEventListener('click', async () => { if (!runOf) return; const err = await addFriend(runOf.uid, runOf.name); API.toast(err || runOf.name + ' is now your friend \u2014 find them under Friends on the main menu.', err ? 'warn' : 'good'); renderRunFriend(); });
+function renderRunFriend() { const b = $('run-friend'); if (!b || !runOf) return; const f = isFriend(runOf.uid); b.hidden = !O.user || runOf.uid === O.user.uid || f; }
 $('run-msg').addEventListener('click', () => { if (!runOf) return; closeM('m-run'); closeM('m-board'); openThread(runOf.uid, runOf.name); });
 
 /* ============================================================ MESSAGES
@@ -843,6 +847,7 @@ function startInbox() {
     O.inbox = snap.docs.map(x => Object.assign({id: x.id}, x.data()));
     updateMsgBadge();
     if (!$('m-acct').hidden && acctPane === 'msgs') renderMsgs();
+    if (frBox && frSel) renderFriendChat();
   }, e => console.warn('Inbox unavailable', e));
 }
 async function loadSent() {
@@ -871,6 +876,7 @@ function renderMsgs() {
 }
 function renderThread() {
   $('msg-with').textContent = msgWith.name || 'Player';
+  const af = $('msg-addfriend'); if (af) { af.hidden = isFriend(msgWith.uid); af.onclick = async () => { const err = await addFriend(msgWith.uid, msgWith.name); API.toast(err || (msgWith.name || 'They') + ' is now your friend', err ? 'warn' : 'good'); renderThread(); }; }
   const ms = O.inbox.filter(m => m.from === msgWith.uid).concat(O.sent.filter(m => m.to === msgWith.uid)).sort((a, b) => msAt(a) - msAt(b));
   const body = $('msg-body');
   body.innerHTML = ms.length ? ms.map(m => '<div class="bubble' + (m.from === O.user.uid ? ' me' : '') + '">' + esc(m.text || '') + '<time>' + new Date(msAt(m)).toLocaleString(undefined, {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'}) + '</time></div>').join('')
@@ -888,23 +894,117 @@ async function openThread(uid, name) {
 $('msg-list').addEventListener('click', e => { const b = e.target.closest('[data-with]'); if (b) { msgWith = {uid: b.dataset.with, name: b.dataset.name}; renderMsgs(); } });
 $('msg-back').addEventListener('click', () => { msgWith = null; renderMsgs(); });
 let lastSend = 0;
+/* send one message; resolves to '' on success or an error to show */
+async function sendTo(uid, name, t) {
+  t = (t || '').trim();
+  if (!t) return 'Write something first.';
+  if (!O.profile || !O.profile.name) return 'Pick a username first (Account \u2192 Profile).';
+  if (t.length > 500) return 'Messages can be up to 500 characters.';
+  if (Date.now() - lastSend < 1500) return 'Slow down a little.';
+  lastSend = Date.now();
+  const m = {from: O.user.uid, fromName: myName(), to: uid, toName: (name || 'Player').slice(0, 16), text: t, at: serverTimestamp(), read: false};
+  try { const ref = await addDoc(collection(db, 'messages'), m); O.sent.push(Object.assign({id: ref.id, localAt: Date.now()}, m, {at: null})); return ''; }
+  catch (e) { return 'Couldn\u2019t send that: ' + e.message; }
+}
 async function sendMsg() {
-  const t = $('msg-text').value.trim(); $('msg-err').textContent = '';
-  if (!t || !msgWith) return;
-  if (!O.profile || !O.profile.name) { $('msg-err').textContent = 'Pick a username first (Profile tab).'; return; }
-  if (t.length > 500) { $('msg-err').textContent = 'Messages can be up to 500 characters.'; return; }
-  if (Date.now() - lastSend < 1500) { $('msg-err').textContent = 'Slow down a little.'; return; }
-  lastSend = Date.now(); $('msg-send').disabled = true;
-  const m = {from: O.user.uid, fromName: myName(), to: msgWith.uid, toName: msgWith.name || 'Player', text: t, at: serverTimestamp(), read: false};
-  try {
-    const ref = await addDoc(collection(db, 'messages'), m);
-    O.sent.push(Object.assign({id: ref.id, localAt: Date.now()}, m, {at: null}));
-    $('msg-text').value = ''; renderThread();
-  } catch (e) { $('msg-err').textContent = 'Couldn\u2019t send that: ' + e.message; }
-  finally { $('msg-send').disabled = false; }
+  if (!msgWith) return;
+  $('msg-err').textContent = ''; $('msg-send').disabled = true;
+  const err = await sendTo(msgWith.uid, msgWith.name, $('msg-text').value);
+  $('msg-send').disabled = false;
+  if (err) { $('msg-err').textContent = err; return; }
+  $('msg-text').value = ''; renderThread();
 }
 $('msg-send').addEventListener('click', sendMsg);
 $('msg-text').addEventListener('keydown', e => { if (e.key === 'Enter') sendMsg(); });
+/* ============================================================ FRIENDS
+   users/{uid}/friends/{fuid}: the players you've added. The Friends section of the main menu lists them with
+   their records (best on every mode, and on this week's Expert seed) and a chat with each. */
+O.friends = null; let frBox = null, frSel = null, frRecords = {};
+const friendRef = (fuid) => doc(db, 'users', O.user.uid, 'friends', fuid);
+const isFriend = fuid => !!(O.friends || []).find(f => f.uid === fuid);
+async function loadFriends(force) {
+  if (!O.ready || !O.user) return [];
+  if (O.friends && !force) return O.friends;
+  try { const sn = await getDocs(collection(db, 'users', O.user.uid, 'friends')); O.friends = sn.docs.map(x => Object.assign({uid: x.id}, x.data())).sort((a, b) => String(a.name).localeCompare(b.name)); }
+  catch (e) { console.warn('Friends unavailable', e); O.friends = O.friends || []; }
+  return O.friends;
+}
+async function addFriend(fuid, name) {
+  if (!O.ready || !O.user) return 'Online features are still connecting.';
+  if (!O.profile || !O.profile.name) return 'Pick a username first.';
+  if (fuid === O.user.uid) return 'That\u2019s you.';
+  try { await setDoc(friendRef(fuid), {name: String(name || 'Player').slice(0, 16), at: serverTimestamp()}); await loadFriends(true); return ''; }
+  catch (e) { return 'Couldn\u2019t add that friend: ' + e.message; }
+}
+async function addFriendByName(name) {
+  name = (name || '').trim();
+  if (!/^[A-Za-z0-9_-]{3,16}$/.test(name)) return 'Usernames are 3\u201316 letters, numbers, _ or -.';
+  try {
+    const sn = await getDoc(doc(db, 'usernames', name.toLowerCase()));
+    if (!sn.exists() || !sn.data().uid) return 'No player called \u201c' + name + '\u201d.';
+    return await addFriend(sn.data().uid, name);
+  } catch (e) { return 'Couldn\u2019t look that player up: ' + e.message; }
+}
+async function friendRecordsOf(fuid) {
+  if (frRecords[fuid] && Date.now() - frRecords[fuid].at < 120e3) return frRecords[fuid];
+  const r = {at: Date.now(), modes: {}, expert: null};
+  await Promise.all(MODES.map(async m => { try { const x = await getDoc(boardRef(m, fuid)); if (x.exists()) r.modes[m] = x.data(); } catch (e) {} }));
+  try { const x = await getDoc(expertRef(API.expertSeed(0).key, fuid)); if (x.exists()) r.expert = x.data(); } catch (e) {}
+  return (frRecords[fuid] = r);
+}
+function recordsHTML(r) {
+  const cell = (v, l) => '<div><b>' + v + '</b><span>' + l + '</span></div>';
+  let h = '<div class="statgrid frstats">';
+  for (const m of MODES) {
+    const d = r.modes[m] || {};
+    h += m === 'zen' ? cell(d.playSec ? hm(d.playSec) : '\u2014', esc(API.diffLabel(m)) + ' \u00b7 longest')
+      : cell(d.parcels ? d.parcels.toLocaleString() : '\u2014', esc(API.diffLabel(m)) + ' \u00b7 parcels' + (d.weeks ? ', week ' + d.weeks : ''));
+  }
+  h += cell(r.expert ? r.expert.parcels.toLocaleString() : '\u2014', 'Expert this week' + (r.expert ? ' \u00b7 week ' + r.expert.weeks : ''));
+  return h + '</div>';
+}
+/* the Friends section: add form, your friends with their best records, and a chat with whoever is picked */
+async function renderFriends(box) {
+  frBox = box || frBox; if (!frBox) return;
+  if (!O.ready || !O.user) { frBox.innerHTML = '<p class="mini">Friends need the online service \u2014 it\u2019s still connecting, or unavailable right now.</p>'; return; }
+  if (!O.profile || !O.profile.name) { frBox.innerHTML = '<p class="mini">Pick a username first, then you can add friends.</p><button class="bigbtn" type="button" id="fr-pick">Pick a username</button>'; $('fr-pick').onclick = () => openUserModal(); return; }
+  frBox.innerHTML = '<p class="mini">Loading friends\u2026</p>';
+  const list = await loadFriends();
+  await loadSent();
+  const unreadFrom = uid => O.inbox.filter(m => m.from === uid && !m.read).length;
+  frBox.innerHTML = '<div class="frwrap"><div class="frcol">' +
+    '<div class="fradd"><input id="fr-name" type="text" maxlength="16" placeholder="Add a friend by username" autocomplete="off" spellcheck="false"><button class="bigbtn" id="fr-add" type="button">Add</button></div>' +
+    '<p class="formerr" id="fr-err" role="alert"></p>' +
+    '<div class="frlist">' + (list.length ? list.map(f => '<button type="button" class="frrow' + (frSel && frSel.uid === f.uid ? ' active' : '') + '" data-fr="' + esc(f.uid) + '" data-name="' + esc(f.name) + '"><span class="av">' + esc(String(f.name).charAt(0).toUpperCase()) + '</span><b>' + esc(f.name) + '</b>' + (unreadFrom(f.uid) ? '<span class="tabbadge">' + unreadFrom(f.uid) + '</span>' : '') + '</button>').join('')
+      : '<p class="mini">No friends yet. Add someone by their username, or from a player on the Expert leaderboard.</p>') + '</div></div>' +
+    '<div class="frmain" id="fr-main">' + (frSel ? '' : '<p class="mini">Pick a friend to see their records and chat.</p>') + '</div></div>';
+  const add = async () => { const err = await addFriendByName($('fr-name').value); if (err) { $('fr-err').textContent = err; return; } API.toast('Friend added', 'good'); renderFriends(); };
+  $('fr-add').onclick = add; $('fr-name').onkeydown = e => { if (e.key === 'Enter') add(); };
+  frBox.querySelectorAll('[data-fr]').forEach(b => b.onclick = () => { frSel = {uid: b.dataset.fr, name: b.dataset.name}; renderFriends(); });
+  if (frSel) renderFriendMain();
+}
+async function renderFriendMain() {
+  const main = $('fr-main'); if (!main || !frSel) return;
+  main.innerHTML = '<div class="frhead"><b>' + esc(frSel.name) + '</b><button class="linkbtn" type="button" id="fr-remove">Remove friend</button></div>' +
+    '<div id="fr-rec"><p class="mini">Loading records\u2026</p></div>' +
+    '<h4 class="frh">Chat</h4><div class="mt-body" id="fr-chat"></div>' +
+    '<div class="mt-reply"><input id="fr-text" type="text" maxlength="500" placeholder="Message ' + esc(frSel.name) + '\u2026" autocomplete="off"><button class="bigbtn" id="fr-send" type="button">Send</button></div><p class="formerr" id="fr-cerr" role="alert"></p>';
+  $('fr-remove').onclick = async () => { try { await deleteDoc(friendRef(frSel.uid)); } catch (e) {} frSel = null; await loadFriends(true); renderFriends(); };
+  const send = async () => { $('fr-cerr').textContent = ''; const err = await sendTo(frSel.uid, frSel.name, $('fr-text').value); if (err) { $('fr-cerr').textContent = err; return; } $('fr-text').value = ''; renderFriendChat(); };
+  $('fr-send').onclick = send; $('fr-text').onkeydown = e => { if (e.key === 'Enter') send(); };
+  renderFriendChat();
+  const sel = frSel, r = await friendRecordsOf(sel.uid);
+  if (frSel === sel && $('fr-rec')) $('fr-rec').innerHTML = recordsHTML(r);
+}
+function renderFriendChat() {
+  const body = $('fr-chat'); if (!body || !frSel) return;
+  const ms = O.inbox.filter(m => m.from === frSel.uid).concat(O.sent.filter(m => m.to === frSel.uid)).sort((a, b) => msAt(a) - msAt(b));
+  body.innerHTML = ms.length ? ms.map(m => '<div class="bubble' + (m.from === O.user.uid ? ' me' : '') + '">' + esc(m.text || '') + '<time>' + new Date(msAt(m)).toLocaleString(undefined, {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'}) + '</time></div>').join('')
+    : '<p class="mini">No messages yet \u2014 say hello.</p>';
+  body.scrollTop = body.scrollHeight;
+  for (const m of ms) if (m.to === O.user.uid && !m.read) { m.read = true; updateDoc(doc(db, 'messages', m.id), {read: true}).catch(() => {}); }
+  updateMsgBadge();
+}
 window.__junctionMessages = () => {
   if (!O.ready || !O.user) { API.toast('Online features are still connecting \u2014 try again in a moment.', 'warn'); return; }
   if (!O.profile || !O.profile.name) { openUserModal(); return; }
@@ -1107,5 +1207,7 @@ window.JunctionOnline = {
   get ready() { return O.ready && !!(O.profile && O.profile.name); },
   get feedbackReady() { return !!O.user; },
   openSaves, openBoard, openWatch, sendFeedback, feedbackIdentity,
+  renderSlots(box) { if (!O.ready) return false; renderSlots(box); return true; },
+  renderFriends(box) { renderFriends(box); },
   openExpert(ago) { if (!O.ready) { API.toast('Online features are still connecting \u2014 try again in a moment.', 'warn'); return; } openExpert(ago); }
 };
