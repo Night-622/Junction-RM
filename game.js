@@ -17,7 +17,7 @@
 const CONFIG = {
   // clock & map
   weekSeconds:        110,
-  startSpan:          11,     // stores take a 3x4 plot, so the first map needs a little more room
+  startSpan:          8,     // stores take a 3x4 plot, so the first map needs a little more room
   growPerWeek:        1,      // tiles added on EVERY side each week
   maxSpan:            128,
   cameraEase:         2.4,
@@ -1379,6 +1379,7 @@ function arrive(c) {
     const n = c.load, cash = c.cash || 0;
     if (n > 0) {
       score += n; stats.delivered += n; stats.lastDeliveries.push(clock);
+      if (!spectating) earnBucks(n, buildings[c.home]);
       earn(cash);
       onDeliver(c, n, cash);
     }
@@ -3679,7 +3680,7 @@ const ctx = cv.getContext('2d');
 let W = 900, H = 700, dpr = 1;
 const cam = {x: 0, y: 0, z: 1, auto: true};
 const insets = {l: 0, r: 0, t: 0, b: 0};
-let theme = 'light', animT = 0, showHeat = false, showGrid = false, nightOn = true, fxOn = true;
+let theme = 'light', animT = 0, showHeat = false, showGrid = false, nightOn = true, fxOn = true, showMoto = true;
 let fx = [];
 
 const PALS = {
@@ -3712,11 +3713,13 @@ const MAP_THEMES = {
   blossom:  {label: 'Blossom',  tone: 'light', decor: 'blossom', land: '#e2ebd6', land2: '#d9e4ca', patch: '#f1cbd9', water: '#a4cfe6',
              tree1: '#f2a7c3', tree2: '#d98aa8', grass: '#cfe2b8'},
   tropical: {label: 'Tropical', tone: 'light', decor: 'palm',    land: '#d3ebc3', land2: '#c9e4b7', patch: '#eee0ae', water: '#5ccbd4', foam: '#d6f6f7', grass: '#b9de9d'},
+  candy:    {label: 'Candy',    tone: 'light', decor: 'flowers', land: '#f5dce8', land2: '#f0d1df', patch: '#c9eedc', water: '#9fd5f2', foam: '#e3f4fd',
+             tree1: '#ff9ec7', tree2: '#e77fae', grass: '#c9eedc', check: 'rgba(255,255,255,.4)'},
   spooky:   {label: 'Spooky',   tone: 'dark',  decor: 'pumpkin', land: '#2a2633', land2: '#25212e', patch: '#3b3046', water: '#263b55', foam: '#3b5a7a',
              tree1: '#4d3d60', tree2: '#3a2d4a', grass: '#3a3346'}
 };
 const MAP_PAL_KEYS = ['land', 'land2', 'patch', 'water', 'foam', 'tree1', 'tree2', 'grass', 'check'];
-let mapPrefs = {theme: 'meadow', decor: 'auto', land: '', patch: '', water: '', lastDay: 'meadow'};
+let mapPrefs = {theme: 'meadow', decor: 'auto', land: '', patch: '', water: '', road: '', moto: '', lastDay: 'meadow'};
 /* the full drawing palette for a map theme (plus any hand-picked colours) */
 function palFor(id, custom) {
   const T = MAP_THEMES[id] || MAP_THEMES.meadow, cu = custom || {};
@@ -3726,11 +3729,16 @@ function palFor(id, custom) {
   if (cu.land) { P.land = land; P.land2 = mixHex(land, '#000000', 0.035); P.check = tone === 'light' ? 'rgba(255,255,255,.28)' : 'rgba(255,255,255,.03)'; }
   if (cu.patch) P.patch = cu.patch;
   if (cu.water) { P.water = cu.water; P.foam = mixHex(cu.water, '#ffffff', 0.45); }
+  if (cu.road) {                                     // road surface; its kerb and the wet look follow it
+    P.road = cu.road; P.roadWet = mixHex(cu.road, '#000000', 0.09);
+    P.edge = mixHex(cu.road, '#000000', lum(cu.road) > 0.3 ? 0.72 : 0.6);
+  }
+  if (cu.moto) { P.deck = cu.moto; P.deckEdge = mixHex(cu.moto, '#000000', 0.55); }
   P.tone = tone;
   return P;
 }
 const decorKind = () => mapPrefs.decor !== 'auto' && DECOR[mapPrefs.decor] ? mapPrefs.decor : (MAP_THEMES[mapPrefs.theme] || MAP_THEMES.meadow).decor;
-const mapCustom = () => !!(mapPrefs.land || mapPrefs.patch || mapPrefs.water);
+const mapCustom = () => !!(mapPrefs.land || mapPrefs.patch || mapPrefs.water || mapPrefs.road || mapPrefs.moto);
 function applyMap() {
   PAL = palFor(mapPrefs.theme, mapPrefs); theme = PAL.tone;
   const root = document.documentElement;
@@ -3749,7 +3757,7 @@ function loadMap() {
       if (MAP_THEMES[m.lastDay]) mapPrefs.lastDay = m.lastDay;
       if (m.decor === 'snowman') m.decor = 'snowpine';
       if (m.decor === 'auto' || DECOR[m.decor]) mapPrefs.decor = m.decor;
-      for (const f of ['land', 'patch', 'water']) mapPrefs[f] = hexOk(m[f]) ? m[f].toLowerCase() : '';
+      for (const f of ['land', 'patch', 'water', 'road', 'moto']) mapPrefs[f] = hexOk(m[f]) ? m[f].toLowerCase() : '';
     } else {                                           // first run on this version: keep the old light/dark choice
       let t = 'light';
       try { t = localStorage.getItem('junction2-theme') || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); } catch (e) {}
@@ -4179,7 +4187,7 @@ function drawRoads() {
   ctx.save(); ctx.globalAlpha = SUN.a; ctx.translate(SUN.x * 4, SUN.y * 4); ctx.strokeStyle = PAL.sh; ctx.lineWidth = RW + 7; ctx.stroke(P.bridge); ctx.restore();
   ctx.strokeStyle = PAL.stone; ctx.lineWidth = RW + 7; ctx.stroke(P.bridge);
   // motorway deck
-  if (motorways.length) {
+  if (motorways.length && showMoto) {
     ctx.save(); ctx.globalAlpha = SUN.a; ctx.translate(SUN.x * 7, SUN.y * 7); ctx.strokeStyle = PAL.sh; ctx.lineWidth = 16; ctx.stroke(P.moto); ctx.restore();
   }
   ctx.strokeStyle = PAL.edge; ctx.lineWidth = RW + 3.4; ctx.stroke(P.all);
@@ -4192,7 +4200,7 @@ function drawRoads() {
   ctx.strokeStyle = PAL.lane; ctx.lineWidth = 1.3; ctx.setLineDash([4.5, 5]); ctx.globalAlpha = 0.85; ctx.stroke(P.dash);
   ctx.setLineDash([]); ctx.globalAlpha = 1;
   ctx.strokeStyle = PAL.stop; ctx.lineWidth = 1.8; ctx.lineCap = 'butt'; ctx.stroke(P.stop); ctx.lineCap = 'round';
-  if (motorways.length) {
+  if (motorways.length && showMoto) {
     ctx.strokeStyle = PAL.deckEdge; ctx.lineWidth = 15; ctx.stroke(P.moto);
     ctx.strokeStyle = PAL.deck; ctx.lineWidth = 12.6; ctx.stroke(P.moto);
     ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 1.4; ctx.setLineDash([7, 6]); ctx.stroke(P.motoDash); ctx.setLineDash([]);
@@ -4465,7 +4473,8 @@ function drawStore(b) {
   const [Bx, By, Bw, Bh] = STORE_BOX[tier], front = By + Bh, roof = tier === 3 ? shade(PAL.roofBase, -0.12) : PAL.roofBase;
   const ends = b.ends || 0, open = [ends !== 2 ? 1 : 0, ends !== 1 ? 1 : 0];        // [+x end, -x end]
   dropShadow(x, y, th, s, 0.5, [[-31, -47, 62, 94, 6]]);                                    // the plot's kerb
-  dropShadow(x, y, th, s, 5 + tier * 1.6, [[Bx, By, Bw, Bh, 4]]);                            // the building
+  const H = (8 + tier * 2.2) * s;                                                             // how tall it stands, in world px
+  dropShadow(x, y, th, s, H * 1.25, [[Bx, By, Bw, Bh, 4]]);                                    // the building's shadow, as long as it is tall
   ctx.save(); ctx.translate(x, y); ctx.rotate(th); ctx.scale(s, s);
   // plot and kerb
   rr(-31, -47, 62, 94, 6); ctx.fillStyle = PAL.lot; ctx.fill();
@@ -4497,6 +4506,28 @@ function drawStore(b) {
     const dk = decorKind();
     for (const [gx, gy, gr, sd] of [[-27.5, -43, 3.2, 1], [27.5, -42.5, 3.4, 2], [-27.5, -14, 2.9, 3], [27.5, 2, 3, 4]]) drawDecor(ctx, dk, gx, gy, gr, 0, b.k * 7 + sd);
   }
+  ctx.restore();
+  // the building stands up: its roof is lifted by H (straight up the screen) and the wall facing you shows below it
+  {
+    const cs = [[Bx, By], [Bx + Bw, By], [Bx + Bw, By + Bh], [Bx, By + Bh]].map(([lx, ly]) => rot(x, y, th, lx * s, ly * s));
+    const x0 = Math.min(...cs.map(q => q.x)), x1 = Math.max(...cs.map(q => q.x)), y1 = Math.max(...cs.map(q => q.y)), w = x1 - x0;
+    const wall = shade(PAL.roofBase, -0.3), frontFaces = Math.abs(((th % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) < 0.1;   // front of the store towards you
+    rr(x0, y1 - H - 3, w, H + 3, 3); ctx.fillStyle = wall; ctx.fill();
+    const gr = ctx.createLinearGradient(0, y1 - H, 0, y1); gr.addColorStop(0, 'rgba(255,255,255,.1)'); gr.addColorStop(1, 'rgba(0,0,0,.22)');
+    ctx.fillStyle = gr; rr(x0, y1 - H - 3, w, H + 3, 3); ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.fillRect(x0 + 2, y1 - 1.2, w - 4, 1.2);                     // where the wall meets the ground
+    if (frontFaces) {                                                                                 // shopfront: two garage doors and a glass entrance
+      for (const gx of [-18, 18]) { const q = rot(x, y, th, gx * s, 0); rollerDoor(q.x - 6 * s, y1 - H * 0.82, 12 * s, H * 0.82, col); }
+      rr(x + -7 * s, y1 - H * 0.78, 14 * s, H * 0.78, 1); ctx.fillStyle = 'rgba(24,44,58,.88)'; ctx.fill();
+      ctx.fillStyle = 'rgba(170,215,240,.4)'; ctx.fillRect(x - 6 * s, y1 - H * 0.72, 5 * s, H * 0.6); ctx.fillRect(x + 1 * s, y1 - H * 0.72, 5 * s, H * 0.6);
+    } else {                                                                                          // a row of windows along any other wall
+      ctx.fillStyle = 'rgba(24,44,58,.6)';
+      for (let wx = x0 + 6; wx < x1 - 8; wx += 9) ctx.fillRect(wx, y1 - H * 0.72, 4.5, H * 0.36);
+      ctx.fillStyle = 'rgba(170,215,240,.3)';
+      for (let wx = x0 + 6; wx < x1 - 8; wx += 9) ctx.fillRect(wx + 0.5, y1 - H * 0.7, 1.4, H * 0.32);
+    }
+  }
+  ctx.save(); ctx.translate(x, y - H); ctx.rotate(th); ctx.scale(s, s);
   // walls and roof
   rr(Bx, By, Bw, Bh, 4); ctx.fillStyle = shade(roof, -0.14); ctx.fill();
   rr(Bx + 2, By + 2, Bw - 4, Bh - 9, 3); ctx.fillStyle = roof; ctx.fill();
@@ -5041,8 +5072,8 @@ function draw() {
   if (showHeat) drawHeat();
   drawSelectedBuilding();
   drawSelectedRoute();
-  for (const c of cars) drawCar(c);
-  for (const t of trucks) drawTruck(t, t.state === 'garage' ? 0.62 : 0);   // parked ones wait, small, inside their store
+  for (const c of cars) if (showMoto || !(c.edge && c.edge.fast) && !(c.cr && c.cr.outE && c.cr.outE.fast)) drawCar(c);
+  for (const t of trucks) { if (t.state === 'garage' && isBig(buildings[t.store])) continue; drawTruck(t, t.state === 'garage' ? 0.62 : 0); }   // parked ones wait inside their store
   for (const a of ambs) { drawAmbTarget(a); drawAmb(a); }
   for (const b of buildings) { if (b.type === 'store') { drawStoreLevel(b); drawStoreBadge(b); drawContractBadge(b); } else drawHouseBadge(b); }
   drawFX(); drawMotoPick();
@@ -5082,7 +5113,7 @@ function drawMini() {
   for (let r = x0; r < x1; r++) for (let c = x0; c < x1; c++) if (water[idx(c, r)]) mctx.fillRect((c - x0) * k, (r - x0) * k, k + 0.5, k + 0.5);
   mctx.strokeStyle = PAL.edge; mctx.lineWidth = Math.max(1, k * 0.5); mctx.lineCap = 'round';
   mctx.beginPath();
-  for (const e of edges) { if (e.a > e.b && !e.fast) continue; mctx.moveTo((e.ax / CELL - x0) * k, (e.ay / CELL - x0) * k); mctx.lineTo((e.bx / CELL - x0) * k, (e.by / CELL - x0) * k); }
+  for (const e of edges) { if (e.a > e.b && !e.fast) continue; if (e.fast && !showMoto) continue; mctx.moveTo((e.ax / CELL - x0) * k, (e.ay / CELL - x0) * k); mctx.lineTo((e.bx / CELL - x0) * k, (e.by / CELL - x0) * k); }
   mctx.stroke();
   for (const b of buildings) {
     mctx.fillStyle = COLORS[b.color].hex;
@@ -5250,7 +5281,7 @@ function toast(msg, kind) {
 let actx = null, muted = false;
 function sfxReady() { return !!actx; }
 function sfx(kind) {
-  if (muted) return;
+  if (muted || !audioPrefs.sfx) return;
   const nowMs = performance.now(); sfx.last = sfx.last || {};
   if (sfx.last[kind] && nowMs - sfx.last[kind] < 70) return;
   sfx.last[kind] = nowMs;
@@ -5272,8 +5303,75 @@ function sfx(kind) {
     else if (kind === 'upgrade') { tone(523, 0.12, 'triangle', 0.05); tone(659, 0.12, 'triangle', 0.05, 0.1); tone(784, 0.2, 'triangle', 0.05, 0.2); }
     else if (kind === 'alarm') { tone(320, 0.18, 'square', 0.03); tone(260, 0.22, 'square', 0.03, 0.2); }
     else if (kind === 'over') { tone(300, 0.3, 'sawtooth', 0.05, 0, 90); }
+    else if (kind === 'buck') { tone(988, 0.09, 'sine', 0.035); tone(1319, 0.16, 'sine', 0.03, 0.06); }
   } catch (e) {}
 }
+/* ---- the soundtrack: a slow, generated ambient piece (soft pad chords, sparse bell notes, a wash of reverb)
+   with a quiet hum of distant traffic underneath that swells and settles with how many cars are moving.
+   Nothing is downloaded; it is all made here with Web Audio, and it only starts after your first click or key. */
+const audioPrefs = {music: true, musicVol: 0.6, traffic: 0.45, sfx: true};
+let mus = null;
+const midiHz = m => 440 * Math.pow(2, (m - 69) / 12);
+const MUSIC_CHORDS = [[48, 52, 55, 59, 62], [45, 48, 52, 55, 59], [41, 45, 48, 52, 57], [43, 47, 50, 55, 57]];   // Cmaj9, Am9, Fmaj9, G6
+const MUSIC_BELLS = [72, 74, 76, 79, 81, 84, 86];                                                              // C major pentatonic
+function musicInit() {
+  if (mus) return;
+  try {
+    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+    const a = actx, master = a.createGain(); master.gain.value = muted ? 0 : 1; master.connect(a.destination);
+    const len = Math.floor(a.sampleRate * 3.4), ir = a.createBuffer(2, len, a.sampleRate);         // a soft hall
+    for (let ch = 0; ch < 2; ch++) { const d = ir.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.8); }
+    const verb = a.createConvolver(); verb.buffer = ir;
+    const wet = a.createGain(); wet.gain.value = 0.6; verb.connect(wet); wet.connect(master);
+    const musicBus = a.createGain(); musicBus.gain.value = 0;
+    const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1700;
+    musicBus.connect(lp); lp.connect(master); lp.connect(verb);
+    const nb = a.createBuffer(1, a.sampleRate * 4, a.sampleRate), nd = nb.getChannelData(0);   // brown noise: a far-off road
+    let lastN = 0; for (let i = 0; i < nd.length; i++) { lastN = (lastN + 0.02 * (Math.random() * 2 - 1)) / 1.02; nd[i] = lastN * 3.2; }
+    const src = a.createBufferSource(); src.buffer = nb; src.loop = true;
+    const tf = a.createBiquadFilter(); tf.type = 'lowpass'; tf.frequency.value = 480;
+    const tg = a.createGain(); tg.gain.value = 0;
+    src.connect(tf); tf.connect(tg); tg.connect(master); src.start();
+    mus = {a, master, musicBus, verb, tg, tf, next: a.currentTime + 0.4, bell: a.currentTime + 4, chord: 0};
+  } catch (e) { mus = null; }
+}
+function musicVoice(f, t0, dur, vol, type, detune) {
+  const a = mus.a, o = a.createOscillator(), g = a.createGain();
+  o.type = type; o.frequency.value = f; o.detune.value = detune || 0;
+  g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + Math.min(2.6, dur * 0.35));
+  g.gain.setValueAtTime(vol, t0 + dur * 0.6); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(g); g.connect(mus.musicBus); o.start(t0); o.stop(t0 + dur + 0.05);
+}
+function musicTick() {
+  if (!mus) return;
+  const a = mus.a, now = a.currentTime;
+  mus.master.gain.setTargetAtTime(muted ? 0 : 1, now, 0.15);
+  mus.musicBus.gain.setTargetAtTime(audioPrefs.music ? audioPrefs.musicVol * 0.9 : 0, now, 0.6);
+  // traffic hum: louder with more cars on the move, a little brighter when it jams
+  const moving = (started && !over && cars) ? cars.reduce((n, c) => n + (c.state === 'driving' || c.state === 'crossing' ? 1 : 0), 0) : 0;
+  const lvl = started && !over && running ? clamp(moving / 24, moving ? 0.18 : 0, 1) : 0;
+  mus.tg.gain.setTargetAtTime(audioPrefs.traffic * 0.075 * lvl, now, 1.2);
+  mus.tf.frequency.setTargetAtTime(420 + (stats ? stats.jamPct : 0) * 260, now, 2);
+  if (!audioPrefs.music || muted) { mus.next = Math.max(mus.next, now + 0.2); mus.bell = Math.max(mus.bell, now + 1); return; }
+  if (now > mus.next - 0.25) {                      // the next chord, overlapping the last one as it fades
+    const ch = MUSIC_CHORDS[mus.chord++ % MUSIC_CHORDS.length], t0 = Math.max(now, mus.next), dur = 11;
+    for (const m of ch) { musicVoice(midiHz(m), t0, dur, 0.016, 'triangle', -5); musicVoice(midiHz(m), t0 + 0.08, dur, 0.012, 'sine', 6); }
+    musicVoice(midiHz(ch[0] - 12), t0, dur, 0.03, 'sine');
+    mus.next = t0 + 8;
+  }
+  if (now > mus.bell) {                             // a soft bell now and then
+    const m = pick(MUSIC_BELLS), t0 = now + 0.05, f = midiHz(m), g = a.createGain(), o = a.createOscillator(), o2 = a.createOscillator();
+    o.type = 'sine'; o.frequency.value = f; o2.type = 'sine'; o2.frequency.value = f * 2.01;
+    const g2 = a.createGain(); g2.gain.value = 0.25; o2.connect(g2); g2.connect(g); o.connect(g); g.connect(mus.musicBus);
+    g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.028, t0 + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 2.8);
+    o.start(t0); o2.start(t0); o.stop(t0 + 3); o2.stop(t0 + 3);
+    mus.bell = now + 1.6 + Math.random() * 4.2;
+  }
+}
+/* browsers only allow sound after the player has clicked or pressed a key */
+function audioWake() { musicInit(); if (actx && actx.state === 'suspended') actx.resume(); }
+['pointerdown', 'keydown'].forEach(ev => document.addEventListener(ev, audioWake, {capture: true}));
+document.addEventListener('visibilitychange', () => { if (!actx) return; if (document.hidden) actx.suspend(); else if (mus) actx.resume(); });
 const fmtP = n => '$' + (Math.round(n * 10) / 10);
 function setHTML(el, h) { if (el && el._h !== h) { el._h = h; el.innerHTML = h; } }
 function buyBtn(kind, id, lead) {
@@ -5319,7 +5417,7 @@ function refreshUI() {
   document.querySelectorAll('#speed-seg button').forEach(b => b.setAttribute('aria-pressed', +b.dataset.speed === speed ? 'true' : 'false'));
   const side = $('btn-side'); if (side) side.textContent = keepLeft ? 'Keep left' : 'Keep right';
   const ht = $('btn-heat'); if (ht) ht.setAttribute('aria-pressed', showHeat ? 'true' : 'false');
-  const sd = $('btn-sound'); if (sd) { sd.setAttribute('aria-pressed', muted ? 'true' : 'false'); sd.dataset.tip = muted ? 'Sound off' : 'Sound on'; sd.dataset.key = 'M'; }
+  const sd = $('btn-sound'); if (sd) { sd.setAttribute('aria-pressed', muted ? 'true' : 'false'); sd.dataset.tip = muted ? 'Sound off' : 'Sound on'; sd.dataset.key = 'N'; }
   const fl = $('btn-follow'); if (fl) fl.setAttribute('aria-pressed', follow ? 'true' : 'false');
   const ud = $('btn-undo'); if (ud) ud.disabled = !undoStack.length;
   const rd = $('btn-redo'); if (rd) rd.disabled = !redoStack.length;
@@ -5869,7 +5967,8 @@ function bindInput() {
       case 'h': showHeat = !showHeat; refreshUI(); break;
       case 'g': showGrid = !showGrid; syncPrefUI(); savePrefs(); break;
       case 'f': if (sel && sel.type === 'car') { follow = !follow; cam.auto = !follow ? cam.auto : false; refreshUI(); renderInspector(); } break;
-      case 'm': toggleMute(); break;
+      case 'm': toggleMoto(); break;
+      case 'n': toggleMute(); break;
       case 'c': snapshot(); break;
       case 't': toggleMode(); break;
       case 'tab': break;
@@ -5925,6 +6024,12 @@ function bindInput() {
   $('opt-night').addEventListener('change', e => { nightOn = e.target.checked; savePrefs(); });
   $('opt-grid').addEventListener('change', e => { showGrid = e.target.checked; savePrefs(); });
   $('opt-fx').addEventListener('change', e => { fxOn = e.target.checked; savePrefs(); });
+  $('opt-moto').addEventListener('change', e => { if (e.target.checked !== showMoto) toggleMoto(); });
+  $('snd-music').addEventListener('change', e => { audioPrefs.music = e.target.checked; audioWake(); savePrefs(); musicTick(); });
+  $('snd-sfx').addEventListener('change', e => { audioPrefs.sfx = e.target.checked; savePrefs(); });
+  $('snd-musicvol').addEventListener('input', e => { audioPrefs.musicVol = +e.target.value / 100; audioWake(); musicTick(); });
+  $('snd-traffic').addEventListener('input', e => { audioPrefs.traffic = +e.target.value / 100; audioWake(); musicTick(); });
+  for (const id of ['snd-musicvol', 'snd-traffic']) $(id).addEventListener('change', () => savePrefs());
   $('opt-notes').addEventListener('click', e => {
     const b = e.target.closest('button[data-notes]'); if (!b) return;
     notesMode = b.dataset.notes; savePrefs(true); renderNotesUI();
@@ -5976,7 +6081,12 @@ function bindInput() {
 function togglePlay() { if (over || modalOpen || spectating) return; running = !running; refreshUI(); }
 function cycleSpeed(d) { if (spectating) return; const s = CFG_SPEEDS; let i = s.indexOf(speed); i = (i + d + s.length) % s.length; speed = s[i]; refreshUI(); }
 const CFG_SPEEDS = [0.5, 1, 2, 3];
-function toggleMute() { muted = !muted; savePrefs(); refreshUI(); }
+function toggleMute() { muted = !muted; audioWake(); savePrefs(); refreshUI(); musicTick(); }
+/* M hides the motorways (and anything driving on them) so the streets underneath are easy to see */
+function toggleMoto() {
+  showMoto = !showMoto; savePrefs(); syncPrefUI();
+  hint(showMoto ? 'Motorways shown.' : 'Motorways hidden — press M to show them again.', false, true);
+}
 /* settings that should outlive a reload */
 const PREFS_KEY = 'junction2-prefs';
 
@@ -6033,7 +6143,7 @@ function bindLayout() {
   window.addEventListener('resize', () => { if (layDevice() !== layDev) applyLayout(); });
 }
 function savePrefs(noCity) {
-  try { localStorage.setItem(PREFS_KEY, JSON.stringify({muted, nightOn, showGrid, fxOn, colorMode, customHex, showSymbols, tipsOn, notesMode})); } catch (e) {}
+  try { localStorage.setItem(PREFS_KEY, JSON.stringify({muted, nightOn, showGrid, fxOn, colorMode, customHex, showSymbols, tipsOn, notesMode, showMoto, audio: audioPrefs})); } catch (e) {}
   if (!noCity && started && !over && !tutorialMode && !spectating && running) saveGame();   // the open city keeps these colours
 }
 function renderNotesUI() {
@@ -6045,6 +6155,9 @@ function renderNotesUI() {
 }
 function syncPrefUI() {
   const set = (id, v) => { const el = $(id); if (el) el.checked = !!v; };
+  set('opt-moto', showMoto); set('snd-music', audioPrefs.music); set('snd-sfx', audioPrefs.sfx);
+  const sv = (id, v) => { const el = $(id); if (el) el.value = Math.round(v * 100); };
+  sv('snd-musicvol', audioPrefs.musicVol); sv('snd-traffic', audioPrefs.traffic);
   set('opt-night', nightOn); set('opt-grid', showGrid); set('opt-fx', fxOn); set('opt-symbols', showSymbols); set('opt-tips', tipsOn);
   renderNotesUI();
 }
@@ -6053,6 +6166,12 @@ function loadPrefs() {
     const p = JSON.parse(localStorage.getItem(PREFS_KEY));
     if (p && typeof p === 'object') {
       if (typeof p.muted === 'boolean') muted = p.muted;
+      if (typeof p.showMoto === 'boolean') showMoto = p.showMoto;
+      if (p.audio && typeof p.audio === 'object') {
+        if (typeof p.audio.music === 'boolean') audioPrefs.music = p.audio.music;
+        if (typeof p.audio.sfx === 'boolean') audioPrefs.sfx = p.audio.sfx;
+        for (const k of ['musicVol', 'traffic']) if (isFinite(p.audio[k])) audioPrefs[k] = clamp(+p.audio[k], 0, 1);
+      }
       if (typeof p.nightOn === 'boolean') nightOn = p.nightOn;
       if (typeof p.showGrid === 'boolean') showGrid = p.showGrid;
       if (typeof p.fxOn === 'boolean') fxOn = p.fxOn;
@@ -6075,7 +6194,8 @@ function renderPaletteUI() {
     const b = document.createElement('button'); b.type = 'button'; b.className = 'palpick'; b.dataset.pal = id;
     b.setAttribute('aria-pressed', id === colorMode ? 'true' : 'false');
     b.innerHTML = '<span class="dots">' + hexes.map(h => '<i style="background:' + h + '"></i>').join('') + '</span><b>' + pal.label + '</b><small>' + pal.note + '</small>';
-    b.addEventListener('click', () => { colorMode = id; applyPalette(); savePrefs(); renderPaletteUI(); refreshHud(); drawMini(); });
+    if (id === 'custom') { b.insertAdjacentHTML('beforeend', lockTag('col:city')); b.classList.toggle('locked', !owns('col:city')); }
+    b.addEventListener('click', () => buyThen(id === 'custom' ? 'col:city' : '', () => { colorMode = id; applyPalette(); savePrefs(); renderPaletteUI(); refreshHud(); drawMini(); }));
     pk.append(b);
   }
   sw.innerHTML = '';
@@ -6089,6 +6209,7 @@ function renderPaletteUI() {
   });
   sw.append(slots);
   const lib = document.createElement('div'); lib.className = 'libgrid';
+  if (!owns('col:city')) lib.insertAdjacentHTML('beforeend', '<p class="mnote liblock">' + lockTag('col:city') + ' Pick your own city colours from the library once unlocked — tap any colour to buy.</p>');
   const cur = COLORS[palSlot].hex.toLowerCase(), usedBy = {};
   COLORS.forEach((c, i) => { usedBy[c.hex.toLowerCase()] = i; });
   const mkSwatch = (name, hex) => {
@@ -6120,6 +6241,7 @@ function renderPaletteUI() {
 }
 let palSlot = 0, libExpanded = false;
 function pickLibColour(hex) {
+  if (!owns('col:city')) { buyThen('col:city', () => pickLibColour(hex)); return; }
   const cur = COLORS.map(c => c.hex.toLowerCase());
   if (colorMode !== 'custom') { customHex = cur.slice(); colorMode = 'custom'; }
   const other = customHex.findIndex((h, j) => j !== palSlot && h.toLowerCase() === hex);
@@ -6141,7 +6263,10 @@ const UI_THEMES = {
   ember:    {label: 'Ember',    plate: '#3a1f18', accent: '#ffb347'},
   paper:    {label: 'Paper',    plate: '#f6f3ec', accent: '#1f6feb'},
   snow:     {label: 'Snow',     plate: '#ffffff', accent: '#e0483e'},
-  sand:     {label: 'Sand',     plate: '#ece1c9', accent: '#1f7a6c'}
+  sand:     {label: 'Sand',     plate: '#ece1c9', accent: '#1f7a6c'},
+  neon:     {label: 'Neon',     plate: '#0b0f1f', accent: '#22e6ff'},
+  royal:    {label: 'Royal',    plate: '#221a4c', accent: '#ffcc4d'},
+  rosegold: {label: 'Rose gold', plate: '#f5e3de', accent: '#b45f4e'}
 };
 const UI_STYLES = ['clean', 'glass', 'sign'];
 let uiTheme = {preset: 'petrol', style: 'clean', frost: false, plate: '', btn: '', accent: ''};
@@ -6204,8 +6329,9 @@ function renderUiThemeUI() {
     const t = UI_THEMES[id], pl = theme === 'dark' && t.night ? t.night : t.plate;
     const b = document.createElement('button'); b.type = 'button'; b.className = 'themepick';
     b.setAttribute('aria-pressed', !uiCustom() && uiTheme.preset === id ? 'true' : 'false');
-    b.innerHTML = '<span class="tp-prev" style="background:' + pl + ';color:' + (lum(pl) > 0.4 ? '#17252d' : '#f2f7f6') + '"><i style="background:' + t.accent + '"></i><em></em></span><b>' + t.label + '</b>';
-    b.addEventListener('click', () => setUi({preset: id, plate: '', btn: '', accent: ''}));
+    b.innerHTML = '<span class="tp-prev" style="background:' + pl + ';color:' + (lum(pl) > 0.4 ? '#17252d' : '#f2f7f6') + '"><i style="background:' + t.accent + '"></i><em></em></span><b>' + t.label + '</b>' + lockTag('ui:' + id);
+    b.classList.toggle('locked', !owns('ui:' + id));
+    b.addEventListener('click', () => buyThen('ui:' + id, () => setUi({preset: id, plate: '', btn: '', accent: ''})));
     box.append(b);
   }
   const c = uiColours();
@@ -6215,7 +6341,7 @@ function renderUiThemeUI() {
   document.querySelectorAll('#opt-style button').forEach(b => b.setAttribute('aria-pressed', b.dataset.style === uiTheme.style ? 'true' : 'false'));
   const fr = $('frost-row'); if (fr) fr.hidden = uiTheme.style !== 'glass';
   const fc = $('ui-frost'); if (fc) fc.checked = !!uiTheme.frost;
-  renderModesUI();
+  renderModesUI(); decoratePickers();
 }
 function bindUiTheme() {
   for (const [id, f] of [['ui-plate', 'plate'], ['ui-btn', 'btn'], ['ui-accent', 'accent']]) {
@@ -6223,8 +6349,11 @@ function bindUiTheme() {
     e.addEventListener('input', () => { uiTheme[f] = e.value.toLowerCase(); applyUiTheme(); const cn = $('ui-custom-note'); if (cn) cn.hidden = false; document.querySelectorAll('.themepick').forEach(b => b.setAttribute('aria-pressed', 'false')); });
     e.addEventListener('change', () => setUi({[f]: e.value.toLowerCase()}));
   }
-  document.querySelectorAll('#opt-style button').forEach(b => b.addEventListener('click', () => setUi({style: b.dataset.style})));
-  const fc = $('ui-frost'); if (fc) fc.addEventListener('change', () => setUi({frost: fc.checked}));
+  document.querySelectorAll('#opt-style button').forEach(b => b.addEventListener('click', () => buyThen('style:' + b.dataset.style, () => setUi({style: b.dataset.style}))));
+  const fc = $('ui-frost'); if (fc) fc.addEventListener('change', () => {
+    if (fc.checked && !owns('style:frost')) { fc.checked = false; buyThen('style:frost', () => setUi({frost: true})); return; }
+    setUi({frost: fc.checked});
+  });
   const rs = $('ui-reset'); if (rs) rs.addEventListener('click', () => setUi({preset: 'petrol', style: 'clean', frost: false, plate: '', btn: '', accent: ''}));
   document.querySelectorAll('.modepick').forEach(b => b.addEventListener('click', () => useMode(b.dataset.mode)));
   const mr = $('mode-reset'); if (mr) mr.addEventListener('click', () => { modes[modes.cur] = null; useMode(modes.cur); });
@@ -6234,11 +6363,11 @@ function bindUiTheme() {
    T key (or the half-moon button) swaps between the two. */
 const MODES_KEY = 'junction-modes-v1';
 const MODE_DEFAULTS = {
-  light: {ui: {preset: 'petrol', style: 'clean', frost: false, plate: '', btn: '', accent: ''}, map: {theme: 'meadow', decor: 'auto', land: '', patch: '', water: ''}},
-  dark:  {ui: {preset: 'petrol', style: 'clean', frost: false, plate: '', btn: '', accent: ''}, map: {theme: 'night', decor: 'auto', land: '', patch: '', water: ''}}
+  light: {ui: {preset: 'petrol', style: 'clean', frost: false, plate: '', btn: '', accent: ''}, map: {theme: 'meadow', decor: 'auto', land: '', patch: '', water: '', road: '', moto: ''}},
+  dark:  {ui: {preset: 'petrol', style: 'clean', frost: false, plate: '', btn: '', accent: ''}, map: {theme: 'night', decor: 'auto', land: '', patch: '', water: '', road: '', moto: ''}}
 };
 let modes = {cur: 'light', light: null, dark: null}, modeBusy = true;      // busy until boot has loaded everything
-const snapLook = () => ({ui: Object.assign({}, uiTheme), map: {theme: mapPrefs.theme, decor: mapPrefs.decor, land: mapPrefs.land, patch: mapPrefs.patch, water: mapPrefs.water}});
+const snapLook = () => ({ui: Object.assign({}, uiTheme), map: {theme: mapPrefs.theme, decor: mapPrefs.decor, land: mapPrefs.land, patch: mapPrefs.patch, water: mapPrefs.water, road: mapPrefs.road, moto: mapPrefs.moto}});
 function saveModes() { try { localStorage.setItem(MODES_KEY, JSON.stringify(modes)); } catch (e) {} }
 function rememberMode() { if (modeBusy) return; modes[modes.cur] = snapLook(); saveModes(); renderModesUI(); }
 function useMode(m) {
@@ -6273,6 +6402,119 @@ function renderModesUI() {
     const sm = b.querySelector('small'); if (sm) sm.textContent = MAP_THEMES[L.map.theme].label + ' map · ' + (L.ui.plate ? 'custom' : pr.label) + ' panels';
   });
 }
+/* ------------------------------------------------ Junc Bucks (#): a currency for looks
+   Every 10 parcels delivered, in any city, earns one. Themes, panel styles, decorations and custom colours are
+   bought with them (two taps, so nothing is spent by accident). The default light and dark looks, and the
+   colour-blind colour modes, are always free. Saved on this browser. */
+const SHOP_KEY = 'junction-shop-v1';
+const COSMETICS = {
+  'ui:midnight': [30, 'Midnight theme'], 'ui:graphite': [25, 'Graphite theme'], 'ui:forest': [30, 'Forest theme'], 'ui:plum': [35, 'Plum theme'],
+  'ui:ember': [35, 'Ember theme'], 'ui:paper': [40, 'Paper theme'], 'ui:snow': [40, 'Snow theme'], 'ui:sand': [35, 'Sand theme'],
+  'ui:neon': [75, 'Neon theme'], 'ui:royal': [65, 'Royal theme'], 'ui:rosegold': [85, 'Rose gold theme'],
+  'style:glass': [35, 'Glass panels'], 'style:sign': [25, 'Road sign panels'], 'style:frost': [55, 'Frosted glass'],
+  'map:winter': [45, 'Winter map'], 'map:desert': [35, 'Desert map'], 'map:autumn': [35, 'Autumn map'], 'map:blossom': [40, 'Blossom map'],
+  'map:tropical': [45, 'Tropical map'], 'map:spooky': [75, 'Spooky map'], 'map:candy': [90, 'Candy map'],
+  'decor:pine': [25, 'Pines'], 'decor:bush': [25, 'Bushes'], 'decor:rock': [25, 'Rocks'], 'decor:flowers': [30, 'Flowers'], 'decor:autumn': [30, 'Autumn trees'],
+  'decor:cactus': [30, 'Cacti'], 'decor:blossom': [35, 'Blossom trees'], 'decor:palm': [35, 'Palms'], 'decor:snowpine': [45, 'Snowy pines'],
+  'decor:mushroom': [55, 'Mushrooms'], 'decor:pumpkin': [60, 'Pumpkins'],
+  'col:ui-plate': [40, 'Custom menu colour'], 'col:ui-btn': [30, 'Custom button colour'], 'col:ui-accent': [30, 'Custom highlight colour'],
+  'col:land': [40, 'Custom ground colour'], 'col:patch': [30, 'Custom patch colour'], 'col:water': [35, 'Custom water colour'],
+  'col:road': [45, 'Custom road colour'], 'col:moto': [45, 'Custom motorway colour'], 'col:city': [50, 'Custom city colours']
+};
+const RARE_AT = 50;
+let jb = {bucks: 0, toward: 0, owned: {}}, jbFirstRun = false, buyPending = null;
+const owns = id => !COSMETICS[id] || !!jb.owned[id];
+function saveShop() { try { localStorage.setItem(SHOP_KEY, JSON.stringify(jb)); } catch (e) {} }
+function loadShop() {
+  let d = null; try { d = JSON.parse(localStorage.getItem(SHOP_KEY)); } catch (e) {}
+  if (d && typeof d === 'object') {
+    jb.bucks = Math.max(0, Math.floor(+d.bucks || 0)); jb.toward = clamp(Math.floor(+d.toward || 0), 0, 9);
+    jb.owned = {}; if (d.owned && typeof d.owned === 'object') for (const k in d.owned) if (COSMETICS[k]) jb.owned[k] = 1;
+  } else jbFirstRun = true;
+}
+/* the first time this version runs, anything already in use stays yours */
+function grantInUse() {
+  if (!jbFirstRun) return;
+  const give = id => { if (COSMETICS[id]) jb.owned[id] = 1; };
+  const looks = [snapLook()].concat(['light', 'dark'].map(m => modes[m]).filter(Boolean));
+  for (const L of looks) {
+    give('ui:' + L.ui.preset); if (L.ui.style !== 'clean') give('style:' + L.ui.style); if (L.ui.frost) give('style:frost');
+    for (const f of ['plate', 'btn', 'accent']) if (L.ui[f]) give('col:ui-' + f);
+    give('map:' + L.map.theme); if (L.map.decor !== 'auto') give('decor:' + L.map.decor);
+    for (const f of ['land', 'patch', 'water', 'road', 'moto']) if (L.map[f]) give('col:' + f);
+  }
+  if (colorMode === 'custom') give('col:city');
+  jbFirstRun = false; saveShop();
+}
+function earnBucks(n, at) {
+  jb.toward += n; let got = 0;
+  while (jb.toward >= 10) { jb.toward -= 10; got++; }
+  if (got) {
+    jb.bucks += got; sfx('buck');
+    if (at) popText(bX(at), bY(at) - 38, '+' + got + ' #', '#ffd23a');
+    bump('v-jb');
+  }
+  saveShop(); renderBucks();
+}
+function renderBucks() {
+  const set = (id, t) => { const e = $(id); if (e && e.textContent !== t) e.textContent = t; };
+  set('v-jb', '#' + jb.bucks.toLocaleString('en-US')); set('v-jbnext', jb.toward + '/10 to next');
+  set('jb-bal', '#' + jb.bucks.toLocaleString('en-US') + ' Junc Bucks');
+}
+/* a small price tag for a locked item ('' once it's yours) */
+function lockTag(id) {
+  if (owns(id)) return '';
+  const pr = COSMETICS[id][0], conf = buyPending && buyPending.id === id;
+  return '<span class="lock' + (pr >= RARE_AT ? ' rare' : '') + (conf ? ' confirm' : '') + '">' + (conf ? 'Tap to buy' : (pr >= RARE_AT ? '★ ' : '') + '#' + pr) + '</span>';
+}
+/* buy (on a second tap) and then run fn, or just run fn if it's already yours */
+function buyThen(id, fn) {
+  if (owns(id)) { fn(); return; }
+  const [price, name] = COSMETICS[id];
+  if (jb.bucks < price) {
+    hint(name + ' costs #' + price + ' — you have #' + jb.bucks + '. You earn one Junc Buck for every 10 parcels delivered.');
+    buyPending = null; return;
+  }
+  const nowMs = performance.now();
+  if (!buyPending || buyPending.id !== id || nowMs - buyPending.t > 4000) {
+    buyPending = {id, t: nowMs};
+    hint('Unlock ' + name + ' for #' + price + '? Tap it again to buy.');
+    renderShopUI();
+    setTimeout(() => { if (buyPending && buyPending.id === id && performance.now() - buyPending.t >= 4000) { buyPending = null; renderShopUI(); } }, 4100);
+    return;
+  }
+  buyPending = null; jb.bucks -= price; jb.owned[id] = 1; saveShop();
+  toast('Unlocked ' + name + ' for #' + price, 'good'); sfx('upgrade');
+  renderBucks(); fn(); renderShopUI();
+}
+function renderShopUI() { renderUiThemeUI(); renderMapUI(); renderPaletteUI(); renderBucks(); }
+/* colour pickers that are still locked show their price, and open only once bought */
+const PICKER_COSTS = {'ui-plate': 'col:ui-plate', 'ui-btn': 'col:ui-btn', 'ui-accent': 'col:ui-accent', 'map-land': 'col:land', 'map-patch': 'col:patch', 'map-water': 'col:water', 'map-road': 'col:road', 'map-moto': 'col:moto'};
+function decoratePickers() {
+  for (const inId in PICKER_COSTS) {
+    const inp = $(inId); if (!inp) continue;
+    const lab = inp.closest('label'), id = PICKER_COSTS[inId];
+    lab.classList.toggle('locked', !owns(id));
+    let tag = lab.querySelector('.lock'); if (tag) tag.remove();
+    if (!owns(id)) lab.insertAdjacentHTML('beforeend', lockTag(id));
+  }
+  document.querySelectorAll('#opt-style button').forEach(b => {
+    const id = 'style:' + b.dataset.style, old = b.querySelector('.lock'); if (old) old.remove();
+    if (COSMETICS[id] && !owns(id)) b.insertAdjacentHTML('beforeend', lockTag(id));
+  });
+  const fr = $('frost-row'); if (fr) { const old = fr.querySelector('.lock'); if (old) old.remove(); if (!owns('style:frost')) fr.insertAdjacentHTML('beforeend', lockTag('style:frost')); }
+}
+function bindPickerLocks() {
+  for (const inId in PICKER_COSTS) {
+    const inp = $(inId); if (!inp) continue;
+    inp.addEventListener('click', e => {
+      const id = PICKER_COSTS[inId]; if (owns(id)) return;
+      e.preventDefault();
+      buyThen(id, () => { decoratePickers(); });
+    });
+  }
+}
+
 /* ------------------------------------------------ settings: map theme, colours and decorations */
 /* a little picture of a map theme: its ground, a patch, a strip of water and two of its decorations */
 function mapPreview(cvs, id, custom, decor) {
@@ -6295,8 +6537,8 @@ function renderMapUI() {
     b.setAttribute('aria-pressed', !mapCustom() && mapPrefs.theme === id ? 'true' : 'false');
     const c = document.createElement('canvas'); c.width = 132; c.height = 72; mapPreview(c, id, null, mapPrefs.decor !== 'auto' ? mapPrefs.decor : null);
     const lb = document.createElement('b'); lb.textContent = MAP_THEMES[id].label;
-    b.append(c, lb);
-    b.addEventListener('click', () => setMap({theme: id, land: '', patch: '', water: ''}));
+    b.append(c, lb); b.insertAdjacentHTML('beforeend', lockTag('map:' + id)); b.classList.toggle('locked', !owns('map:' + id));
+    b.addEventListener('click', () => buyThen('map:' + id, () => setMap({theme: id, land: '', patch: '', water: '', road: '', moto: ''})));
     box.append(b);
   }
   const dbox = $('map-decor');
@@ -6313,22 +6555,22 @@ function renderMapUI() {
       g.fillStyle = PAL.patch; rr_(g, 6, 38, 52, 20, 8);
       drawDecor(g, id === 'auto' ? auto : id, 32, 32, 17, 0, 5);
       const lb = document.createElement('span'); lb.textContent = id === 'auto' ? 'Theme' : DECOR[id];
-      b.append(c, lb);
-      b.addEventListener('click', () => setMap({decor: id}));
+      b.append(c, lb); b.insertAdjacentHTML('beforeend', lockTag('decor:' + id)); b.classList.toggle('locked', !owns('decor:' + id));
+      b.addEventListener('click', () => buyThen('decor:' + id, () => setMap({decor: id})));
       dbox.append(b);
     }
   }
   const set = (id, v) => { const e = $(id); if (e) e.value = v; };
-  set('map-land', PAL.land); set('map-patch', PAL.patch); set('map-water', PAL.water);
+  set('map-land', PAL.land); set('map-patch', PAL.patch); set('map-water', PAL.water); set('map-road', PAL.road); set('map-moto', PAL.deck);
   const cn = $('map-custom-note'); if (cn) cn.hidden = !mapCustom();
 }
 function bindMap() {
-  for (const [id, f] of [['map-land', 'land'], ['map-patch', 'patch'], ['map-water', 'water']]) {
+  for (const [id, f] of [['map-land', 'land'], ['map-patch', 'patch'], ['map-water', 'water'], ['map-road', 'road'], ['map-moto', 'moto']]) {
     const e = $(id); if (!e) continue;
     e.addEventListener('input', () => { mapPrefs[f] = e.value.toLowerCase(); PAL = palFor(mapPrefs.theme, mapPrefs); theme = PAL.tone; patchCache = null; pathCache.ver = -1; });
     e.addEventListener('change', () => setMap({[f]: e.value.toLowerCase()}));
   }
-  const rs = $('map-reset'); if (rs) rs.addEventListener('click', () => setMap({theme: 'meadow', decor: 'auto', land: '', patch: '', water: ''}));
+  const rs = $('map-reset'); if (rs) rs.addEventListener('click', () => setMap({theme: 'meadow', decor: 'auto', land: '', patch: '', water: '', road: '', moto: ''}));
 }
 function bindSettings() {
   bindUiTheme(); bindMap();
@@ -6586,7 +6828,7 @@ function frame(now) {
   camUpdate(real);
   draw();
   accHud += real; accMini += real; accIns += real;
-  if (accHud > 0.2) { accHud = 0; refreshHud(); }
+  if (accHud > 0.2) { accHud = 0; refreshHud(); musicTick(); }
   if (accMini > 0.25) { accMini = 0; drawMini(); }
   if (accIns > 0.25 && sel) { accIns = 0; renderInspector(); }
   accLife += real;
@@ -6597,10 +6839,12 @@ function frame(now) {
 
 /* ----------------------------------------------------------------- boot */
 function boot() {
+  loadShop();
   loadUiTheme();
   loadMap();
   loadModes();
   loadPrefs();
+  grantInUse(); bindPickerLocks(); renderShopUI();
   buildToolbars(); bindInput(); showTab('city');
   applyLayout(); bindLayout();
   resetGame('standard'); running = false;
