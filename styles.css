@@ -1550,3 +1550,48 @@ ol.board li.click:hover{background:rgba(var(--ov),.09)}
 .news-dots button{width:7px;height:7px;border-radius:50%;border:0;padding:0;background:rgba(255,255,255,.35);cursor:pointer;transition:width .25s}
 .news-dots button[aria-pressed="true"]{width:18px;border-radius:4px;background:var(--accent)}
 #acct-tabs{flex-wrap:wrap;gap:4px;justify-content:flex-start}#acct-tabs button{flex:0 0 auto}
+
+/* v1.11: the main menu on phones. Upright: a slim top, a scrolling row of menu buttons, and a scrolling strip of
+   news and tiles along the bottom, so the city shows in between. Sideways: the menu down the left, the tiles in a
+   compact column on the right, the city in the middle. Panels fill what's left. */
+@media (max-width:600px) and (orientation:portrait){
+  .rl-top{top:max(10px,env(safe-area-inset-top));left:10px;right:10px}
+  .rl-bal{padding:5px 12px 5px 8px;gap:7px}.rl-bal .jbcoin{width:26px;height:26px;font-size:14px}.rl-bal b{font-size:16px}.rl-bal small{font-size:10px}
+  .rl-icon{width:36px;height:36px}
+  .rl-logo{top:calc(max(10px,env(safe-area-inset-top)) + 50px);left:14px}.rl-logo h1{font-size:24px}
+  .rl-menu{top:calc(max(10px,env(safe-area-inset-top)) + 82px);padding:0 10px 4px;scrollbar-width:none}
+  .rl-menu::-webkit-scrollbar{display:none}
+  .rl-item,.rl-item.big{font-size:14px;padding:8px 14px}
+  .rl-tiles{top:auto;bottom:max(8px,env(safe-area-inset-bottom));left:0;right:0;width:auto;display:flex;gap:8px;overflow-x:auto;padding:0 10px 2px;scroll-snap-type:x mandatory;scrollbar-width:none}
+  .rl-tiles::-webkit-scrollbar{display:none}
+  .rl-tile,.rl-tile.wide{flex:0 0 auto;min-width:126px;min-height:60px;padding:8px 12px;scroll-snap-align:start}
+  .rl-tile b,.rl-tile.wide b{font-size:13px}.rl-tile small{font-size:9.5px}.rl-tile span{display:none}
+  .rl-news{flex:0 0 min(76vw,300px);min-height:60px;scroll-snap-align:start}
+  .news-track{height:60px}.news-s{padding:6px 10px 15px 14px;gap:8px}.news-t small{display:none}.news-t b{font-size:13px}.news-s canvas{width:44px}
+  .news-dots{bottom:5px;left:14px}
+  .rl-panel{top:calc(max(10px,env(safe-area-inset-top)) + 126px);bottom:max(6px,env(safe-area-inset-bottom));left:6px;right:6px;width:auto;min-width:0}
+  .modal.mainmenu.rl.center-pane .rl-panel{top:max(8px,env(safe-area-inset-top));bottom:max(6px,env(safe-area-inset-bottom));left:6px;right:6px;width:auto}
+  .rl-phead{padding:8px 12px 8px 14px}.rl-phead b{font-size:19px}
+  .rl-pbody{padding:10px 12px 14px}
+}
+@media (max-height:520px) and (orientation:landscape){
+  .rl-top{top:8px;left:max(10px,env(safe-area-inset-left));right:max(10px,env(safe-area-inset-right))}
+  .rl-bal{padding:4px 12px 4px 8px;gap:7px}.rl-bal .jbcoin{width:24px;height:24px;font-size:13px}.rl-bal b{font-size:15px}.rl-bal small{font-size:9.5px}
+  .rl-icon{width:34px;height:34px}
+  .rl-logo{display:none}
+  .rl-menu{top:60px;left:max(0px,env(safe-area-inset-left));right:auto;bottom:auto;width:196px;flex-direction:column;overflow:visible;gap:5px;padding:0}
+  .rl-item,.rl-item.big{margin-left:-14px;font-size:14px;padding:7px 16px 7px 30px}
+  .rl-item.big{font-size:20px;padding:9px 16px 9px 30px;margin-bottom:2px}
+  .rl-item:hover,.rl-item[aria-pressed="true"]{transform:skewX(-14deg) translateX(6px)}
+  .rl-tiles{left:auto;right:max(10px,env(safe-area-inset-right));top:60px;bottom:8px;width:250px;grid-template-columns:1fr 1fr;align-content:end;overflow-y:auto;gap:6px;scrollbar-width:none}
+  .rl-tile,.rl-tile.wide{min-height:44px;padding:6px 10px}.rl-tile.wide{grid-column:1/-1}
+  .rl-tile b,.rl-tile.wide b{font-size:12.5px}.rl-tile small{font-size:9px}.rl-tile span{display:none}
+  .rl-news{min-height:56px}.news-track{height:56px}.news-s{padding:6px 10px 14px 14px;gap:8px}.news-t small{display:none}.news-t b{font-size:12.5px}.news-s canvas{width:40px}.news-dots{bottom:4px}
+  .rl-panel{left:calc(max(0px,env(safe-area-inset-left)) + 196px);right:max(8px,env(safe-area-inset-right));top:54px;bottom:6px;width:auto;min-width:0}
+  .modal.mainmenu.rl.has-panel .rl-tiles{display:none}
+  .modal.mainmenu.rl.center-pane .rl-panel{left:max(8px,env(safe-area-inset-left));right:max(8px,env(safe-area-inset-right));top:6px;bottom:6px;width:auto}
+  .rl-phead{padding:6px 12px}.rl-phead b{font-size:17px}
+  .rl-pbody{padding:8px 14px 12px}
+  .rl-foot{display:none}
+}
+@media (max-width:600px){.crates{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.crate-s{padding:9px 8px 8px}.crate-s small{display:none}.crate-s b{font-size:12.5px}.crate-foot{flex-direction:column;align-items:flex-start;gap:3px}}

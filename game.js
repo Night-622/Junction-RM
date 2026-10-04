@@ -975,6 +975,14 @@ function baySpots(d) {
   }
   return list;
 }
+/* a car keeps the bay it took until it leaves (bays used to be handed out by queue order, so when one car
+   left, the rest all shuffled along) */
+function stableSlot(c, list, n, key) {
+  if (c.slotKey === key && c.slotI < n && !list.some(o => o !== c && o.slotKey === key && o.slotI === c.slotI)) return c.slotI;
+  const used = new Set(); for (const o of list) if (o !== c && o.slotKey === key) used.add(o.slotI);
+  let i = 0; while (used.has(i) && i < n - 1) i++;
+  c.slotKey = key; c.slotI = i; return i;
+}
 function parkedPose(c) {
   const L = c.loc;
   if (L.t === 'yard') {
@@ -994,11 +1002,11 @@ function parkedPose(c) {
   }
   if (L.t === 'bay') {
     const d = depots[L.i]; if (!d) return {x: c.x, y: c.y, a: c.ang};
-    const sp = baySpots(d), i = Math.max(0, d.slots.indexOf(c));
-    return sp[Math.min(i, sp.length - 1)];
+    const sp = baySpots(d);
+    return sp[stableSlot(c, d.slots, sp.length, 'b' + L.i)];
   }
-  const s = buildings[L.i], sp = dockSpots(s), i = Math.max(0, s.docks.indexOf(c));
-  return sp[Math.min(i, sp.length - 1)];
+  const s = buildings[L.i], sp = dockSpots(s);
+  return sp[stableSlot(c, s.docks, sp.length, 'd' + L.i)];
 }
 
 /* ------------------------------------------------------------ car life */
@@ -1237,19 +1245,53 @@ function beginCross(nd, c, f, kind) {
   else sp = vmax * CFG.roundScale;
   const ci = e.cars.indexOf(c); if (ci >= 0) e.cars.splice(ci, 1);
   c.cr = {node: nd, inE: e, outE: f, u: 0, len, speed: sp, x0: p0x, y0: p0y, cx: ccx, cy: ccy, x1: P1.x, y1: P1.y};
+  if (nd.type === 'round') {
+    // Round the ring, the way your side of the road turns: a car turns toward its own side as it joins (so
+    // anticlockwise when driving on the right, clockwise on the left), then follows the ring to its exit.
+    const ox_ = tx(nd.k), oy_ = ty(nd.k), vx = p0x - ox_, vy = p0y - oy_;
+    const a0 = Math.atan2(vy, vx), a1 = Math.atan2(P1.y - oy_, P1.x - ox_), along = vx * e.ux + vy * e.uy;
+    const side = (-Math.sin(a0)) * (vx - along * e.ux) + Math.cos(a0) * (vy - along * e.uy), dir = side >= 0 ? 1 : -1;
+    let sw = (((a1 - a0) * dir) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+    if (sw < 0.3) sw += Math.PI * 2;                      // back the way it came: all the way round
+    const Rr = 10.6, r0 = Math.hypot(vx, vy), r1 = Math.hypot(P1.x - ox_, P1.y - oy_);
+    const ringLen = sw * Rr + Math.abs(r0 - Rr) + Math.abs(r1 - Rr);
+    c.cr.ring = {ox: ox_, oy: oy_, a0, dir, sw, Rr, r0, r1};
+    c.cr.speed = sp * ringLen / (len * 1.25);             // about as long as the old crossing (a quarter more), at the ring's pace
+    c.cr.len = ringLen;
+  }
   c.state = 'crossing'; c.edge = null; c.blockedT = 0; c.stopT = 0;
   nd.cross.push(c); nd.crossEdge = e; nd.passed++; e.passed++;
   f.inb.push(c);
 }
+/* where a car is on a roundabout's ring at progress u: it swings in to the ring, round, and out to its exit lane */
+function ringPos(g, u) {
+  const a = g.a0 + g.dir * g.sw * u;
+  const r = g.Rr + (g.r0 - g.Rr) * Math.pow(Math.max(0, 1 - u / 0.2), 2) + (g.r1 - g.Rr) * Math.pow(Math.max(0, (u - 0.8) / 0.2), 2);
+  return {x: g.ox + Math.cos(a) * r, y: g.oy + Math.sin(a) * r};
+}
+const ringAng = c => c.cr.ring.a0 + c.cr.ring.dir * c.cr.ring.sw * Math.min(1, c.cr.u);
 function stepCross(nd, dt) {
   for (let i = nd.cross.length - 1; i >= 0; i--) {
     const c = nd.cross[i], cr = c.cr;
     cr.u += cr.speed * dt / cr.len;
     c.v = cr.speed;
+    if (cr.ring) {                                         // round the ring: keep a gap to the car ahead on it
+      const g = cr.ring, me = ringAng(c);
+      for (const o of nd.cross) if (o !== c && o.cr && o.cr.ring && o.cr.u > 0.12 && o.cr.u < 0.9) {
+        const ahead = ((ringAng(o) - me) * g.dir % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+        if (ahead > 0.05 && ahead < 1.0) { cr.u -= cr.speed * dt / cr.len * 0.7; break; }
+      }
+    }
     const u = Math.min(1, cr.u), w = 1 - u;
-    c.x = w * w * cr.x0 + 2 * w * u * cr.cx + u * u * cr.x1;
-    c.y = w * w * cr.y0 + 2 * w * u * cr.cy + u * u * cr.y1;
-    const dx = 2 * w * (cr.cx - cr.x0) + 2 * u * (cr.x1 - cr.cx), dy = 2 * w * (cr.cy - cr.y0) + 2 * u * (cr.y1 - cr.cy);
+    let dx, dy;
+    if (cr.ring) {
+      const p = ringPos(cr.ring, u), q = ringPos(cr.ring, Math.min(1, u + 0.01));
+      c.x = p.x; c.y = p.y; dx = q.x - p.x; dy = q.y - p.y;
+    } else {
+      c.x = w * w * cr.x0 + 2 * w * u * cr.cx + u * u * cr.x1;
+      c.y = w * w * cr.y0 + 2 * w * u * cr.cy + u * u * cr.y1;
+      dx = 2 * w * (cr.cx - cr.x0) + 2 * u * (cr.x1 - cr.cx); dy = 2 * w * (cr.cy - cr.y0) + 2 * u * (cr.y1 - cr.cy);
+    }
     if (Math.abs(dx) + Math.abs(dy) > 1e-3) { const ta = Math.atan2(dy, dx); c.ang += angDiff(c.ang, ta) * Math.min(1, dt * 14); }
     c.brake = false;
     if (cr.u >= 1) {
@@ -1406,10 +1448,44 @@ function startEnter(c) {
     const d = depots[c.bay]; d.res = Math.max(0, d.res - 1); d.slots.push(c); c.loc = {t: 'bay', i: c.bay}; pose = parkedPose(c);
   }
   c.state = 'entering'; c.v = 0;
-  c.xf = {t: 0, dur: 0.6, x0: c.x, y0: c.y, a0: c.ang, x1: pose.x, y1: pose.y, a1: pose.a};
+  c.xf = parkPath(c, pose);
+}
+/* A drive into a parking spot. Spots face the road (cars leave nose first), so a car drives in past its spot,
+   stops broadside to it, then reverses in. Each leg is a curve whose ends match the car's heading. */
+const cubicAt = (p, t) => {
+  const w = 1 - t, a = w * w * w, b = 3 * w * w * t, c2 = 3 * w * t * t, d = t * t * t;
+  return {x: a * p[0] + b * p[2] + c2 * p[4] + d * p[6], y: a * p[1] + b * p[3] + c2 * p[5] + d * p[7],
+          dx: 3 * w * w * (p[2] - p[0]) + 6 * w * t * (p[4] - p[2]) + 3 * t * t * (p[6] - p[4]), dy: 3 * w * w * (p[3] - p[1]) + 6 * w * t * (p[5] - p[3]) + 3 * t * t * (p[7] - p[5])};
+};
+function leg(x0, y0, h0, x1, y1, h1, rev, pace) {
+  const d = Math.hypot(x1 - x0, y1 - y0), k = Math.max(3, d * 0.42), m = rev ? -1 : 1;    // reversing: the car moves against its heading
+  const p = [x0, y0, x0 + Math.cos(h0) * k * m, y0 + Math.sin(h0) * k * m, x1 - Math.cos(h1) * k * m, y1 - Math.sin(h1) * k * m, x1, y1];
+  return {p, rev, dur: clamp(d / pace, 0.35, 1.5)};
+}
+function parkPath(c, pose) {
+  const out = pose.a, fx = Math.cos(out), fy = Math.sin(out);
+  // broadside to the spot, a little out from it, on the side away from the car (it drives past, then backs in)
+  const sx = -fy, sy = fx, ax = pose.x + fx * 8 - c.x, ay = pose.y + fy * 8 - c.y;
+  const sgn = ax * sx + ay * sy >= 0 ? 1 : -1;         // the far side, seen from where the car is now
+  const side = Math.atan2(sy * sgn, sx * sgn);
+  const S = {x: pose.x + fx * 8 + Math.cos(side) * 8, y: pose.y + fy * 8 + Math.sin(side) * 8};
+  // past the driveway already? then back up to it rather than loop round
+  const behind = (S.x - c.x) * Math.cos(c.ang) + (S.y - c.y) * Math.sin(c.ang) < 0;
+  const ph = [leg(c.x, c.y, c.ang, S.x, S.y, side, behind, behind ? 22 : 34), leg(S.x, S.y, side, pose.x, pose.y, out, true, 20)];
+  return {t: 0, ph, dur: ph.reduce((a, q) => a + q.dur, 0), park: true};
 }
 function stepXf(c, dt) {
   const xf = c.xf; xf.t += dt;
+  if (xf.ph) {                                             // a drive along curved legs (forward, or reversing)
+    let t = xf.t, i = 0;
+    while (i < xf.ph.length - 1 && t > xf.ph[i].dur) { t -= xf.ph[i].dur; i++; }
+    const L_ = xf.ph[i], u = clamp(t / L_.dur, 0, 1);
+    const q = cubicAt(L_.p, u * u * (3 - 2 * u));
+    c.x = q.x; c.y = q.y;
+    if (Math.abs(q.dx) + Math.abs(q.dy) > 1e-4) c.ang = Math.atan2(q.dy, q.dx) + (L_.rev ? Math.PI : 0);
+    c.brake = L_.rev || u > 0.8;
+    return xf.t >= xf.dur;
+  }
   const u = clamp(xf.t / xf.dur, 0, 1), w = u * u * (3 - 2 * u);
   c.x = lerp(xf.x0, xf.x1, w); c.y = lerp(xf.y0, xf.y1, w);
   c.ang = xf.a0 + angDiff(xf.a0, xf.a1) * w;
@@ -1473,7 +1549,8 @@ function stepExiting(c, dt) {
       leaveSpot(c);
       const p = laneAt(f, f.r0);
       c.xfEdge = f; f.inb.push(c);
-      c.xf = {t: 0, dur: 0.55, x0: c.x, y0: c.y, a0: c.ang, x1: p.x, y1: p.y, a1: Math.atan2(f.uy, f.ux)};
+      const lg = leg(c.x, c.y, c.ang, p.x, p.y, Math.atan2(f.uy, f.ux), false, 40);   // drive out nose first, curving onto the lane
+      c.xf = {t: 0, ph: [lg], dur: lg.dur};
       c.tripStart = clock;
     } else { const p = parkedPose(c); c.x = p.x; c.y = p.y; c.ang = p.a; }
     return;
