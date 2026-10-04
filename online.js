@@ -153,8 +153,9 @@ function nameFreeFor(snap, uid) {
   return !permRes(d) && !!(d.at && d.at.toMillis) && Date.now() - d.at.toMillis() > GUEST_NAME_TTL;
 }
 const TAKEN = 'That username is taken. Pick another.';
+const REFUSED = 'The online service wouldn\u2019t save that name (its security rules may need updating). You can still play \u2014 try again later.';
 function takenError(e) {
-  if (e && String(e.code || '').includes('permission-denied')) return new Error(TAKEN);
+  if (e && String(e.code || '').includes('permission-denied')) { const x = new Error(REFUSED); x.refused = true; return x; }
   return e;
 }
 async function saveGuestName(name) {
@@ -260,7 +261,11 @@ $('user-guest').addEventListener('click', () => busy(null, async () => {
     closeM('m-user'); renderAccount(); loadBest();
     API.toast('Welcome, ' + n + ' \u2605', 'good'); return;
   }
-  await saveGuestName(n);
+  try { await saveGuestName(n); }
+  catch (e) {
+    if (!e.refused) throw e;
+    closeM('m-user'); API.toast(REFUSED, 'warn'); return;
+  }
   closeM('m-user'); renderAccount();
   API.toast('Playing as ' + n, 'good');
 }));
