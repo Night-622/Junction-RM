@@ -6562,7 +6562,7 @@ function renderPlay() {
   showStartBest();
 }
 function bindMainMenu() {
-  document.querySelectorAll('#m-start [data-mm]').forEach(b => b.addEventListener('click', () => showMM(mmPane === b.dataset.mm && !b.classList.contains('rl-tile') ? null : b.dataset.mm)));
+  document.querySelectorAll('#m-start button[data-mm]').forEach(b => b.addEventListener('click', () => showMM(mmPane === b.dataset.mm && !b.classList.contains('rl-tile') ? null : b.dataset.mm)));
   $('mm-close').addEventListener('click', () => showMM(null));
   $('mm-settings2').addEventListener('click', () => $('mm-settings').click());
   document.querySelectorAll('#m-start [data-mm-go]').forEach(b => b.addEventListener('click', () => { if (b.dataset.mmGo === 'tutorial') $('btn-try-tutorial').click(); else showMM(b.dataset.mmGo); }));
