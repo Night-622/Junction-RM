@@ -268,6 +268,7 @@ function expertSeed(weeksAgo) {
   const fmt = d => d.toLocaleDateString('en-US', {day: 'numeric', month: 'short', timeZone: 'UTC'});
   return {key: w.key, num: h, name: SEED_NAMES[h % SEED_NAMES.length], code, label: fmt(w.mon) + ' \u2013 ' + fmt(w.sun) + ', ' + w.sun.getUTCFullYear()};
 }
+let demoMode = false, demoT = 0;                      // the main menu's background city
 let expWeek = '', prevDiff = 'standard';             // prevDiff: the ordinary difficulty to go back to after an Expert start                                      // the seed week of the Expert city being played ('' otherwise)
 const CELL = 32, MAXD = CFG.maxSpan, COLS = MAXD, ROWS = MAXD, N = COLS * ROWS;
 const DX = [0, 1, 1, 1, 0, -1, -1, -1], DY = [-1, -1, 0, 1, 1, 1, 0, -1];
@@ -1423,7 +1424,7 @@ function arrive(c) {
     const n = c.load, cash = c.cash || 0;
     if (n > 0) {
       score += n; stats.delivered += n; stats.lastDeliveries.push(clock);
-      if (!spectating) earnBucks(n, buildings[c.home]);
+      if (!spectating && !demoMode) earnBucks(n, buildings[c.home]);
       earn(cash);
       onDeliver(c, n, cash);
     }
@@ -1553,6 +1554,7 @@ let undoStack = [], redoStack = [], undoGroup = 0, replaying = false, tool = 'se
 let goalsDone = new Set(), autosaveT = CFG.autosaveSeconds, statT = 0;
 
 function resetGame(dk) {
+  demoMode = false; curSlot = pendingSlot; pendingSlot = '';
   lifeNewCity = true; lifeSnap = null;
   tutorialMode = false;
   setTutorialUI(false);
@@ -1581,8 +1583,13 @@ function resetGame(dk) {
   undoStack = []; redoStack = []; sel = null; follow = false; motoPick = -1; goalsDone = new Set();
   stats = freshStats(); fx.length = 0;
   genWater();
-  for (let i = 0; i < CFG.startStores; i++) addBuilding('store', i % COLORS.length);
-  for (let i = 0; i < CFG.startHouses; i++) addBuilding('house', i % Math.max(1, CFG.startStores));
+  for (let tries = 0; tries < 6; tries++) {           // keep trying until the first store and its house both fit
+    for (let i = 0; i < CFG.startStores; i++) addBuilding('store', i % COLORS.length);
+    let homes = 0; for (let i = 0; i < CFG.startHouses; i++) if (addBuilding('house', i % Math.max(1, CFG.startStores))) homes++;
+    if (homes && buildings.some(b => b.type === 'store')) break;
+    for (const b of buildings) for (const t of bTiles(b)) bAt[t] = -1;
+    buildings = []; cars = [];
+  }
   rebuildNet();
   for (const c of cars) { const p = parkedPose(c); c.x = p.x; c.y = p.y; c.ang = p.a; }
   camReset(true);
@@ -1684,6 +1691,12 @@ function storeSpot(gap) {
 }
 /* half of all stores open at both ends of their car park, the rest at just one */
 const randomEnds = () => rand() < 0.5 ? 0 : rand() < 0.5 ? 1 : 2;
+/* take back the building just added (a store that found no room for its house) */
+function dropLastBuilding(b) {
+  if (buildings[buildings.length - 1] !== b) return;
+  for (const t of bTiles(b)) if (bAt[t] === buildings.length - 1) bAt[t] = -1;
+  buildings.pop(); linkBuildings(); rebuildNet();
+}
 function newBuilding(k, type, colorIdx, sd, ends) {
   const b = {k, type, color: colorIdx, pins: 0, claimed: 0, timer: 0, tier: 0, cars: [], carsN: 0, park: 0, lvl: 0, trucks: 0,
              docks: [], served: 0, acc: -1, face: 0, pref: -1, unreach: 0, born: clock, bornAnim: animT, contract: null,
@@ -1700,7 +1713,8 @@ function addBuilding(type, colorIdx) {
     if (!spot) return null;
     b = newBuilding(spot.k, type, colorIdx, spot.sd, spot.ends);
   } else {
-    const k = freeSpot(1, true);
+    let k = freeSpot(1, true);
+    if (k < 0) k = freeSpot(0, true);                 // a tight map: right beside other buildings is fine
     if (k < 0) return null;
     b = newBuilding(k, type, colorIdx);
   }
@@ -2275,6 +2289,7 @@ function setTutorialUI(on) {
   if (!on) { const c = $('tut-coach'); if (c) c.hidden = true; document.querySelectorAll('.tool').forEach(b => b.classList.remove('tut-glow')); }
 }
 function startTutorial() {
+  demoMode = false; curSlot = '';
   tutorialMode = true; DIFF = DIFFS.zen; diffKey = 'zen'; tutStage = 0; tutLastStage = -1;
   water = new Uint8Array(N); road = new Uint8Array(N); lnk = new Uint8Array(N);
   sign = new Array(N).fill(null); special = new Array(N).fill(null);
@@ -3297,6 +3312,7 @@ const GOALS = [
   {id: 'haul',  name: 'Recovery run',        hint: 'Have your own tow truck rescue a car', hit: () => stats.hauls > 0, reward: {inv: {light: 1}}}
 ];
 function checkGoals() {
+  if (demoMode) return;
   if (spectating) return;
   for (const g of GOALS) {
     if (goalsDone.has(g.id)) continue;
@@ -3375,8 +3391,10 @@ function update(dt) {
     if (cols.length < COLORS.length && rand() < CFG.newColourChance) c = pick(COLORS.map((_, i) => i).filter(i => !cols.includes(i)));
     else c = pick(cols);
     const ns = addBuilding('store', c);
-    if (ns) {
-      for (let i = 0; i < CFG.housesOnStoreSpawn; i++) addBuilding('house', c);
+    let homes = 0;
+    if (ns) for (let i = 0; i < CFG.housesOnStoreSpawn; i++) if (addBuilding('house', c)) homes++;
+    if (ns && !homes) { dropLastBuilding(ns); storeTimer = 8; }        // no room for its house yet: try again shortly
+    else if (ns) {
       toast('A new ' + COLORS[c].name + ' store opened, with ' + CFG.housesOnStoreSpawn + ' new ' + COLORS[c].name + (CFG.housesOnStoreSpawn === 1 ? ' house' : ' houses') + ' nearby', 'warn');
     }
   }
@@ -3521,6 +3539,7 @@ function bestFor(dk) {
   } catch (e) { return 0; }
 }
 function endGame(why) {
+  writeSlot(true);
   if (spectating) return;
   lifeTick(0);
   if (!tutorialMode && life[diffKey]) { life[diffKey].ended++; saveLife(); }
@@ -3572,7 +3591,7 @@ function mergeLife(other, add) {
 }
 function lifeMark() { lifeSnap = {score, week, earned: stats.earned, spent: stats.spent, trips: stats.trips, tows: stats.tows, breakdowns: stats.breakdowns, goals: goalsDone.size}; }
 function lifeTick(realDt) {
-  if (!started || over || tutorialMode || spectating || !life[diffKey] || !stats) return;
+  if (!started || over || tutorialMode || spectating || demoMode || !life[diffKey] || !stats) return;
   const playing = running && !modalOpen, L = life[diffKey];
   if (lifeNewCity) { if (!playing) return; L.cities++; L.weeks += week; lifeNewCity = false; lifeMark(); lifeDirty = true; }
   if (!lifeSnap) { lifeMark(); return; }
@@ -3659,6 +3678,7 @@ function mergeAch(other) {
   if (changed) saveAch();
 }
 function checkAch() {
+  if (demoMode) return;
   if (!started || tutorialMode || spectating || !stats) return;
   for (const a of ACH) {
     if (ach[a.id]) continue;
@@ -3706,13 +3726,52 @@ function serialize() {
     pal: {mode: colorMode, hex: customHex.slice()}
   };
 }
+const SLOT_KEY = 'junction-slot-v1:', SLOT_MODES = ['chill', 'standard', 'frantic', 'zen', 'expert'];
+let curSlot = '', pendingSlot = '';                     // the local slot ("standard-2") of the city being played
+function readSlot(id) { try { return JSON.parse(localStorage.getItem(SLOT_KEY + id)); } catch (e) { return null; } }
+function writeSlot(final) {
+  if (!curSlot || tutorialMode || spectating || demoMode || !started) return;
+  try { localStorage.setItem(SLOT_KEY + curSlot, JSON.stringify(final ? {over: true, score, week, diffKey, at: Date.now()} : {data: serialize(), score, week, diffKey, at: Date.now()})); } catch (e) {}
+}
+const agoLocal = t => { const s2 = (Date.now() - t) / 1000; return s2 < 90 ? 'just now' : s2 < 3600 ? Math.round(s2 / 60) + ' min ago' : s2 < 86400 ? Math.round(s2 / 3600) + ' h ago' : Math.round(s2 / 86400) + ' days ago'; };
+function renderLocalSlots(box, mode) {
+  box.innerHTML = '';
+  for (let n = 1; n <= 5; n++) {
+    const id = mode + '-' + n, d = readSlot(id), el = document.createElement('div');
+    el.className = 'slot-card' + (curSlot === id && started && !over ? ' current' : '');
+    let desc, btns;
+    if (d && d.data) { desc = '<b>Week ' + d.week + '</b> \u00b7 ' + d.score + ' parcels<small>Saved ' + agoLocal(d.at) + '</small>'; btns = '<button class="bigbtn" data-act="load">Continue</button><button class="act" data-act="new">New city here</button><button class="act danger" data-act="del">Delete</button>'; }
+    else if (d && d.over) { desc = '<b>Finished</b> \u00b7 week ' + d.week + ', ' + d.score + ' parcels<small>' + agoLocal(d.at) + '</small>'; btns = '<button class="bigbtn" data-act="new">New city here</button><button class="act danger" data-act="del">Clear</button>'; }
+    else { desc = '<b>Empty slot</b><small>' + DIFFS[mode].label + ' \u00b7 nothing saved yet</small>'; btns = '<button class="bigbtn" data-act="new">New city here</button>'; }
+    el.innerHTML = '<div class="slotnum">' + n + '</div><div class="slotinfo">' + desc + '</div><div class="slotbtns">' + btns + '</div>';
+    el.querySelectorAll('[data-act]').forEach(b => { b.type = 'button'; b.onclick = () => {
+      const act = b.dataset.act;
+      if (act === 'load') { if (!loadGame(d.data)) { toast('That save couldn\u2019t be opened.', 'warn'); return; } curSlot = id; closeModal('m-start'); running = true; refreshHud(); layout(); }
+      else if (act === 'new') { if (d && d.data && !confirm('Replace the city in ' + DIFFS[mode].label + ' slot ' + n + ' (week ' + d.week + ') with a new one?')) return; pendingSlot = id; closeModal('m-start'); resetGame(mode); running = true; refreshHud(); layout(); writeSlot(); }
+      else if (act === 'del') { if (!confirm('Delete ' + DIFFS[mode].label + ' slot ' + n + '? This can\u2019t be undone.')) return; try { localStorage.removeItem(SLOT_KEY + id); } catch (e) {} if (curSlot === id) curSlot = ''; renderLocalSlots(box, mode); }
+    }; });
+    box.append(el);
+  }
+}
+/* five slots for a mode: in the cloud when signed in, otherwise on this device */
+function renderSlotsFor(box, mode, tabs) {
+  const on = window.JunctionOnline;
+  if (on && on.ready && on.renderSlots && on.renderSlots(box, mode, tabs)) return;
+  if (tabs) {
+    const wrap = document.createElement('div'); box.innerHTML = '<div class="seg boardtabs slottabs">' + SLOT_MODES.map(m => '<button type="button" data-smode="' + m + '" aria-pressed="' + (m === mode) + '">' + DIFFS[m].label + '</button>').join('') + '</div>';
+    box.querySelectorAll('[data-smode]').forEach(b => b.onclick = () => renderSlotsFor(box, b.dataset.smode, true));
+    box.append(wrap); renderLocalSlots(wrap, mode); return;
+  }
+  renderLocalSlots(box, mode);
+}
 function saveGame(urgent) {
-  if (over || !started || tutorialMode || spectating) return;
+  if (over || !started || tutorialMode || spectating || demoMode) return;
   JEvents.emit('autosave', {urgent: !!urgent});
   try {
     const prev = localStorage.getItem(SAVE_KEY);
     if (prev) localStorage.setItem(SAVE_KEY + '-backup', prev);
     localStorage.setItem(SAVE_KEY, JSON.stringify(serialize()));
+    writeSlot();
     localStorage.setItem(bestKey(diffKey), String(Math.max(best, score)));
   } catch (e) {}
 }
@@ -3817,6 +3876,7 @@ function loadGameCore(data) {
   } catch (e) { return false; }
 }
 function resetGameBlank(dk) {
+  demoMode = false;
   lifeNewCity = false; lifeSnap = null;
   tutorialMode = false;
   setTutorialUI(false);
@@ -4294,12 +4354,6 @@ function drawGround(vr) {
   ctx.fillStyle = PAL.land; ctx.fillRect(vr.x0, vr.y0, vr.x1 - vr.x0, vr.y1 - vr.y0);
   const x0 = camOrg * CELL, y0 = camOrg * CELL, sz = camSpan * CELL;
   ctx.fillStyle = PAL.land2; ctx.fillRect(x0, y0, sz, sz);
-  if (cam.z > 0.7) {
-    ctx.fillStyle = PAL.check;
-    for (let r = vr.r0; r <= vr.r1; r++) for (let c = vr.c0; c <= vr.c1; c++) {
-      if (((c + r) & 1) && c >= camOrg && r >= camOrg && c < camOrg + camSpan && r < camOrg + camSpan) ctx.fillRect(c * CELL, r * CELL, CELL, CELL);
-    }
-  }
   drawPatches(vr);
   // water
   ctx.fillStyle = PAL.water;
@@ -5899,7 +5953,7 @@ function muteToast(kind) {
   return notesMode === 'off' || kind !== 'warn';
 }
 function toast(msg, kind) {
-  const box = $('toasts'); if (!box) return;
+  const box = $('toasts'); if (!box || demoMode) return;
   if (muteToast(kind)) return;
   const small = compactUI();
   while (box.children && box.children.length > (small ? 1 : 3)) box.removeChild(box.children[0]);
@@ -6085,6 +6139,7 @@ const TIPS_KEY = 'junction-tips-seen';
 let tipsOn = true;                  // pop-up tips; they can always be read in the City tab
 const seenTips = new Set((() => { try { return JSON.parse(localStorage.getItem(TIPS_KEY)) || []; } catch (e) { return []; } })());
 function tipOnce(id) {
+  if (demoMode) return;
   if (tutorialMode || seenTips.has(id) || !TIPS[id]) return;
   seenTips.add(id);
   try { localStorage.setItem(TIPS_KEY, JSON.stringify([...seenTips])); } catch (e) {}
@@ -6464,21 +6519,27 @@ function selectAt(sx, sy) {
 
 /* -------------------------------------------------------------- modals */
 let modalOpen = false, rerollLeft = 1, lastGrew = false;
-function openModal(id) { $(id).hidden = false; modalOpen = true; if (id === 'm-start') showMM(mmPane); }
+function openModal(id) {
+  $(id).hidden = false; modalOpen = true;
+  if (id === 'm-start') {
+    if (!started || over || tutorialMode) startDemo();      // nothing to come back to: put the background city on
+    $('app').classList.add('in-menu'); showMM(null);
+  }
+}
 /* ---- the main menu: Play, Saves, Friends, Customise, Settings and Account on the left; Leaderboard, Store,
    Weeklys, Tutorial, Feedback and Watch a player on the right; your balance top left. The middle shows
    whichever section is picked. */
-let mmPane = 'play';
+let mmPane = null, playMode = 'standard';
+const MM_TITLES = {play: 'Play', saves: 'Saves', friends: 'Friends', custom: 'Customise', store: 'Store', weekly: 'Weeklys'};
 function showMM(pane) {
-  mmPane = pane || 'play';
-  document.querySelectorAll('#m-start .mm-btn[data-mm]').forEach(b => b.setAttribute('aria-pressed', b.dataset.mm === mmPane ? 'true' : 'false'));
+  mmPane = pane || null;
+  document.querySelectorAll('#m-start [data-mm]').forEach(b => { if (b.matches('.rl-item,.rl-tile,.rl-icon')) b.setAttribute('aria-pressed', b.dataset.mm === mmPane ? 'true' : 'false'); });
   document.querySelectorAll('#m-start .mm-pane').forEach(p => { p.hidden = p.dataset.mm !== mmPane; });
+  $('mm-panel').hidden = !mmPane; $('m-start').classList.toggle('has-panel', !!mmPane);
+  if (mmPane) { $('mm-ptitle').textContent = MM_TITLES[mmPane] || ''; const pb = $('mm-panel'); pb.classList.remove('slide'); void pb.offsetWidth; pb.classList.add('slide'); }
   const on = window.JunctionOnline;
-  if (mmPane === 'saves') {
-    const ok = on && on.renderSlots && on.renderSlots($('mm-slots'));
-    if (!ok) $('mm-slots').innerHTML = '<p class="mini">Cloud save slots need the online service, which is still connecting or unavailable. Your city on this device is always kept.</p>';
-    $('mm-resume').hidden = !hasSave();
-  }
+  if (mmPane === 'play') renderPlay();
+  if (mmPane === 'saves') { renderSlotsFor($('mm-slots'), playMode, true); $('mm-resume').hidden = !hasSave(); }
   if (mmPane === 'friends') { if (on && on.renderFriends) on.renderFriends($('mm-friends')); else $('mm-friends').innerHTML = '<p class="mini">Friends need the online service, which isn\u2019t available right now.</p>'; }
   if (mmPane === 'weekly') { renderExpertCard(); renderWeeks(); }
   renderLook();
@@ -6489,15 +6550,30 @@ function renderWeeks() {
   box.innerHTML = '<h3>Earlier seeds</h3>' + [1, 2, 3].map(w => { const sd = expertSeed(w); return '<div class="mm-week"><div><b>' + sd.name + '</b><small>' + sd.label + ' \u00b7 code ' + sd.code + '</small></div><button class="act small" type="button" data-wk="' + w + '">Leaderboard</button></div>'; }).join('');
   box.querySelectorAll('[data-wk]').forEach(b => b.onclick = () => { if (window.JunctionOnline && window.JunctionOnline.openExpert) window.JunctionOnline.openExpert(+b.dataset.wk); else toast('Leaderboards need the online service.', 'warn'); });
 }
+/* Play: pick a game mode, then one of its five save slots */
+function renderPlay() {
+  const box = $('mm-modes'); if (!box) return;
+  const sd = expertSeed();
+  box.innerHTML = SLOT_MODES.map(m => '<button type="button" class="rl-mode' + (m === 'expert' ? ' expert' : '') + '" data-pmode="' + m + '" aria-pressed="' + (m === playMode) + '"><b>' + DIFFS[m].label + '</b><small>' +
+    (m === 'expert' ? 'This week: \u201c' + sd.name + '\u201d' : DIFFS[m].note) + '</small></button>').join('');
+  box.querySelectorAll('[data-pmode]').forEach(b => b.onclick = () => { playMode = b.dataset.pmode; if (playMode !== 'expert') startDiff = playMode; renderPlay(); });
+  $('mm-play-h').textContent = DIFFS[playMode].label + ' \u2014 your five saves';
+  renderSlotsFor($('mm-play-slots'), playMode, false);
+  showStartBest();
+}
 function bindMainMenu() {
-  document.querySelectorAll('#m-start .mm-btn[data-mm]').forEach(b => b.addEventListener('click', () => showMM(b.dataset.mm)));
+  document.querySelectorAll('#m-start [data-mm]').forEach(b => b.addEventListener('click', () => showMM(mmPane === b.dataset.mm && !b.classList.contains('rl-tile') ? null : b.dataset.mm)));
+  $('mm-close').addEventListener('click', () => showMM(null));
+  $('mm-settings2').addEventListener('click', () => $('mm-settings').click());
   document.querySelectorAll('#m-start [data-mm-go]').forEach(b => b.addEventListener('click', () => { if (b.dataset.mmGo === 'tutorial') $('btn-try-tutorial').click(); else showMM(b.dataset.mmGo); }));
   $('mm-settings').addEventListener('click', () => { $('app').classList.add('menu-over'); openMenu('settings'); });
   $('mm-account').addEventListener('click', () => { if (window.__junctionAccount) window.__junctionAccount(); else toast('Accounts need the online service, which isn\u2019t available right now.', 'warn'); });
   $('mm-resume').addEventListener('click', () => $('btn-resume').click());
   for (const id of ['mm-custom', 'mm-store']) $(id).addEventListener('click', shopClick);
 }
-function closeModal(id) { $(id).hidden = true; modalOpen = !!document.querySelector('.modal:not([hidden])'); }
+/* the seed of the week on its tile */
+function renderMenuTiles() { const t = $('tile-seed'); if (t) { const sd = expertSeed(); t.textContent = sd.name; $('tile-seedwk').textContent = sd.label; } }
+function closeModal(id) { if (id === 'm-start') $('app').classList.remove('in-menu'); $(id).hidden = true; modalOpen = !!document.querySelector('.modal:not([hidden])'); }
 function offerUpgrade(grew) {
   lastGrew = grew; rerollLeft = 1; running = false; openModal('m-upgrade'); renderUpgrade();
   refreshUI();
@@ -6542,6 +6618,7 @@ function showGameOver(why) {
 /* ---------------------------------------------------------------- input */
 let startDiff = 'standard';       // difficulty highlighted on the start screen (the running game keeps diffKey until a new one starts)
 function renderExpertCard() {
+  renderMenuTiles();
   const sd = expertSeed(), n = $('exp-name'); if (!n) return;
   n.textContent = sd.name; $('exp-code').textContent = sd.code; $('exp-week').textContent = sd.label;
 }
@@ -6579,6 +6656,7 @@ function drawCitySnap(cv2, str) {
   return true;
 }
 function showStartBest() {
+  if (!$('start-best')) return;
   const b = bestFor(startDiff), lb = DIFFS[startDiff].label;
   $('start-best').textContent = b ? 'Best on ' + lb + ': ' + b + ' parcels' : 'No games yet on ' + lb;
 }
@@ -6660,6 +6738,7 @@ function bindInput() {
     if (k === ' ') { spaceHeld = true; e.preventDefault(); return; }
     if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
     if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
+    if (k === 'Escape' && !$('m-start').hidden && mmPane && $('menu').hidden) { showMM(null); return; }
     if (k === 'Escape') { closeInspector(); closeMenu(); toggleCust(false); if (!$('m-help').hidden) closeModal('m-help'); if (!$('m-explain').hidden) closeModal('m-explain'); if (!$('m-feedback').hidden) closeModal('m-feedback'); setTool('select'); return; }
     if (modalOpen) return;
     const n = parseInt(k, 10);
@@ -7662,7 +7741,7 @@ function frame(now) {
   requestAnimationFrame(frame);
   const real = Math.min(0.1, (now - last) / 1000); last = now;
   animT += real;
-  if (running && !over && !modalOpen && started) {
+  if (running && !over && started && (!modalOpen || demoMode)) {     // the menu's background city keeps playing behind it
     simAcc += real * speed;
     let n = 0;
     while (simAcc >= SIM_STEP && n < 12) {
@@ -7674,7 +7753,7 @@ function frame(now) {
   if (tutorialMode && started && !spectating) { tutCheckT += real; if (tutCheckT > 0.35) { tutCheckT = 0; checkTutorial(); } }
   rollHud();
   stepFX(real);
-  camUpdate(real);
+  if (demoMode) demoCam(real); else camUpdate(real);
   draw();
   accHud += real; accMini += real; accIns += real;
   if (accHud > 0.2) { accHud = 0; refreshHud(); musicTick(); }
@@ -7687,6 +7766,46 @@ function frame(now) {
 }
 
 /* ----------------------------------------------------------------- boot */
+/* build the background city: a grid of streets with lights and roundabouts, a store of every colour and
+   plenty of houses, then let it run */
+function startDemo() {
+  pendingSlot = ''; resetGame('zen');
+  demoMode = true; curSlot = '';
+  DIFF = Object.assign({}, DIFFS.zen, {pin: 0.3});
+  weekTimer = houseTimer = storeTimer = breakdownTimer = closureTimer = ambTimer = contractTimer = 1e9;
+  for (const b of buildings) for (const t of bTiles(b)) bAt[t] = -1;
+  buildings = []; cars = []; trucks = []; road.fill(0); lnk.fill(0); special.fill(null); sign.fill(null); lightQ.clear();
+  span = 34; org = Math.floor((MAXD - span) / 2); camSpan = span; camOrg = org;
+  money = 1e9;
+  const L = (c, r) => idx(org + c, org + r), lay = (a, b) => { road[a] = 1; road[b] = 1; const d = dirBetween(a, b); if (d >= 0) setLink(a, d, true); };
+  const lines = []; for (let i = 3; i < span - 2; i += 6) lines.push(i);
+  for (const r of lines) for (let c = 1; c < span - 2; c++) lay(L(c, r), L(c + 1, r));
+  for (const c of lines) for (let r = 1; r < span - 2; r++) lay(L(c, r), L(c, r + 1));
+  lines.forEach((r, i) => lines.forEach((c, j) => { const k = L(c, r), v = (i * 3 + j * 5) % 4; if (v === 0) special[k] = 'round'; else if (v === 1) { special[k] = 'light'; lightQ.set(k, [CFG.lightBatch, CFG.lightBatch]); } }));
+  // a store of every colour, opening onto a street, then houses beside the streets
+  for (let col = 0; col < COLORS.length; col++) for (let t = 0; t < 600; t++) {
+    const k = L(2 + Math.floor(Math.random() * (span - 4)), 2 + Math.floor(Math.random() * (span - 4))), sd = ORTH[Math.floor(Math.random() * 4)];
+    if (storeFits(k, sd, inPlay, 0) && storeDoorsAt(k, sd, 0).some(([d]) => road[d])) { newBuilding(k, 'store', col, sd, 0); break; }
+  }
+  for (let i = 0, made = 0; i < 4000 && made < 30; i++) {
+    const k = L(1 + Math.floor(Math.random() * (span - 2)), 1 + Math.floor(Math.random() * (span - 2)));
+    if (occupied(k) || water[k] || storeFront(k) || !ORTH.some(d => road[nbr(k, d)])) continue;
+    const b = newBuilding(k, 'house', made % COLORS.length); b.extra = 2; made++;
+  }
+  linkBuildings(); rebuildNet();
+  buildings.forEach((b, i) => { if (b.type === 'house') for (let n = 0; n < 4; n++) addCar(i); else b.pins = 4; });
+  for (const c of cars) { c.up.spd = Math.floor(Math.random() * 3); c.up.cap = Math.floor(Math.random() * 3); syncCarLen(c); const q = parkedPose(c); c.x = q.x; c.y = q.y; c.ang = q.a; }
+  running = true; over = false; demoT = 0; pathCache.ver = -1;
+}
+/* the background camera drifts slowly across the city, which sits a little right of centre */
+function demoCam(dt) {
+  demoT += dt;
+  const cxw = (org + span / 2) * CELL;
+  cam.auto = false; follow = false;
+  cam.z = clamp(Math.min(W, H) / (span * CELL * 0.62), 0.9, 2.4);
+  cam.x = cxw - (W * 0.14) / cam.z + Math.sin(demoT * 0.045) * span * CELL * 0.16;
+  cam.y = cxw + Math.cos(demoT * 0.033) * span * CELL * 0.12;
+}
 function boot() {
   loadShop();
   loadUiTheme();
@@ -7696,7 +7815,7 @@ function boot() {
   grantInUse(); renderLook();
   buildToolbars(); bindInput(); showTab('city');
   applyLayout(); bindLayout();
-  resetGame('standard'); running = false;
+  startDemo();
   layout();
   showStartBest();
   $('btn-resume').hidden = !hasSave();

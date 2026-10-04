@@ -6,7 +6,7 @@
 
    Firestore layout
      users/{uid}                 name, nameLower, star, liveCode (accounts only)
-     users/{uid}/saves/{1-5}   data (serialized city, as a string), score, week, diffKey, over, updatedAt
+     users/{uid}/saves/{mode-1..5} five save slots per game mode (chill, standard, frantic, zen, expert)   data (serialized city, as a string), score, week, diffKey, over, updatedAt
      usernames/{nameLower}       uid, perm, at — every player's name is reserved here, so no two players share one.
                                  Accounts keep theirs for good; a guest name frees up after 30 days unused.
      boards/{mode}/players/{uid} one leaderboard per mode (chill, standard, frantic: parcels, weeks, goalsSec;
@@ -47,7 +47,9 @@ const API = window.JunctionAPI;
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 const NAME_RE = /^[A-Za-z0-9_-]{3,16}$/;
-const SLOTS = ['1', '2', '3', '4', '5'];
+const SLOTS = ['1', '2', '3', '4', '5'];            // the old shared slots, moved into per-mode slots on sign-in
+const SAVE_MODES = ['chill', 'standard', 'frantic', 'zen', 'expert'];
+const slotIds = mode => SLOTS.map(n => mode + '-' + n);                 // five slots per game mode: "standard-1" ... "standard-5"
 const CLOUD_SAVE_EVERY = 30e3;      // ms between routine cloud autosaves (local autosave still runs every 12s)
 const LIVE_SEND_EVERY = 4e3;        // ms between live snapshots while someone is watching
 const LIVE_HEARTBEAT = 60e3;        // ms between "I'm online" pings when nobody is watching
@@ -317,7 +319,7 @@ $('user-signin').addEventListener('click', () => busy(null, async () => {
 
 /* ------------------------------------------------------ account widgets */
 function renderAccount() {
-  startInbox();
+  startInbox(); migrateLegacySaves();
   const sa = $('start-account');
   sa.hidden = false;
   sa.innerHTML = '<span>Playing as <b>' + nameHTML(myName(), isPerm(), myAch3()) + '</b>' + (isPerm() ? '' : ' <small>(guest)</small>') + '</span>' +
@@ -404,7 +406,7 @@ $('acct-tabs').addEventListener('click', e => { const b = e.target.closest('butt
 function acctPaneOpened() {
   if (acctPane === 'saves') {
     $('acct-saves-lead').textContent = isPerm() ? 'Five cloud save slots, kept with your account on any device.' : 'Five cloud save slots for this browser. Make a permanent account to keep them everywhere.';
-    renderSlots($('acct-slots'));
+    renderSlots($('acct-slots'), SAVE_MODES.includes(API.startDiff) ? API.startDiff : 'standard', true);
   }
   if (acctPane === 'msgs') { Promise.all([loadSent(), loadFriends()]).then(renderMsgs); renderMsgs(); }
   if (acctPane === 'watch') { $('acct-watch-err').textContent = ''; $('acct-watch-code').value = ''; setTimeout(() => $('acct-watch-code').focus(), 50); }
@@ -478,7 +480,7 @@ $('sec-delete').addEventListener('click', () => acctBusy('sec-err', async () => 
   await dropLive(true);
   if (O.profile && O.profile.liveCode) await deleteDoc(doc(db, 'live', O.profile.liveCode)).catch(() => {});
   await Promise.all([
-    ...SLOTS.map(n => deleteDoc(doc(db, 'users', uid, 'saves', n)).catch(() => {})),
+    ...SLOTS.concat(...SAVE_MODES.map(slotIds)).map(n => deleteDoc(doc(db, 'users', uid, 'saves', n)).catch(() => {})),
     ...MODES.map(m => deleteDoc(boardRef(m, uid)).catch(() => {})),
     deleteDoc(lifeRef(uid)).catch(() => {}),
     deleteDoc(doc(db, 'leaderboard', uid)).catch(() => {})
@@ -554,60 +556,79 @@ $('stats-modes').addEventListener('click', e => { const b = e.target.closest('bu
 /* ============================================================ SAVE FILES */
 let savesMode = 'load';
 const slotRef = n => doc(db, 'users', O.user.uid, 'saves', n);
-async function openSaves(mode) {
+/* the Save files window: five slots for one game mode, with tabs to switch mode */
+async function openSaves(arg) {
   if (!O.ready) return;
-  savesMode = mode || 'load';
+  const mode = SAVE_MODES.includes(arg) ? arg : (SAVE_MODES.includes(API.startDiff) ? API.startDiff : 'standard');
   $('menu').hidden = true;
-  $('saves-title').textContent = savesMode === 'new' ? 'Pick a slot for your new city' : 'Save files';
-  $('saves-lead').textContent = isPerm()
-    ? 'Five cloud save slots, kept with your account on any device.'
-    : 'Five cloud save slots for this browser. Make a permanent account to keep them everywhere.';
-  $('saves-diff').textContent = 'New cities use the difficulty picked on the start screen: ' + API.diffLabel(API.startDiff) + '.';
+  $('saves-title').textContent = 'Save files';
+  $('saves-lead').textContent = isPerm() ? 'Five cloud save slots for every game mode, kept with your account on any device.' : 'Five cloud save slots for every game mode, on this browser. Make a permanent account to keep them everywhere.';
+  $('saves-diff').textContent = '';
   openM('m-saves');
-  await renderSlots($('save-slots'));
+  await renderSlots($('save-slots'), mode, true);
 }
-let slotsBox = null;
-async function renderSlots(box) {
-  slotsBox = box;
-  box.innerHTML = '<p class="mini">Loading\u2026</p>';
+let slotsBox = null, slotsMode = 'standard', slotsTabs = false;
+async function renderSlots(box, mode, tabs) {
+  slotsBox = box; slotsMode = SAVE_MODES.includes(mode) ? mode : slotsMode; slotsTabs = !!tabs;
+  const want = slotsMode;
+  box.innerHTML = (slotsTabs ? slotTabsHTML() : '') + '<p class="mini">Loading\u2026</p>';
+  bindSlotTabs(box);
   await cloudSave(true);
-  const rows = await Promise.all(SLOTS.map(n => getDoc(slotRef(n)).then(s => [n, s.exists() ? s.data() : null]).catch(() => [n, null])));
-  box.innerHTML = '';
-  for (const [n, d] of rows) {
-    const el = document.createElement('div'); el.className = 'slot-card' + (O.slot === n ? ' current' : '');
+  const rows = await Promise.all(slotIds(want).map((id, i) => getDoc(slotRef(id)).then(x => [id, i + 1, x.exists() ? x.data() : null]).catch(() => [id, i + 1, null])));
+  if (slotsBox !== box || slotsMode !== want) return;
+  box.innerHTML = slotsTabs ? slotTabsHTML() : '';
+  bindSlotTabs(box);
+  for (const [id, n, d] of rows) {
+    const el = document.createElement('div'); el.className = 'slot-card' + (O.slot === id ? ' current' : '');
     let desc, btns = '';
     if (d && d.data && !d.over) {
-      desc = '<b>Week ' + d.week + '</b> \u00b7 ' + d.score + ' parcels \u00b7 ' + esc(API.diffLabel(d.diffKey)) + '<small>Saved ' + ago(d.updatedAt) + (O.slot === n ? ' \u00b7 playing now' : '') + '</small>';
+      desc = '<b>Week ' + d.week + '</b> \u00b7 ' + d.score + ' parcels<small>Saved ' + ago(d.updatedAt) + (O.slot === id ? ' \u00b7 playing now' : '') + '</small>';
       btns = '<button class="bigbtn" data-act="load" type="button">Continue</button><button class="act" data-act="new" type="button">New city here</button><button class="act danger" data-act="del" type="button">Delete</button>';
     } else if (d && d.over) {
-      desc = '<b>Finished</b> \u00b7 week ' + d.week + ', ' + d.score + ' parcels \u00b7 ' + esc(API.diffLabel(d.diffKey)) + '<small>' + ago(d.updatedAt) + '</small>';
+      desc = '<b>Finished</b> \u00b7 week ' + d.week + ', ' + d.score + ' parcels<small>' + ago(d.updatedAt) + '</small>';
       btns = '<button class="bigbtn" data-act="new" type="button">New city here</button><button class="act danger" data-act="del" type="button">Clear</button>';
     } else {
-      desc = '<b>Empty slot</b><small>Nothing saved yet</small>';
+      desc = '<b>Empty slot</b><small>' + esc(API.diffLabel(want)) + ' \u00b7 nothing saved yet</small>';
       btns = '<button class="bigbtn" data-act="new" type="button">New city here</button>';
     }
     el.innerHTML = '<div class="slotnum">' + n + '</div><div class="slotinfo">' + desc + '</div><div class="slotbtns">' + btns + '</div>';
-    el.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => slotAction(n, b.dataset.act, d)));
+    el.querySelectorAll('[data-act]').forEach(btn => btn.addEventListener('click', () => slotAction(id, n, btn.dataset.act, d, want)));
     box.append(el);
   }
 }
-async function slotAction(n, act, d) {
-  if (act !== 'del') closeM('m-acct');
+function slotTabsHTML() { return '<div class="seg boardtabs slottabs">' + SAVE_MODES.map(m => '<button type="button" data-smode="' + m + '" aria-pressed="' + (m === slotsMode) + '">' + esc(API.diffLabel(m)) + '</button>').join('') + '</div>'; }
+function bindSlotTabs(box) { box.querySelectorAll('[data-smode]').forEach(btn => btn.onclick = () => renderSlots(box, btn.dataset.smode, true)); }
+async function slotAction(id, n, act, d, mode) {
+  if (act !== 'del') { closeM('m-acct'); closeM('m-saves'); }
   if (act === 'load') {
     let city = null; try { city = JSON.parse(d.data); } catch (e) {}
     if (!city || !API.loadCity(city)) { API.toast('That save file couldn\u2019t be opened.', 'warn'); return; }
-    O.slot = n; O.lastSaveAt = Date.now(); O.lastSaveStr = d.data;
-    API.toast('Slot ' + n + ' loaded \u2014 week ' + d.week, 'good');
+    O.slot = id; O.lastSaveAt = Date.now(); O.lastSaveStr = d.data;
+    API.toast(API.diffLabel(mode) + ' slot ' + n + ' loaded \u2014 week ' + d.week, 'good');
   } else if (act === 'new') {
-    if (d && d.data && !d.over && !confirm('Replace the city in slot ' + n + ' (week ' + d.week + ', ' + d.score + ' parcels) with a new one?')) return;
-    O.slot = n; O.lastSaveStr = '';
-    API.startCity(API.startDiff);
+    if (d && d.data && !d.over && !confirm('Replace the city in ' + API.diffLabel(mode) + ' slot ' + n + ' (week ' + d.week + ', ' + d.score + ' parcels) with a new one?')) return;
+    O.slot = id; O.lastSaveStr = '';
+    API.startCity(mode);
     setTimeout(() => cloudSave(true), 400);
   } else if (act === 'del') {
-    if (!confirm('Delete slot ' + n + '? This can\u2019t be undone.')) return;
-    await deleteDoc(slotRef(n)).catch(e => API.toast('Couldn\u2019t delete: ' + e.message, 'warn'));
-    if (O.slot === n) O.slot = null;
-    if (slotsBox) renderSlots(slotsBox);
+    if (!confirm('Delete ' + API.diffLabel(mode) + ' slot ' + n + '? This can\u2019t be undone.')) return;
+    await deleteDoc(slotRef(id)).catch(e => API.toast('Couldn\u2019t delete: ' + e.message, 'warn'));
+    if (O.slot === id) O.slot = null;
+    if (slotsBox) renderSlots(slotsBox, slotsMode, slotsTabs);
+  }
+}
+/* one-off: the old shared slots 1-5 become slots of the mode each city was played on */
+O.slotsMigrated = '';
+async function migrateLegacySaves() {
+  if (!O.user || O.slotsMigrated === O.user.uid) return;
+  O.slotsMigrated = O.user.uid;
+  for (const n of SLOTS) {
+    try {
+      const x = await getDoc(slotRef(n)); if (!x.exists()) continue;
+      const d = x.data(), mode = SAVE_MODES.includes(d.diffKey) ? d.diffKey : 'standard', to = slotRef(mode + '-' + n);
+      if (d.data && !d.over && !(await getDoc(to)).exists()) await setDoc(to, d);
+      await deleteDoc(slotRef(n));
+    } catch (e) { console.warn('Moving an old save slot failed', e); }
   }
 }
 async function cloudSave(urgent) {
@@ -1207,7 +1228,7 @@ window.JunctionOnline = {
   get ready() { return O.ready && !!(O.profile && O.profile.name); },
   get feedbackReady() { return !!O.user; },
   openSaves, openBoard, openWatch, sendFeedback, feedbackIdentity,
-  renderSlots(box) { if (!O.ready) return false; renderSlots(box); return true; },
+  renderSlots(box, mode, tabs) { if (!O.ready) return false; renderSlots(box, mode, tabs); return true; },
   renderFriends(box) { renderFriends(box); },
   openExpert(ago) { if (!O.ready) { API.toast('Online features are still connecting \u2014 try again in a moment.', 'warn'); return; } openExpert(ago); }
 };

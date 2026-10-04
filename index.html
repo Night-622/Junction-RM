@@ -289,66 +289,62 @@
     <div id="tut-flash" hidden><div class="tf-card"><span class="tf-tick">✓</span><div><small>Step complete</small><b id="tf-title"></b></div></div></div>
 
     <!-- modals -->
-    <div class="modal mainmenu" id="m-start">
-      <div class="mm">
-        <header class="mm-top">
-          <div class="mm-bal plate" title="Your balance" data-tip="Your balance" data-sub="Junc Bucks (#) from every 10 parcels; rare bucks (R#) from Frantic cities">
-            <span class="jbcoin" aria-hidden="true">#</span><div><b id="mm-bucks" class="num">#0</b><small><span id="mm-rbucks" class="rtag num">R#0</span> · <span id="mm-next">0/10</span> to next #</small></div>
-          </div>
-          <div class="mm-brand"><h1>Junction</h1><span>keep the city moving</span></div>
+    <div class="modal mainmenu rl" id="m-start">
+      <!-- top bar: balance on the left, who you are and quick icons on the right -->
+      <div class="rl-top">
+        <div class="rl-bal" data-tip="Your balance" data-sub="Junc Bucks (#) from every 10 parcels; rare bucks (R#) from Frantic cities">
+          <span class="jbcoin" aria-hidden="true">#</span><div><b id="mm-bucks" class="num">#0</b><small><span id="mm-rbucks" class="rtag num">R#0</span> · <span id="mm-next">0/10</span> to next #</small></div>
+        </div>
+        <div class="rl-topr">
           <div class="acct-strip" id="start-account" hidden></div>
-        </header>
-        <nav class="mm-side mm-left" aria-label="Main menu">
-          <button type="button" class="mm-btn primary" data-mm="play" aria-pressed="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4l13 8-13 8z"/></svg><span>Play</span></button>
-          <button type="button" class="mm-btn" data-mm="saves" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg><span>Saves</span></button>
-          <button type="button" class="mm-btn" data-mm="friends" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><circle cx="17.5" cy="9" r="2.6"/><path d="M16 14.2c3 .2 5.5 2.3 5.5 5.3"/></svg><span>Friends</span></button>
-          <button type="button" class="mm-btn" data-mm="custom" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 100 18c1.1 0 1.6-.9 1.3-1.8-.4-1 .2-2.2 1.4-2.2H17a4 4 0 004-4c0-5.5-4-10-9-10z"/><circle cx="7.5" cy="11" r="1.2" fill="currentColor"/><circle cx="10.5" cy="7.2" r="1.2" fill="currentColor"/><circle cx="15" cy="7.6" r="1.2" fill="currentColor"/></svg><span>Customise</span></button>
-          <button type="button" class="mm-btn" id="mm-settings"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg><span>Settings</span></button>
-          <button type="button" class="mm-btn" id="mm-account"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg><span>Account</span></button>
-        </nav>
-        <main class="mm-center plate">
-          <section class="mm-pane" data-mm="play">
-            <h2>Play</h2>
-            <p class="lead">Design the road network and keep every parcel moving. Stores make parcels, houses send cars to fetch them, and you draw the roads in between. Every delivery scores a point and pays cash — and the city never stops growing around you.</p>
-            <h3>Difficulty</h3>
-            <div class="diffs" id="diff-picks"></div>
-            <div class="btnrow">
-              <button class="bigbtn" id="btn-start" type="button">Start a new city</button>
-              <button class="bigbtn ghost" id="btn-resume" type="button" hidden>Resume on this device</button>
-              <button class="bigbtn ghost" id="btn-tutorial" type="button">How to Play</button>
-            </div>
+          <button type="button" class="rl-icon" data-mm="friends" aria-pressed="false" title="Friends"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><circle cx="17.5" cy="9" r="2.6"/><path d="M16 14.2c3 .2 5.5 2.3 5.5 5.3"/></svg></button>
+          <button type="button" class="rl-icon" id="mm-settings2" title="Settings"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg></button>
+        </div>
+      </div>
+      <div class="rl-logo"><h1>JUNCTION</h1><span>keep the city moving</span></div>
+      <!-- the menu, down the left -->
+      <nav class="rl-menu" aria-label="Main menu">
+        <button type="button" class="rl-item big" data-mm="play" aria-pressed="false"><span>Play</span></button>
+        <button type="button" class="rl-item" data-mm="saves" aria-pressed="false"><span>Saves</span></button>
+        <button type="button" class="rl-item" data-mm="friends" aria-pressed="false"><span>Friends</span></button>
+        <button type="button" class="rl-item" data-mm="custom" aria-pressed="false"><span>Customise</span></button>
+        <button type="button" class="rl-item" id="mm-settings"><span>Settings</span></button>
+        <button type="button" class="rl-item" id="mm-account"><span>Account</span></button>
+      </nav>
+      <!-- the section that's open -->
+      <section class="rl-panel" id="mm-panel" hidden>
+        <header class="rl-phead"><b id="mm-ptitle">Play</b><button type="button" class="rl-x" id="mm-close" aria-label="Close">×</button></header>
+        <div class="rl-pbody">
+          <div class="mm-pane" data-mm="play" hidden>
+            <div class="rl-modes" id="mm-modes"></div>
+            <h3 id="mm-play-h">Your five saves</h3>
+            <div class="slots" id="mm-play-slots"></div>
+            <div class="btnrow"><button class="bigbtn ghost" id="btn-resume" type="button" hidden>Continue last city</button><button class="bigbtn ghost" id="btn-tutorial" type="button">How to Play</button></div>
             <p class="mini" id="start-best"></p>
-            <p class="mini">New here? Try the <button class="linkbtn inl" type="button" data-mm-go="tutorial">tutorial</button> first. Scroll to zoom; right-drag, middle-drag or hold <kbd>Shift</kbd> to pan; click a car for its route.</p>
-          </section>
-          <section class="mm-pane" data-mm="saves" hidden>
-            <h2>Saves</h2>
-            <p class="lead">Five cloud save slots, plus the city on this device.</p>
-            <div class="slots" id="mm-slots"><p class="mini">Loading…</p></div>
-            <div class="btnrow"><button class="bigbtn ghost" id="btn-saves" type="button" hidden>Open save files</button><button class="bigbtn ghost" id="mm-resume" type="button" hidden>Resume the city on this device</button></div>
-          </section>
-          <section class="mm-pane" data-mm="friends" hidden>
-            <h2>Friends</h2>
-            <div id="mm-friends"></div>
-          </section>
-          <section class="mm-pane" data-mm="custom" hidden>
-            <h2>Customise</h2>
+            <p class="mini">New here? Try the <button class="linkbtn inl" type="button" data-mm-go="tutorial">tutorial</button> first.</p>
+            <div id="diff-picks" hidden></div><button id="btn-start" type="button" hidden></button>
+          </div>
+          <div class="mm-pane" data-mm="saves" hidden>
+            <p class="mini">Five save slots for every game mode.</p>
+            <div id="mm-slots"></div>
+            <div class="btnrow"><button class="bigbtn ghost" id="btn-saves" type="button" hidden>Open save files</button><button class="bigbtn ghost" id="mm-resume" type="button" hidden>Continue last city</button></div>
+          </div>
+          <div class="mm-pane" data-mm="friends" hidden><div id="mm-friends"></div></div>
+          <div class="mm-pane" data-mm="custom" hidden>
             <p class="mini">Everything you own. Tap to use it. <button class="linkbtn inl" type="button" data-mm-go="store">Get more in the Store</button></p>
             <div class="shoplist" id="mm-custom"></div>
-          </section>
-          <section class="mm-pane" data-mm="store" hidden>
-            <h2>Store</h2>
+          </div>
+          <div class="mm-pane" data-mm="store" hidden>
             <div class="jbbar"><span class="jbcoin" aria-hidden="true">#</span><div><b id="mm-store-bal">#0 Junc Bucks</b><small>Earn # for every 10 parcels. <span class="rarekey">★ Super rare</span> items cost <b class="rtag">R#</b>, only from Frantic cities (1 every 20 parcels). 🏆 items unlock with achievements. Tap once to see the price, again to buy; colours can be hired for 3 hours for #20.</small></div></div>
             <div class="shoplist" id="mm-store"></div>
-          </section>
-          <section class="mm-pane" data-mm="weekly" hidden>
-            <h2>Weeklys</h2>
-            <p class="lead">A new seeded city every Monday. Everyone gets the same map — see how you stack up.</p>
+          </div>
+          <div class="mm-pane" data-mm="weekly" hidden>
             <div class="expertcard" id="expert-card">
               <div class="exp-l">
                 <small>Expert Survival · this week's seed</small>
                 <b id="exp-name">—</b>
                 <span><span id="exp-week"></span> · code <code id="exp-code" class="num">——</code></span>
-                <em>Tougher than Frantic. Your best run goes on the weekly Expert leaderboard, where anyone can open your city and message you.</em>
+                <em>Everyone gets the same map. Tougher than Frantic. Your best run goes on the weekly Expert leaderboard, where anyone can open your city and message you.</em>
               </div>
               <div class="exp-r">
                 <button class="bigbtn" id="btn-expert" type="button">Play this week's seed</button>
@@ -356,18 +352,20 @@
               </div>
             </div>
             <div id="mm-weeks" class="mm-weeks"></div>
-          </section>
-        </main>
-        <nav class="mm-side mm-right" aria-label="More">
-          <button type="button" class="mm-btn" id="btn-board-s"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 01-10 0z"/><path d="M7 6H4v2a3 3 0 003 3M17 6h3v2a3 3 0 01-3 3"/></svg><span>Leaderboard</span></button>
-          <button type="button" class="mm-btn" data-mm="store" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h16l-1.5 11h-13z"/><path d="M8 9V7a4 4 0 018 0v2"/></svg><span>Store</span></button>
-          <button type="button" class="mm-btn" data-mm="weekly" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M9.5 14.5l1.8 1.8 3.5-3.5"/></svg><span>Weeklys</span></button>
-          <button type="button" class="mm-btn" id="btn-try-tutorial"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8l9-4 9 4-9 4z"/><path d="M7 10v5c0 1.7 2.2 3 5 3s5-1.3 5-3v-5M21 8v6"/></svg><span>Tutorial</span></button>
-          <button type="button" class="mm-btn" id="btn-feedback-s"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12h5"/></svg><span>Feedback</span></button>
-          <button type="button" class="mm-btn" id="btn-watch-s"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><span>Watch a player</span></button>
-          <div id="start-online" hidden></div>
-        </nav>
-      </div>
+          </div>
+        </div>
+      </section>
+      <!-- event tiles, bottom right -->
+      <aside class="rl-tiles" aria-label="More">
+        <button type="button" class="rl-tile wide t-weekly" data-mm="weekly" aria-pressed="false"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M9.5 14.5l1.8 1.8 3.5-3.5"/></svg> Weekly · Expert Survival</small><b id="tile-seed">—</b><span id="tile-seedwk"></span></button>
+        <button type="button" class="rl-tile t-store" data-mm="store" aria-pressed="false"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h16l-1.5 11h-13z"/><path d="M8 9V7a4 4 0 018 0v2"/></svg> Store</small><b>New designs</b></button>
+        <button type="button" class="rl-tile t-board" id="btn-board-s"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 01-10 0z"/><path d="M7 6H4v2a3 3 0 003 3M17 6h3v2a3 3 0 01-3 3"/></svg> Leaderboard</small><b>Top cities</b></button>
+        <button type="button" class="rl-tile t-tut" id="btn-try-tutorial"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8l9-4 9 4-9 4z"/><path d="M7 10v5c0 1.7 2.2 3 5 3s5-1.3 5-3v-5M21 8v6"/></svg> Tutorial</small><b>Learn to play</b></button>
+        <button type="button" class="rl-tile t-watch" id="btn-watch-s"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg> Watch</small><b>A live city</b></button>
+        <button type="button" class="rl-tile wide t-fb" id="btn-feedback-s"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12h5"/></svg> Feedback</small><b>Tell us what you think</b></button>
+        <div id="start-online" hidden></div>
+      </aside>
+      <div class="rl-foot">Esc closes a panel · Junction v1.8</div>
     </div>
 
     <!-- tutorial: how the game works, before the first step -->

@@ -2,7 +2,7 @@ rules_version = '2';
 
 // Junction — who can read and write what.
 //   users/{uid}               a player's own profile (name, live code)          owner only
-//   users/{uid}/saves/{slot}  five cloud save slots                            owner only
+//   users/{uid}/saves/{slot}  five save slots per game mode ("standard-1" ...)   owner only
 //   users/{uid}/friends/{fid} the players someone has added as friends          owner only
 //   usernames/{nameLower}     names reserved by permanent accounts             readable by players, create-once
 //   leaderboard/{uid}         personal bests                                   everyone reads, owner writes
@@ -44,7 +44,8 @@ service cloud.firestore {
       match /saves/{slot} {
         allow get, list, delete: if isMe(uid);
         allow create, update: if isMe(uid)
-          && slot in ['1', '2', '3', '4', '5']
+          // five per game mode; the old shared slots 1-5 can still be read and deleted while they're moved over
+          && slot.matches('^(chill|standard|frantic|zen|expert)-[1-5]$')
           && request.resource.data.keys().hasOnly(['data', 'score', 'week', 'diffKey', 'over', 'updatedAt'])
           && (!('data' in request.resource.data)
               || (request.resource.data.data is string && request.resource.data.data.size() < 1000000));
