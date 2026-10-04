@@ -832,6 +832,14 @@ async function openExpert(ago) {
       : expertAgo === 0 ? 'Play this week\u2019s seed from the start screen to get on this board.' : '';
   } catch (e) { $('board-list').innerHTML = '<li class="mini">Couldn\u2019t load the Expert leaderboard: ' + esc(e.message) + '</li>'; }
 }
+/* the top few of a week's seed, for the Weeklys page on the main menu */
+async function expertTop(ago, n) {
+  const wk = API.expertSeed(ago || 0).key;
+  const snap = await getDocs(query(collection(db, 'expert', wk, 'players'), orderBy('parcels', 'desc'), limit(n || 3)));
+  const out = [];
+  snap.forEach(x => { const d = x.data(); expertRows[x.id] = d; out.push({uid: x.id, name: d.name || '?', parcels: d.parcels || 0, weeks: d.weeks || 0, city: d.city || ''}); });
+  return out;
+}
 $('board-list').addEventListener('click', e => { const li = e.target.closest('[data-run]'); if (li && boardMode === 'expert') openRun(API.expertSeed(expertAgo).key, li.dataset.run); });
 $('board-list').addEventListener('keydown', e => { if (e.key === 'Enter') { const li = e.target.closest('[data-run]'); if (li && boardMode === 'expert') openRun(API.expertSeed(expertAgo).key, li.dataset.run); } });
 let runOf = null;
@@ -1230,5 +1238,7 @@ window.JunctionOnline = {
   openSaves, openBoard, openWatch, sendFeedback, feedbackIdentity,
   renderSlots(box, mode, tabs) { if (!O.ready) return false; renderSlots(box, mode, tabs); return true; },
   renderFriends(box) { renderFriends(box); },
+  expertTop(ago, n) { return expertTop(ago, n); },
+  openRun(ago, uid) { openRun(API.expertSeed(ago || 0).key, uid); },
   openExpert(ago) { if (!O.ready) { API.toast('Online features are still connecting \u2014 try again in a moment.', 'warn'); return; } openExpert(ago); }
 };

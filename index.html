@@ -25,7 +25,7 @@
       <div class="plate stats">
         <div class="stat big" data-tip="Parcels delivered" data-sub="Your score for this city"><small class="lbl"><svg class="si" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8l8-4.5L20 8v8.5L12 21l-8-4.5z"/><path d="M4 8l8 4.5L20 8M12 12.5V21"/></svg>Parcels</small><b id="v-score" class="num">0</b><span id="v-rate" class="num sub">0.0 a min</span></div>
         <div class="stat money" data-tip="Cash" data-sub="Delivery income over the last minute, before grants and upkeep"><small class="lbl"><svg class="si" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg>Cash</small><b id="v-money" class="num">$25</b><span id="v-income" class="num sub">$0 a min</span></div>
-        <div class="stat jbstat" data-tip="Junc Bucks" data-sub="1 for every 10 parcels delivered, in any city. Spend them on themes, styles, decorations and colours in Settings."><small class="lbl"><b class="jbsym" aria-hidden="true">#</b>Junc Bucks</small><b id="v-jb" class="num">#0</b><span id="v-jbnext" class="num sub">0/10 to next</span></div>
+        <div class="stat jbstat" data-tip="Junc Bucks" data-sub="3 for every parcel delivered, in any city. Spend them in the Store, which restocks every hour."><small class="lbl"><b class="jbsym" aria-hidden="true">#</b>Junc Bucks</small><b id="v-jb" class="num">#0</b><span id="v-jbnext" class="num sub">R#0</span></div>
         <div class="stat weekstat" data-tip="Week progress" data-sub="A reward and a council grant arrive when the week ends"><small class="lbl"><svg class="si" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>Week <span id="v-week" class="num">1</span></small>
           <div class="row2"><b id="v-weektime" class="num">1:50</b><span id="v-weekleft">left</span></div>
           <div class="meter"><i id="v-weekfill"></i></div>
@@ -45,6 +45,7 @@
       </div>
 
       <div class="plate controls">
+        <button class="cbtn" id="btn-home" type="button" title="Main menu" aria-label="Main menu" data-tip="Main menu" data-sub="Saves your city and goes back to the main menu"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg></button>
         <button class="cbtn" id="btn-play" type="button" title="Pause (P)" aria-pressed="false"></button>
         <div class="seg" id="speed-seg" role="group" aria-label="Game speed" data-tip="Game speed" data-key="+ / −">
           <button type="button" data-speed="0.5" aria-pressed="false">½×</button><button type="button" data-speed="1" aria-pressed="true">1×</button><button type="button" data-speed="2" aria-pressed="false">2×</button><button type="button" data-speed="3" aria-pressed="false">3×</button>
@@ -163,7 +164,7 @@
           <p class="ver">Junction v1.6</p>
         </div>
         <div class="mtab-pane" data-mtab="store" hidden>
-          <div class="jbbar"><span class="jbcoin" aria-hidden="true">#</span><div><b id="jb-bal">#0 Junc Bucks</b><small>Earn # for every 10 parcels delivered. <span class="rarekey">★ Super rare</span> items cost <b class="rtag">R#</b> (rare bucks), which only come from <b>Frantic</b> cities: 1 for every 20 parcels. Tap an item once to see the price, again to buy. Colours can also be hired for 3 hours for #20.</small></div></div>
+          <div class="jbbar"><span class="jbcoin" aria-hidden="true">#</span><div><b id="jb-bal">#0 Junc Bucks</b><small>Every parcel earns 3 #. The Store restocks every hour with 10 items and 5 colours; the daily special costs <b class="rtag">R#</b>, which only come from <b>Frantic</b> cities (1 for every parcel). Mystery crates can hold unique items you can't buy. Tap once to see the price, again to buy.</small></div></div>
           <div id="store-list" class="shoplist"></div>
         </div>
         <div class="mtab-pane" data-mtab="owned" hidden>
@@ -292,8 +293,8 @@
     <div class="modal mainmenu rl" id="m-start">
       <!-- top bar: balance on the left, who you are and quick icons on the right -->
       <div class="rl-top">
-        <div class="rl-bal" data-tip="Your balance" data-sub="Junc Bucks (#) from every 10 parcels; rare bucks (R#) from Frantic cities">
-          <span class="jbcoin" aria-hidden="true">#</span><div><b id="mm-bucks" class="num">#0</b><small><span id="mm-rbucks" class="rtag num">R#0</span> · <span id="mm-next">0/10</span> to next #</small></div>
+        <div class="rl-bal" data-tip="Your balance" data-sub="3 Junc Bucks (#) for every parcel; rare bucks (R#) from Frantic cities">
+          <span class="jbcoin" aria-hidden="true">#</span><div><b id="mm-bucks" class="num">#0</b><small><span id="mm-rbucks" class="rtag num">R#0</span> · 3 # a parcel</small></div>
         </div>
         <div class="rl-topr">
           <div class="acct-strip" id="start-account" hidden></div>
@@ -335,23 +336,25 @@
             <div class="shoplist" id="mm-custom"></div>
           </div>
           <div class="mm-pane" data-mm="store" hidden>
-            <div class="jbbar"><span class="jbcoin" aria-hidden="true">#</span><div><b id="mm-store-bal">#0 Junc Bucks</b><small>Earn # for every 10 parcels. <span class="rarekey">★ Super rare</span> items cost <b class="rtag">R#</b>, only from Frantic cities (1 every 20 parcels). 🏆 items unlock with achievements. Tap once to see the price, again to buy; colours can be hired for 3 hours for #20.</small></div></div>
+            <b id="mm-store-bal" hidden>#0</b>
             <div class="shoplist" id="mm-store"></div>
           </div>
           <div class="mm-pane" data-mm="weekly" hidden>
-            <div class="expertcard" id="expert-card">
-              <div class="exp-l">
-                <small>Expert Survival · this week's seed</small>
-                <b id="exp-name">—</b>
-                <span><span id="exp-week"></span> · code <code id="exp-code" class="num">——</code></span>
-                <em>Everyone gets the same map. Tougher than Frantic. Your best run goes on the weekly Expert leaderboard, where anyone can open your city and message you.</em>
+            <div class="wk">
+              <div class="wk-l">
+                <div class="wk-seed">
+                  <small>Expert Survival · this week's seed</small>
+                  <b id="exp-name">—</b>
+                  <span><span id="exp-week"></span> · code <code id="exp-code" class="num">——</code></span>
+                </div>
+                <h3>Top 3 this week</h3>
+                <ol class="wk-top" id="wk-top"></ol>
+                <div class="btnrow"><button class="bigbtn" id="btn-expert" type="button">Play this week's seed</button><button class="act" id="wk-board" type="button">Full leaderboard</button></div>
+                <button id="btn-expert-board" type="button" hidden></button>
+                <p class="mini">Everyone gets the same map, tougher than Frantic. Your best run goes on the leaderboard.</p>
               </div>
-              <div class="exp-r">
-                <button class="bigbtn" id="btn-expert" type="button">Play this week's seed</button>
-                <button class="act" id="btn-expert-board" type="button">Expert leaderboard</button>
-              </div>
+              <figure class="wk-r"><canvas id="wk-map" width="520" height="520" title="See this run"></canvas><figcaption id="wk-cap"></figcaption></figure>
             </div>
-            <div id="mm-weeks" class="mm-weeks"></div>
           </div>
                 </div>
       </section>
@@ -366,6 +369,16 @@
         <div id="start-online" hidden></div>
       </aside>
       <div class="rl-foot">Esc closes a panel · Junction v1.8</div>
+    </div>
+
+    <!-- a mystery crate opening -->
+    <div class="modal" id="m-crate" hidden>
+      <div class="card plate crate-card">
+        <div class="crate-stage"><div class="crate-box" id="crate-box"><i></i></div><div class="crate-prize" id="crate-prize" hidden></div></div>
+        <em class="rar" id="crate-rar"></em>
+        <p class="crate-name" id="crate-name"></p>
+        <div class="btnrow"><button class="bigbtn" id="crate-use" type="button">Use it now</button><button class="act" id="crate-again" type="button">Open another</button><button class="act" id="crate-done" type="button">Done</button></div>
+      </div>
     </div>
 
     <!-- tutorial: how the game works, before the first step -->
@@ -650,7 +663,7 @@
           <details><summary>Can I undo a mistake?</summary><p>Yes — Ctrl+Z undoes, Ctrl+Y redoes. Both work back through everything from your last press-and-drag.</p></details>
           <details><summary>Can I change the colours?</summary><p>Yes. Open Settings. Under Appearance, pick an interface theme, or choose your own colours for menus, buttons and highlights, and switch the panels between Clean, Glass and Road sign styles. Under Colour mode, pick red–green safe, blue–yellow safe, high contrast, or custom city colours you choose one by one. You can also switch on a shape for each colour on houses and stores.</p></details>
           <details><summary>What is Expert Survival?</summary><p>A new seeded city every week (Monday to Sunday, UTC). Everyone gets the same map, the same first store and house and the same early events, so runs are directly comparable. It's tougher than Frantic. Your best run on the week's seed goes on the Expert leaderboard, labelled with the week's dates, the seed's name and its code. Tap any player there to see their city — who placed what — and their stats, and to send them a message. Messages live under Account → Messages, and the speech-bubble button on the top bar shows when you have new ones.</p></details>
-          <details><summary>What are Junc Bucks (#)?</summary><p>A currency for looks. You earn one for every 10 parcels delivered, in any city and any difficulty, and keep them between cities. Open Settings → Store to buy interface themes, panel styles, map themes, decorations, designs for cars, houses, roads, stores, traffic lights, roundabouts and bridges, and colours — each colour is bought on its own, or hired for 3 hours for #20. Tap once to see the price, again to buy. Everything you own is under Owned, and the palette button next to Settings opens a quick Customise panel. A few super-rare items, marked with a star, cost R# (rare bucks) instead, and R# only come from Frantic cities: one for every 20 parcels delivered. The standard light and dark looks and the colour-blind colour modes are always free.</p></details>
+          <details><summary>What are Junc Bucks (#)?</summary><p>A currency for looks. You earn 3 for every parcel delivered, in any city and any difficulty, and keep them between cities. The Store restocks every hour with 10 items (themes, maps, decorations and designs, #500–1000) and 5 colours (bought, or hired for 3 hours for #150). One special item a day costs R# (rare bucks) instead, and R# only come from Frantic cities: one for every parcel. Mystery crates (colour #150, item #200, object #250, three of each an hour) always hold something you don't own, and are the only way to get unique items. Everything you own is under Owned, and the palette button next to Settings opens a quick Customise panel. The standard light and dark looks and the colour-blind colour modes are always free.</p></details>
           <details><summary>What's a tow truck actually for?</summary><p>Hired at a store, it drives out to stuck or broken-down cars nearby, hooks them, hauls them clear and saves their parcels — handy once a city is busy enough that a single stuck car can back up a whole street.</p></details>
           <details><summary>Is a bigger city always a better city?</summary><p>No — score comes from steady throughput, not size. A small, tightly controlled loop consistently out-earns a sprawling network that's constantly jammed.</p></details>
           <details><summary>Is there a "correct" way to play?</summary><p>No. There's no correct way to play Junction — take any path you want.</p></details>

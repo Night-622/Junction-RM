@@ -335,7 +335,8 @@ const COLOR_LIBRARY = [
   {group: 'Soft', cols: [['cream', '#f4efe1'], ['mist', '#e3e9ee'], ['sage', '#d7e3cc'], ['pale blush', '#f6dfe6'], ['pale sky', '#dceefa'], ['pale sand', '#efe3c8'],
     ['pale lilac', '#e9e1f5'], ['pale mint', '#dcf3e8'], ['deep charcoal', '#1d2226'], ['deep navy', '#142235'], ['deep forest', '#16291f'], ['deep plum', '#2a1a33']]},
   {group: 'Premium', cols: [['gold', '#d4af37', 60], ['neon pink', '#ff2bd6', 55], ['electric lime', '#b6ff00', 55], ['ultraviolet', '#5b2bff', 55], ['arctic', '#bff3ff', 50],
-    ['obsidian', '#0b0b10', 70], ['pearl', '#f3efe6', 50], ['chrome', '#c9d3dc', 65], ['lava', '#ff4d1a', 55], ['aurora teal', '#00d1b2', 50]]}
+    ['obsidian', '#0b0b10', 70], ['pearl', '#f3efe6', 50], ['chrome', '#c9d3dc', 65], ['lava', '#ff4d1a', 55], ['aurora teal', '#00d1b2', 50]]},
+  {group: 'Unique', unique: true, cols: [['starlight', '#e8e4ff'], ['molten gold', '#ffb81c'], ['deep space', '#1a0f3d'], ['toxic', '#7dff3a'], ['blood moon', '#8c0f1f'], ['glacier', '#a8f0ff']]}
 ]
 const LIB_NAME = {}; for (const g of COLOR_LIBRARY) for (const [n, h] of g.cols) LIB_NAME[h] = n;
 /* Colour modes. Each palette fills the same six slots, so saves and colour indices never change —
@@ -3939,7 +3940,11 @@ const MAP_THEMES = {
   candy:    {label: 'Candy',    tone: 'light', decor: 'flowers', land: '#f5dce8', land2: '#f0d1df', patch: '#c9eedc', water: '#9fd5f2', foam: '#e3f4fd',
              tree1: '#ff9ec7', tree2: '#e77fae', grass: '#c9eedc', check: 'rgba(255,255,255,.4)'},
   spooky:   {label: 'Spooky',   tone: 'dark',  decor: 'pumpkin', land: '#2a2633', land2: '#25212e', patch: '#3b3046', water: '#263b55', foam: '#3b5a7a',
-             tree1: '#4d3d60', tree2: '#3a2d4a', grass: '#3a3346'}
+             tree1: '#4d3d60', tree2: '#3a2d4a', grass: '#3a3346'},
+  lunar:    {label: 'Lunar',    tone: 'dark',  decor: 'crystal', land: '#3a3c48', land2: '#353743', patch: '#4a4c5c', water: '#1e2f4f', foam: '#4a6a9a',
+             tree1: '#8ad8ff', tree2: '#5aa8e0', grass: '#45475a'},
+  volcano:  {label: 'Volcano',  tone: 'dark',  decor: 'rock',    land: '#3b2a26', land2: '#352521', patch: '#5a3328', water: '#e8501e', foam: '#ffc23a',
+             tree1: '#6b4a3a', tree2: '#4a3228', grass: '#4a3530'}
 };
 const MAP_PAL_KEYS = ['land', 'land2', 'patch', 'water', 'foam', 'tree1', 'tree2', 'grass', 'check'];
 let mapPrefs = {theme: 'meadow', decor: 'auto', land: '', patch: '', water: '', road: '', moto: '', lastDay: 'meadow'};
@@ -3963,6 +3968,8 @@ function palFor(id, custom) {
   else if (rd === 'boardwalk') { P.road = '#b48a5a'; P.roadWet = '#9f7748'; P.edge = '#6b4a2b'; P.lane = 'rgba(0,0,0,0)'; }
   else if (rd === 'racetrack') { P.road = '#3e4448'; P.roadWet = '#34393d'; P.edge = '#e8473a'; P.lane = '#ffffff'; }
   else if (rd === 'gold') { P.road = '#efc23a'; P.roadWet = '#d9ad27'; P.edge = '#8a6a10'; P.lane = 'rgba(255,255,255,.75)'; }
+  else if (rd === 'marble') { P.road = '#e9e6e1'; P.roadWet = '#dcd8d2'; P.edge = '#a59f96'; P.lane = '#c9a24a'; }
+  else if (rd === 'lava') { P.road = '#2a1714'; P.roadWet = '#24130f'; P.edge = '#ff5a1a'; P.lane = '#ffc23a'; }
   if (cu.road) {                                     // road surface; its kerb and the wet look follow it
     P.road = cu.road; P.roadWet = mixHex(cu.road, '#000000', 0.09);
     P.edge = mixHex(cu.road, '#000000', lum(cu.road) > 0.3 ? 0.72 : 0.6);
@@ -3975,6 +3982,7 @@ function palFor(id, custom) {
   else if (md === 'sunset') { P.deck = '#ff8a5c'; P.deckEdge = '#6b2a4a'; }
   else if (md === 'glass') { P.deck = 'rgba(170,220,245,.55)'; P.deckEdge = 'rgba(70,140,175,.85)'; }
   else if (md === 'skyline') { P.deck = '#151a28'; P.deckEdge = '#00e1ff'; }
+  else if (md === 'aurora') { P.deck = '#2fd6ff'; P.deckEdge = '#1a2a4a'; }
   if (cu.moto) { P.deck = cu.moto; P.deckEdge = mixHex(cu.moto, '#000000', 0.55); }
   P.tone = tone;
   return P;
@@ -4071,7 +4079,7 @@ function drawPatches(vr) {
    k seeds any per-item variety. Shadows follow the same sun as everything else. */
 const DECOR = {
   tree: 'Trees', pine: 'Pines', bush: 'Bushes', blossom: 'Blossom', autumn: 'Autumn trees', palm: 'Palms', cactus: 'Cacti',
-  snowpine: 'Snowy pines', pumpkin: 'Pumpkins', mushroom: 'Mushrooms', flowers: 'Flowers', rock: 'Rocks'
+  snowpine: 'Snowy pines', pumpkin: 'Pumpkins', mushroom: 'Mushrooms', flowers: 'Flowers', rock: 'Rocks', crystal: 'Crystals'
 };
 function drawDecor(g, kind, X, Y, R, sway, k) {
   const sh = (x, y, rx, ry, h) => { g.globalAlpha = SUN.a; g.fillStyle = PAL.treeSh; g.beginPath(); g.ellipse(x + SUN.x * h, y + SUN.y * h, rx, ry, 0, 0, 6.3); g.fill(); g.globalAlpha = 1; };
@@ -4174,6 +4182,18 @@ function drawDecor(g, kind, X, Y, R, sway, k) {
         for (let j = 0; j < 5; j++) { const a = j * 1.2566; dot(fx + Math.cos(a) * R * 0.13, fy + Math.sin(a) * R * 0.13, R * 0.11, c); }
         dot(fx, fy, R * 0.08, '#f5b417');
       }
+      break;
+    }
+    case 'crystal': {                                      // clusters of glowing crystal shards
+      sh(X, Y, R * 0.6, R * 0.45, R * 0.5);
+      const c1 = h1 < 0.5 ? '#8fd8ff' : '#c59bff', c2 = h1 < 0.5 ? '#5aa8e0' : '#9a6be0';
+      const shard = (ox, oy, w, h, a) => {
+        g.save(); g.translate(X + ox + sway * 0.3, Y + oy); g.rotate(a);
+        g.fillStyle = c1; g.beginPath(); g.moveTo(0, -h); g.lineTo(w, -h * 0.35); g.lineTo(w * 0.6, 0); g.lineTo(-w * 0.6, 0); g.lineTo(-w, -h * 0.35); g.closePath(); g.fill();
+        g.fillStyle = c2; g.beginPath(); g.moveTo(0, -h); g.lineTo(w, -h * 0.35); g.lineTo(w * 0.6, 0); g.lineTo(0, 0); g.closePath(); g.fill();
+        g.restore();
+      };
+      shard(-R * 0.35, R * 0.25, R * 0.28, R * 0.9, -0.35); shard(R * 0.3, R * 0.3, R * 0.24, R * 0.75, 0.4); shard(0, R * 0.35, R * 0.34, R * 1.25, 0);
       break;
     }
     case 'rock': {
@@ -4427,10 +4447,10 @@ function drawRoads() {
     ctx.save(); ctx.globalAlpha = SUN.a; ctx.translate(SUN.x * 7, SUN.y * 7); ctx.strokeStyle = PAL.sh; ctx.lineWidth = 16; ctx.stroke(P.moto); ctx.restore();
   }
   const rdz = design('road');
-  if (rdz === 'neon') { ctx.save(); ctx.shadowColor = PAL.edge; ctx.shadowBlur = 7; }
+  if (rdz === 'neon' || rdz === 'lava') { ctx.save(); ctx.shadowColor = PAL.edge; ctx.shadowBlur = 7; }
   ctx.strokeStyle = PAL.edge; ctx.lineWidth = RW + 3.4; ctx.stroke(P.all);
   ctx.lineCap = 'butt'; ctx.lineWidth = CFG.driveWidth + 3.4; ctx.stroke(P.drive); ctx.lineCap = 'round';   // driveways: building door to road
-  if (rdz === 'neon') ctx.restore();
+  if (rdz === 'neon' || rdz === 'lava') ctx.restore();
   ctx.fillStyle = PAL.edge;
   ctx.save(); ctx.lineWidth = 3.4; ctx.strokeStyle = PAL.edge; ctx.stroke(P.disc); ctx.restore();
   ctx.strokeStyle = wet > 0.2 ? PAL.roadWet : PAL.road; ctx.lineWidth = RW; ctx.stroke(P.all);
@@ -4452,6 +4472,9 @@ function paintMoto(path, dash, pillars) {
     ['#ff4d4d', '#ff9f1a', '#ffd23a', '#3fd16a', '#2f9bff', '#8a5bff'].forEach((c, i) => { ctx.strokeStyle = c; ctx.lineWidth = 12.6 - i * 2.1; ctx.stroke(path); });
   } else if (md === 'sunset' && !custom) {
     ['#ffcf5c', '#ff8a5c', '#e3527a', '#8a4fb0'].forEach((c, i) => { ctx.strokeStyle = c; ctx.lineWidth = 12.6 - i * 3; ctx.stroke(path); });
+  } else if (md === 'aurora' && !custom) {                 // green, cyan and violet ribbons, shimmering
+    ['#3dffb0', '#2fd6ff', '#7a5bff', '#d65bff'].forEach((c, i) => { ctx.strokeStyle = c; ctx.lineWidth = 12.6 - i * 3; ctx.stroke(path); });
+    if (!REDUCED_MOTION) { ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 12; ctx.setLineDash([2, 18]); ctx.lineDashOffset = -animT * 30; ctx.stroke(path); ctx.setLineDash([]); ctx.lineDashOffset = 0; }
   } else { ctx.strokeStyle = PAL.deck; ctx.lineWidth = 12.6; ctx.stroke(path); }
   if (md === 'glass') { ctx.strokeStyle = 'rgba(255,255,255,.75)'; ctx.lineWidth = 13.6; ctx.setLineDash([8, 12]); ctx.lineCap = 'butt'; ctx.stroke(path); ctx.setLineDash([]); ctx.lineCap = 'round'; ctx.strokeStyle = PAL.deck; ctx.lineWidth = 11; ctx.stroke(path); }
   if (md === 'skyline') {                                  // glowing edges and pulses of light racing along
@@ -4551,6 +4574,10 @@ function bridgeParapet(path) {
   } else if (bd === 'rainbow') {
     const rb = ['#ff4d4d', '#ff9f1a', '#ffd23a', '#3fd16a', '#2f9bff', '#8a5bff'];
     rb.forEach((c, i) => { ctx.strokeStyle = c; ctx.lineWidth = RW + 10 - i * 1.4; ctx.stroke(path); });
+  } else if (bd === 'crystal') {                           // walls of ice, glinting
+    ctx.strokeStyle = 'rgba(190,240,255,.85)'; ctx.lineWidth = RW + 8; ctx.stroke(path);
+    ctx.strokeStyle = 'rgba(255,255,255,.95)'; ctx.lineWidth = RW + 8; ctx.setLineDash([1.2, 5]); ctx.lineCap = 'butt'; ctx.stroke(path);
+    ctx.setLineDash([]); ctx.strokeStyle = '#6fc9e8'; ctx.lineWidth = RW + 3.6; ctx.stroke(path);
   } else if (bd === 'suspension') {
     ctx.strokeStyle = '#e9edf0'; ctx.lineWidth = RW + 7.5; ctx.stroke(path);
     ctx.strokeStyle = '#5d6b75'; ctx.lineWidth = RW + 7.5; ctx.setLineDash([1.2, 9]); ctx.lineCap = 'butt'; ctx.stroke(path);
@@ -4626,6 +4653,11 @@ function drawRoundAt(x, y) {
     ctx.fillStyle = '#bdb6a8'; rr(x - 2.6, y - 2.6, 5.2, 5.2, 0.8); ctx.fill();
     const gg = ctx.createRadialGradient(x - 0.6, y - 0.8, 0.2, x, y, 2); gg.addColorStop(0, '#fff1a8'); gg.addColorStop(1, '#b8901c');
     ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(x, y, 1.7, 0, 6.3); ctx.fill();
+  } else if (rd === 'carousel') {                          // a striped carousel canopy, turning slowly
+    const a0 = REDUCED_MOTION ? 0 : animT * 0.9;
+    dotShadow(x, y, IR, 2.6);
+    for (let i = 0; i < 8; i++) { ctx.fillStyle = i % 2 ? '#fff3e0' : '#ff5a7a'; ctx.beginPath(); ctx.moveTo(x, y); ctx.arc(x, y, IR + 0.4, a0 + i * 0.785, a0 + (i + 1) * 0.785); ctx.closePath(); ctx.fill(); }
+    ctx.fillStyle = '#ffd23a'; ctx.beginPath(); ctx.arc(x, y, 1.5, 0, 6.3); ctx.fill();
   } else if (rd === 'fountain') {
     ctx.fillStyle = '#d6cfc2'; ctx.beginPath(); ctx.arc(x, y, IR + 0.6, 0, 6.3); ctx.fill();
     ctx.fillStyle = '#6fc3e6'; ctx.beginPath(); ctx.arc(x, y, IR - 0.8, 0, 6.3); ctx.fill();
@@ -4646,7 +4678,7 @@ function drawLightHeads(x, y, ls, dem) {
   const heads = [[-11, -11, 0], [11, 11, 0], [11, -11, 1], [-11, 11, 1]], ld = design('light');
   for (const [hx, hy] of heads) {
     if (ld === 'modern') dropShadow(x + hx, y + hy, 0, 1, 3, [[-3.4, -1.3, 6.8, 2.6, 1.3]]);
-    else if (ld === 'retro' || ld === 'lantern') dotShadow(x + hx, y + hy, 3, 3.5);
+    else if (ld === 'retro' || ld === 'lantern' || ld === 'disco') dotShadow(x + hx, y + hy, 3, 3.5);
     else if (ld === 'minimal') dotShadow(x + hx, y + hy, 1.8, 2.5);
     else dropShadow(x + hx, y + hy, 0, 1, 3, [[-2.6, -2.6, 5.2, 5.2, 1.6]]);
   }
@@ -4666,6 +4698,11 @@ function drawLightHeads(x, y, ls, dem) {
       ctx.strokeStyle = '#23272b'; ctx.lineWidth = 0.5; ctx.beginPath(); ctx.moveTo(-1.8, 0); ctx.lineTo(1.8, 0); ctx.moveTo(0, -1.8); ctx.lineTo(0, 1.8); ctx.stroke();
       ctx.restore();
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = green ? 'rgba(72,224,138,.22)' : 'rgba(255,170,90,.22)'; ctx.beginPath(); ctx.arc(X, Y, 4.6, 0, 6.3); ctx.fill(); ctx.restore();
+    } else if (ld === 'disco') {                           // a ring cycling through the rainbow round each lamp
+      const hue = Math.round((REDUCED_MOTION ? 0 : animT * 120) + hx * 9 + hy * 5) % 360;
+      ctx.fillStyle = 'hsl(' + hue + ',90%,60%)'; ctx.beginPath(); ctx.arc(X, Y, 3, 0, 6.3); ctx.fill();
+      ctx.fillStyle = '#16121f'; ctx.beginPath(); ctx.arc(X, Y, 2.1, 0, 6.3); ctx.fill();
+      ctx.fillStyle = lamp; ctx.beginPath(); ctx.arc(X, Y, 1.5, 0, 6.3); ctx.fill();
     } else if (ld === 'gold') {
       const gg = ctx.createLinearGradient(X - 3, Y - 3, X + 3, Y + 3); gg.addColorStop(0, '#fff1a8'); gg.addColorStop(0.5, '#d4af37'); gg.addColorStop(1, '#8f6d10');
       rr(X - 2.9, Y - 2.9, 5.8, 5.8, 1.8); ctx.fillStyle = gg; ctx.fill();
@@ -4775,6 +4812,7 @@ function drawHouse(b) {
   else if (hd === 'treehouse') dropShadow(x, y, b.face || 0, s, 8, [[-11.5, -15, 23, 20, 10]]);
   else if (hd === 'windmill') dropShadow(x, y, b.face || 0, s, 8, [[-7, -12, 14, 14, 7]]);
   else if (hd === 'lighthouse') dropShadow(x, y, b.face || 0, s, 11, [[-6.5, -11.5, 13, 13, 6.5]]);
+  else if (hd === 'mushroom') dropShadow(x, y, b.face || 0, s, 6, [[-11, -15, 22, 18, 9]]);
   else if (hd !== 'standard') dropShadow(x, y, b.face || 0, s, hd === 'modern' ? 3.4 : 4.2, [[-11, -13, 22, 16, 2]]);
   else dropShadow(x, y, b.face || 0, s, model === 2 ? 4.4 : 3.6, model === 0 ? [[-9, -12, 18, 15.5, 2.6]] : model === 1 ? [[-11.5, -13, 14.5, 16.5, 2.6], [3.4, -8.5, 8.1, 12, 1.4]] : [[-11.5, -13.5, 23, 17, 2.6]]);
   ctx.save(); ctx.translate(x, y); ctx.rotate(b.face || 0); ctx.scale(s, s);
@@ -4820,7 +4858,16 @@ function drawHouse(b) {
 }
 /* House designs, drawn in the house's own frame (front at +y). Bigger houses (more cars bought) get extras. */
 function drawHouseDesign(hd, b, col, model) {
-  if (hd === 'thatch') {                                   // a cottage under a deep golden thatch, door and shutters in the house colour
+  if (hd === 'mushroom') {                                 // a toadstool cottage: a spotted cap in the house colour on a cream stalk
+    ctx.fillStyle = '#efe4cc'; rr(-4.5, -4, 9, 7.5, 2); ctx.fill();
+    rr(-1.4, 0.3, 2.8, 3.2, 1.2); ctx.fillStyle = '#8a5a35'; ctx.fill();
+    const gr = ctx.createRadialGradient(-3, -9, 1, 0, -6, 11); gr.addColorStop(0, shade(col, 0.25)); gr.addColorStop(1, shade(col, -0.2));
+    ctx.fillStyle = gr; ctx.beginPath(); ctx.ellipse(0, -6, 11, 9, 0, 0, 6.3); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.92)';
+    for (const [dx, dy, r_] of [[-5, -9, 1.8], [3, -10, 1.4], [6.5, -5, 1.6], [-1, -4, 1.2], [-7.5, -4, 1.1], [1, -13, 1]]) { ctx.beginPath(); ctx.arc(dx, dy, r_, 0, 6.3); ctx.fill(); }
+    if (model >= 1) { ctx.fillStyle = '#ffd23a'; ctx.beginPath(); ctx.arc(5.5, 2.2, 0.9, 0, 6.3); ctx.fill(); }
+    if (showSymbols) glyph(COLORS[b.color].glyph, 0, -7, 2.4, 'rgba(255,255,255,.92)');
+  } else if (hd === 'thatch') {                                   // a cottage under a deep golden thatch, door and shutters in the house colour
     rr(-11, -13, 22, 16, 5); ctx.fillStyle = '#b9893d'; ctx.fill();
     ctx.fillStyle = '#d9ad5c'; rr(-11, -13, 22, 7.5, 5); ctx.fill();
     ctx.strokeStyle = 'rgba(110,75,25,.35)'; ctx.lineWidth = 0.35; ctx.beginPath();
@@ -5150,7 +5197,13 @@ function drawStore(b) {
 }
 /* store designs re-roof the building (drawn clipped to the roof, in the store's own frame) */
 function storeRoofDesign(sdz, Bx, By, Bw, Bh, col) {
-  if (sdz === 'brick') {                                   // a tar roof inside a red-brick parapet
+  if (sdz === 'arcade') {                                  // a dark roof lit by a chasing grid of neon tiles
+    ctx.fillStyle = '#16122a'; ctx.fillRect(Bx, By, Bw, Bh);
+    const t = REDUCED_MOTION ? 0 : Math.floor(animT * 2);
+    ctx.globalAlpha = 0.6;
+    for (let yy = By + 4, j = 0; yy < By + Bh - 6; yy += 6, j++) for (let xx = Bx + 4, i = 0; xx < Bx + Bw - 6; xx += 6, i++) if ((i + j + t) % 3 === 0) { ctx.fillStyle = (i + j) % 2 ? '#ff3df2' : '#00e1ff'; ctx.fillRect(xx, yy, 4, 4); }
+    ctx.globalAlpha = 1; ctx.strokeStyle = col; ctx.lineWidth = 1.4; ctx.strokeRect(Bx + 3, By + 3, Bw - 6, Bh - 6);
+  } else if (sdz === 'brick') {                                   // a tar roof inside a red-brick parapet
     ctx.fillStyle = '#4b4f52'; ctx.fillRect(Bx, By, Bw, Bh);
     ctx.fillStyle = 'rgba(255,255,255,.05)'; for (let i = 0; i < 40; i++) ctx.fillRect(Bx + hash01(i, 71) * Bw, By + hash01(i, 72) * Bh, 1, 1);
     ctx.strokeStyle = '#a5523b'; ctx.lineWidth = 4; ctx.strokeRect(Bx + 2, By + 2, Bw - 4, Bh - 4);
@@ -5397,6 +5450,16 @@ function drawCar(c, sizeBoost) {
     }
     ctx.restore();
   }
+  if (cd === 'galaxy') {                                   // a starry night sky over the paint, the car's colour glowing through
+    ctx.save(); rr(r, -hw, L, Wd, bi === 0 ? hw : 1.5); ctx.clip();
+    const gg = ctx.createLinearGradient(r, -hw, f, hw); gg.addColorStop(0, 'rgba(26,15,61,.88)'); gg.addColorStop(0.55, rgba(col, 0.5)); gg.addColorStop(1, 'rgba(10,8,30,.9)');
+    ctx.fillStyle = gg; ctx.fillRect(r, -hw, L, Wd);
+    for (let i = 0; i < 6; i++) { const tw_ = REDUCED_MOTION ? 0.8 : 0.5 + 0.5 * Math.sin(animT * 3 + i * 1.7 + c.id); ctx.fillStyle = 'rgba(255,255,255,' + tw_.toFixed(2) + ')'; ctx.fillRect(r + hash01(c.id * 5 + i, 97) * L, -hw + hash01(c.id * 5 + i, 98) * Wd, 0.45, 0.45); }
+    ctx.restore();
+  }
+  if (cd === 'police') {                                   // white doors on the car's own colour
+    ctx.save(); rr(r, -hw, L, Wd, bi === 0 ? hw : 1.5); ctx.clip(); ctx.fillStyle = '#f4f2ec'; ctx.fillRect(r + L * 0.3, -hw, L * 0.36, Wd); ctx.restore();
+  }
   if (cd === 'pastel') {                                   // a soft pastel wash over the paint, with a white roof
     ctx.save(); rr(r, -hw, L, Wd, bi === 0 ? hw : 1.5); ctx.clip(); ctx.fillStyle = 'rgba(255,255,255,.42)'; ctx.fillRect(r, -hw, L, Wd); ctx.restore();
   }
@@ -5456,6 +5519,12 @@ function drawCar(c, sizeBoost) {
     for (let x = r + 1.6; x < f - 5.6; x += 1.6) ctx.fillRect(x, -hw + 0.3, 0.35, Wd - 0.6);    // box ribs
     ctx.fillStyle = col; ctx.fillRect(f - 6.6, -hw + 0.2, 1.1, Wd - 0.4);                       // coloured band on the box front
     ctx.fillRect(r + 0.3, -hw + 0.25, L - 7, 0.8); ctx.fillRect(r + 0.3, hw - 1.05, L - 7, 0.8);
+  }
+  if (cd === 'police') {                                   // a light bar across the roof, flashing red and blue
+    const on = REDUCED_MOTION ? 0 : Math.floor(animT * 5 + c.id) % 2, mx = (roof0 + roof1) / 2;
+    ctx.fillStyle = '#1f262b'; ctx.fillRect(mx - 0.8, -hw + 0.8, 1.6, Wd - 1.6);
+    ctx.fillStyle = on ? '#ff3b3b' : '#8a2020'; ctx.fillRect(mx - 0.55, -hw + 1, 1.1, hw - 1.1);
+    ctx.fillStyle = on ? '#2f4fa0' : '#3d7bff'; ctx.fillRect(mx - 0.55, 0.1, 1.1, hw - 1.1);
   }
   if (cd === 'retro') {                                    // chrome everywhere: bumpers, a roof trim line and whitewall tyres
     ctx.fillStyle = '#e6eaee'; ctx.fillRect(f - 0.8, -hw - 0.2, 0.8, Wd + 0.4); ctx.fillRect(r, -hw - 0.2, 0.8, Wd + 0.4);
@@ -6536,13 +6605,82 @@ function showMM(pane) {
   document.querySelectorAll('#m-start [data-mm]').forEach(b => { if (b.matches('.rl-item,.rl-tile,.rl-icon')) b.setAttribute('aria-pressed', b.dataset.mm === mmPane ? 'true' : 'false'); });
   document.querySelectorAll('#m-start .mm-pane').forEach(p => { p.hidden = p.dataset.mm !== mmPane; });
   $('mm-panel').hidden = !mmPane; $('m-start').classList.toggle('has-panel', !!mmPane);
+  $('m-start').classList.toggle('center-pane', mmPane === 'store' || mmPane === 'weekly');
   if (mmPane) { $('mm-ptitle').textContent = MM_TITLES[mmPane] || ''; const pb = $('mm-panel'); pb.classList.remove('slide'); void pb.offsetWidth; pb.classList.add('slide'); }
   const on = window.JunctionOnline;
   if (mmPane === 'play') renderPlay();
   if (mmPane === 'saves') { renderSlotsFor($('mm-slots'), playMode, true); $('mm-resume').hidden = !hasSave(); }
   if (mmPane === 'friends') { if (on && on.renderFriends) on.renderFriends($('mm-friends')); else $('mm-friends').innerHTML = '<p class="mini">Friends need the online service, which isn\u2019t available right now.</p>'; }
-  if (mmPane === 'weekly') { renderExpertCard(); renderWeeks(); }
+  if (mmPane === 'weekly') { renderExpertCard(); renderWeekly(); }
   renderLook();
+}
+/* Weeklys: this week's seed, its top three, and the leader's city playing out on a little map */
+const escH = t => String(t).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+let wkRows = [], wkSel = 0;
+function renderWeekly() {
+  const top = $('wk-top'), cv2 = $('wk-map'); if (!top || !cv2) return;
+  const on = window.JunctionOnline;
+  wkRows = []; showWkMap(0);
+  if (!on || !on.ready || !on.expertTop) { top.innerHTML = '<li class="mini">The weekly leaderboard needs the online service. It may still be connecting — try again in a moment.</li>'; return; }
+  top.innerHTML = '<li class="mini">Loading the top three…</li>';
+  on.expertTop(0, 3).then(rows => {
+    if (mmPane !== 'weekly') return;
+    wkRows = rows || [];
+    top.innerHTML = wkRows.length ? wkRows.map((d, i) => '<li class="wk-p p' + (i + 1) + '" data-i="' + i + '" tabindex="0"><span class="medal">' + (i + 1) + '</span><span class="who"><b>' + escH(d.name) + '</b><small>reached week ' + d.weeks + '</small></span><b class="num">' + d.parcels.toLocaleString('en-US') + '<small>parcels</small></b></li>').join('')
+      : '<li class="mini">No one has played this seed yet. Be the first on the podium.</li>';
+    top.querySelectorAll('[data-i]').forEach(li => { li.onclick = () => showWkMap(+li.dataset.i); li.onkeydown = e => { if (e.key === 'Enter') showWkMap(+li.dataset.i); }; });
+    showWkMap(0);
+  }).catch(() => { top.innerHTML = '<li class="mini">Couldn’t load the leaderboard.</li>'; });
+}
+function showWkMap(i) {
+  wkSel = i; const d = wkRows[i];
+  document.querySelectorAll('#wk-top [data-i]').forEach(li => li.classList.toggle('sel', +li.dataset.i === i));
+  $('wk-cap').textContent = d ? (d.city ? d.name + '’s city · tap it to see their whole run' : d.name + ' didn’t save a map') : 'The leader’s city shows here';
+  animCitySnap($('wk-map'), d && d.city || null);
+}
+/* a city snapshot that sweeps into view, then little cars drive its roads */
+let snapAnim = null;
+function animCitySnap(cv2, str) {
+  if (snapAnim) cancelAnimationFrame(snapAnim.raf); snapAnim = null;
+  const S = cv2.width, g = cv2.getContext('2d'), off = document.createElement('canvas'); off.width = off.height = S;
+  let d = null; try { d = str ? JSON.parse(str) : null; } catch (e) {}
+  if (!d || !drawCitySnap(off, str)) {                    // nothing to show: an empty plot with a slow pulse
+    const t0 = performance.now();
+    const idle = now => {
+      if (!cv2.isConnected || cv2.offsetParent === null) return;
+      const el = (now - t0) / 1000;
+      g.fillStyle = PAL.land; g.fillRect(0, 0, S, S);
+      g.strokeStyle = 'rgba(127,127,127,' + (0.12 + 0.06 * Math.sin(el * 1.5)).toFixed(3) + ')'; g.lineWidth = 1;
+      g.beginPath(); for (let x = S / 12; x < S; x += S / 12) { g.moveTo(x, 0); g.lineTo(x, S); g.moveTo(0, x); g.lineTo(S, x); } g.stroke();
+      g.fillStyle = 'rgba(127,127,127,.55)'; g.font = '700 ' + Math.round(S / 22) + 'px Overpass, system-ui, sans-serif'; g.textAlign = 'center'; g.fillText('No city yet', S / 2, S / 2);
+      if (!REDUCED_MOTION) snapAnim = {raf: requestAnimationFrame(idle)};
+    };
+    snapAnim = {raf: requestAnimationFrame(idle)}; return;
+  }
+  const k = S / (d.span + 2), o = d.org - 1, X = t => (cx(t) - o + 0.5) * k, Y = t => (cy(t) - o + 0.5) * k;
+  const adj = new Map(), link = (a, b) => { if (!adj.has(a)) adj.set(a, []); adj.get(a).push(b); };
+  for (const [t, m] of d.links) for (let dd = 0; dd < 8; dd++) if ((m >> dd) & 1) { const n = nbr(t, dd); link(t, n); link(n, t); }
+  const nodes_ = [...adj.keys()], pal = d.pal || COLORS.map(c => c.hex), bots = [];
+  for (let i = 0; i < Math.min(48, Math.floor(nodes_.length / 3)); i++) { const a = nodes_[Math.floor(Math.random() * nodes_.length)], nb = adj.get(a); bots.push({a, b: nb[Math.floor(Math.random() * nb.length)], u: Math.random(), v: 1.6 + Math.random() * 1.4, c: pal[i % pal.length]}); }
+  const t0 = performance.now(); let last = t0;
+  const step = now => {
+    if (!cv2.isConnected || cv2.offsetParent === null) { snapAnim = null; return; }
+    const el = (now - t0) / 1000, dt = Math.min(0.05, (now - last) / 1000); last = now;
+    const rev = REDUCED_MOTION ? 1 : Math.min(1, el / 1.4), ease = 1 - Math.pow(1 - rev, 3), z = REDUCED_MOTION ? 1 : 1.03 + 0.03 * Math.sin(el * 0.3);
+    g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = PAL.land; g.fillRect(0, 0, S, S);
+    g.save(); g.translate(S / 2, S / 2); g.scale(z, z); g.translate(-S / 2, -S / 2);
+    g.beginPath(); g.arc(S / 2, S / 2, ease * S * 0.75, 0, 6.3); g.clip(); g.drawImage(off, 0, 0);
+    if (rev > 0.6) for (const c of bots) {
+      c.u += dt * c.v;
+      while (c.u >= 1) { c.u -= 1; const nb = adj.get(c.b) || [c.a], fwd = nb.filter(n => n !== c.a); const nx = (fwd.length ? fwd : nb)[Math.floor(Math.random() * (fwd.length || nb.length))]; c.a = c.b; c.b = nx; }
+      const x = X(c.a) + (X(c.b) - X(c.a)) * c.u, y = Y(c.a) + (Y(c.b) - Y(c.a)) * c.u;
+      g.fillStyle = c.c; g.beginPath(); g.arc(x, y, Math.max(1.6, k * 0.17), 0, 6.3); g.fill();
+      g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = 0.8; g.stroke();
+    }
+    g.restore();
+    if (!(REDUCED_MOTION && rev >= 1 && el > 2)) snapAnim = {raf: requestAnimationFrame(step)};
+  };
+  snapAnim = {raf: requestAnimationFrame(step)};
 }
 /* past weeks' seeds, each with its own leaderboard */
 function renderWeeks() {
@@ -6561,6 +6699,19 @@ function renderPlay() {
   renderSlotsFor($('mm-play-slots'), playMode, false);
   showStartBest();
 }
+/* the Main menu button in the game: save the city, then back to the menu with its own background city.
+   "Continue last city" brings the saved one back, into the same save slot. */
+let resumeSlot = '';
+function goHome() {
+  if (spectating) { if (window.JunctionAPI && window.JunctionAPI.showStart) window.JunctionAPI.showStart(); return; }
+  const keep = started && !over && !tutorialMode ? curSlot : '';
+  saveGame(true);
+  closeMenu(); toggleCust(false); closeInspector();
+  document.querySelectorAll('.modal').forEach(m => { if (m.id !== 'm-start') m.hidden = true; });
+  startDemo(); resumeSlot = keep;
+  $('btn-resume').hidden = !hasSave(); showStartBest();
+  openModal('m-start'); refreshUI();
+}
 function bindMainMenu() {
   document.querySelectorAll('#m-start button[data-mm]').forEach(b => b.addEventListener('click', () => showMM(mmPane === b.dataset.mm && !b.classList.contains('rl-tile') ? null : b.dataset.mm)));
   $('mm-close').addEventListener('click', () => showMM(null));
@@ -6570,6 +6721,10 @@ function bindMainMenu() {
   $('mm-account').addEventListener('click', () => { if (window.__junctionAccount) window.__junctionAccount(); else toast('Accounts need the online service, which isn\u2019t available right now.', 'warn'); });
   $('mm-resume').addEventListener('click', () => $('btn-resume').click());
   for (const id of ['mm-custom', 'mm-store']) $(id).addEventListener('click', shopClick);
+  $('wk-map').addEventListener('click', () => { const d = wkRows[wkSel], on = window.JunctionOnline; if (d && on && on.openRun) on.openRun(0, d.uid); });
+  $('wk-board').addEventListener('click', () => $('btn-expert-board').click());
+  $('m-start').addEventListener('click', e => { if (e.target === $('m-start') && $('m-start').classList.contains('center-pane')) showMM(null); });   // the dimmed backdrop closes the Store or Weeklys
+  bindCrates();
 }
 /* the seed of the week on its tile */
 function renderMenuTiles() { const t = $('tile-seed'); if (t) { const sd = expertSeed(); t.textContent = sd.name; $('tile-seedwk').textContent = sd.label; } }
@@ -6858,7 +7013,8 @@ function bindInput() {
     closeModal('m-start'); resetGame('expert'); running = true; refreshHud(); layout();
   });
   $('btn-expert-board').addEventListener('click', () => { if (window.JunctionOnline && window.JunctionOnline.openExpert) window.JunctionOnline.openExpert(0); else toast('The Expert leaderboard needs the online service, which isn\u2019t available right now.', 'warn'); });
-  $('btn-resume').addEventListener('click', () => { if (loadGame()) { closeModal('m-start'); running = true; refreshHud(); layout(); } else toast('No saved city found', 'warn'); });
+  $('btn-resume').addEventListener('click', () => { if (loadGame()) { if (resumeSlot) curSlot = resumeSlot; resumeSlot = ''; closeModal('m-start'); running = true; refreshHud(); layout(); } else toast('No saved city found', 'warn'); });
+  $('btn-home').addEventListener('click', goHome);
   $('btn-try-tutorial').addEventListener('click', () => { closeModal('m-start'); startTutorial(); refreshHud(); layout(); });
   $('tut-exit').addEventListener('click', exitTutorial);
   $('ti-next').addEventListener('click', () => { if (tiCard < TI_CARDS.length - 1) { tiCard++; renderTutIntro(); } else closeTutIntro(); });
@@ -7057,7 +7213,10 @@ const UI_THEMES = {
   sand:     {label: 'Sand',     plate: '#ece1c9', accent: '#1f7a6c'},
   neon:     {label: 'Neon',     plate: '#0b0f1f', accent: '#22e6ff'},
   royal:    {label: 'Royal',    plate: '#221a4c', accent: '#ffcc4d'},
-  rosegold: {label: 'Rose gold', plate: '#f5e3de', accent: '#b45f4e'}
+  rosegold: {label: 'Rose gold', plate: '#f5e3de', accent: '#b45f4e'},
+  ocean:    {label: 'Ocean',    plate: '#0f3550', accent: '#7fe3ff'},
+  aurora:   {label: 'Aurora',   plate: '#0e1b2e', accent: '#4dffc3'},
+  molten:   {label: 'Molten',   plate: '#2a0f0a', accent: '#ff6a2b'}
 };
 const UI_STYLES = ['clean', 'glass', 'sign'];
 let uiTheme = {preset: 'petrol', style: 'clean', frost: false, plate: '', btn: '', accent: ''};
@@ -7152,8 +7311,10 @@ function loadModes() {
    decorations, designs for cars, houses, roads, stores, traffic lights, roundabouts and bridges, and colours, one
    colour at a time. A colour can also be hired for 3 hours. Buying takes two taps, so nothing goes by accident.
    The standard light and dark looks and the colour-blind colour modes are always free. Saved on this browser. */
-const SHOP_KEY = 'junction-shop-v1', HIRE_PRICE = 20, HIRE_MS = 3 * 3600 * 1000;
-const R_EVERY = 20;                                    // parcels delivered in a Frantic city for each R#
+const SHOP_KEY = 'junction-shop-v1', HIRE_PRICE = 150, HIRE_MS = 3 * 3600 * 1000;
+const BUCKS_PER = 3, R_PER = 1;                        // # for every parcel delivered; R# for every parcel in a Frantic city
+/* prices are written on the old scale (25-90) and stretched onto today's: standard #500-700, rare #750-1000 */
+const newPrice = p => p <= 40 ? 500 + Math.round((p - 25) / 15 * 200 / 25) * 25 : Math.min(1000, 750 + Math.round((p - 45) / 45 * 250 / 25) * 25);
 /* [name, price, currency] — currency 'R' means R# (rare bucks, only from Frantic games): the super-rare few */
 const DESIGNS = {
   car:    {label: 'Car designs', one: 'car design', items: {standard: ['Standard', 0], twotone: ['Two-tone', 35], checker: ['Checker band', 35], livery: ['Racing livery', 40],
@@ -7170,7 +7331,20 @@ const DESIGNS = {
            brick: ['Brick arch', 35], glass: ['Glass', 45], suspension: ['Suspension', 55], rainbow: ['Rainbow', 30, 'R'], covered: ['Covered', 0, 'A', 'cities10']}},
   moto:   {label: 'Motorway designs', one: 'motorway design', items: {standard: ['Blue deck', 0], concrete: ['Concrete', 30], ivy: ['Ivy', 35], lights: ['Night lights', 40], sunset: ['Sunset', 45], glass: ['Glass', 45], rainbow: ['Rainbow', 30, 'R'], skyline: ['Skyline', 0, 'A', 'moto3']}}
 };
+/* v1.9: new designs. 'U' is unique (only from mystery crates); 'R' items are the daily specials, priced in R# */
+Object.assign(DESIGNS.car.items, {police: ['Police', 60], galaxy: ['Galaxy', 0, 'U']});
+Object.assign(DESIGNS.house.items, {mushroom: ['Mushroom house', 0, 'U']});
+Object.assign(DESIGNS.road.items, {marble: ['Marble', 55], lava: ['Lava flow', 0, 'U']});
+Object.assign(DESIGNS.store.items, {arcade: ['Arcade', 0, 'U']});
+Object.assign(DESIGNS.light.items, {disco: ['Disco', 0, 'U']});
+Object.assign(DESIGNS.round.items, {carousel: ['Carousel', 0, 'U']});
+Object.assign(DESIGNS.bridge.items, {crystal: ['Ice crystal', 0, 'U']});
+Object.assign(DESIGNS.moto.items, {aurora: ['Aurora', 0, 'U']});
+const SPECIAL_R = {'car:gold': 200, 'house:castle': 250, 'road:gold': 150, 'store:crystal': 300, 'bridge:rainbow': 200, 'moto:rainbow': 150};
+for (const k in SPECIAL_R) { const [c, i] = k.split(':'); DESIGNS[c].items[i][1] = SPECIAL_R[k]; }
 const COSMETICS = {
+  'ui:ocean': [50, 'Ocean theme'], 'ui:aurora': [0, 'Aurora theme', 'U'], 'ui:molten': [0, 'Molten theme', 'U'],
+  'map:lunar': [0, 'Lunar map', 'U'], 'map:volcano': [0, 'Volcano map', 'U'], 'decor:crystal': [0, 'Crystals', 'U'],
   'ui:midnight': [30, 'Midnight theme'], 'ui:graphite': [25, 'Graphite theme'], 'ui:forest': [30, 'Forest theme'], 'ui:plum': [35, 'Plum theme'],
   'ui:ember': [35, 'Ember theme'], 'ui:paper': [40, 'Paper theme'], 'ui:snow': [40, 'Snow theme'], 'ui:sand': [35, 'Sand theme'],
   'ui:neon': [75, 'Neon theme'], 'ui:royal': [65, 'Royal theme'], 'ui:rosegold': [85, 'Rose gold theme'],
@@ -7182,18 +7356,20 @@ const COSMETICS = {
   'decor:mushroom': [55, 'Mushrooms'], 'decor:pumpkin': [60, 'Pumpkins']
 };
 for (const cat in DESIGNS) for (const k in DESIGNS[cat].items) { const [n, pr, cur, achId] = DESIGNS[cat].items[k]; if (pr || cur) COSMETICS['design:' + cat + ':' + k] = [pr, n + ' ' + DESIGNS[cat].one, cur || '#', achId]; }
-/* every library colour is its own item: Standard #25, Classic #30, Creative #35-45, Soft #30, Rare #60-90 */
-const COLOUR_PRICE = {};
+for (const id in COSMETICS) { const c = COSMETICS[id]; if (!c[2] || c[2] === '#') c[0] = newPrice(c[0]); }
+/* every library colour is its own item (standard #500-700, premium ones rare); the Unique group only comes from crates */
+const COLOUR_PRICE = {}, UNIQUE_COLS = new Set();
 for (const g of COLOR_LIBRARY) g.cols.forEach(([n, h, pr], i) => {
-  COLOUR_PRICE[h] = pr || ({Standard: 25, Classic: 30, Soft: 30}[g.group] || [35, 40, 45][i % 3]);
+  if (g.unique) { COLOUR_PRICE[h] = 0; UNIQUE_COLS.add(h); return; }
+  COLOUR_PRICE[h] = newPrice(pr || ({Standard: 25, Classic: 30, Soft: 30}[g.group] || [35, 40, 45][i % 3]));
 });
 const colourName = hex => LIB_NAME[hex] || hueName(hex);
-const colourPrice = hex => COLOUR_PRICE[hex] || 40;
-let jb = {v: 2, bucks: 0, toward: 0, rbucks: 0, rtoward: 0, owned: {}, hired: {}, designs: {}}, jbFirstRun = false, buyPending = null;
+const colourPrice = hex => hex in COLOUR_PRICE ? COLOUR_PRICE[hex] : 700;
+let jb = {v: 3, bucks: 0, toward: 0, rbucks: 0, rtoward: 0, owned: {}, hired: {}, designs: {}, rot: null, daily: null}, jbFirstRun = false, buyPending = null;
 const design = cat => (jb.designs && DESIGNS[cat] && DESIGNS[cat].items[jb.designs[cat]]) ? jb.designs[cat] : 'standard';
 const storeDesign = () => design('store');
 function itemInfo(id) {                                // [price, name] for anything that can be bought
-  if (id.startsWith('colour:')) { const h = id.slice(7); return [colourPrice(h), colourName(h).replace(/^./, c => c.toUpperCase()) + ' colour', '#']; }
+  if (id.startsWith('colour:')) { const h = id.slice(7); return [colourPrice(h), colourName(h).replace(/^./, c => c.toUpperCase()) + ' colour', UNIQUE_COLS.has(h) ? 'U' : '#']; }
   const c = COSMETICS[id]; return c ? [c[0], c[1], c[2] || '#', c[3]] : null;
 }
 const ownsColour = hex => { const id = 'colour:' + String(hex).toLowerCase(); return !!jb.owned[id] || (jb.hired[id] || 0) > Date.now(); };
@@ -7211,17 +7387,21 @@ function loadShop() {
   let d = null; try { d = JSON.parse(localStorage.getItem(SHOP_KEY)); } catch (e) {}
   if (!d || typeof d !== 'object') { jbFirstRun = true; return; }
   jb.bucks = Math.max(0, Math.floor(+d.bucks || 0)); jb.toward = clamp(Math.floor(+d.toward || 0), 0, 9);
-  jb.rbucks = Math.max(0, Math.floor(+d.rbucks || 0)); jb.rtoward = clamp(Math.floor(+d.rtoward || 0), 0, R_EVERY - 1);
+  jb.rbucks = Math.max(0, Math.floor(+d.rbucks || 0)); jb.rtoward = 0;
+  const strs = a => Array.isArray(a) ? a.filter(x => typeof x === 'string') : [];
+  if (d.rot && typeof d.rot === 'object') { const c = d.rot.crates || {}; jb.rot = {h: +d.rot.h || 0, items: strs(d.rot.items), cols: strs(d.rot.cols), crates: {colour: +c.colour || 0, item: +c.item || 0, object: +c.object || 0}}; }
+  if (d.daily && typeof d.daily === 'object') jb.daily = {d: +d.daily.d || 0, id: typeof d.daily.id === 'string' ? d.daily.id : ''};
   jb.owned = {}; const old = d.owned && typeof d.owned === 'object' ? d.owned : {};
   for (const k in old) if (COSMETICS[k] || /^colour:#[0-9a-f]{6}$/.test(k)) jb.owned[k] = 1;
   jb.hired = {}; if (d.hired && typeof d.hired === 'object') for (const k in d.hired) if (/^colour:#[0-9a-f]{6}$/.test(k) && +d.hired[k] > Date.now()) jb.hired[k] = +d.hired[k];
   jb.designs = {}; if (d.designs && typeof d.designs === 'object') for (const c in DESIGNS) if (DESIGNS[c].items[d.designs[c]]) jb.designs[c] = d.designs[c];
-  if (d.v !== 2) {                                   // the old "unlock a colour picker" purchases are refunded; colours in use stay yours
+  if ((d.v || 0) < 2) {                              // the old "unlock a colour picker" purchases are refunded; colours in use stay yours
     const OLD = {'col:ui-plate': 40, 'col:ui-btn': 30, 'col:ui-accent': 30, 'col:land': 40, 'col:patch': 30, 'col:water': 35, 'col:road': 45, 'col:moto': 45, 'col:city': 50};
     let refund = 0; for (const k in OLD) if (old[k]) refund += OLD[k];
     jb.bucks += refund; jb.migrateColours = true; if (refund) jb.refunded = refund;
   }
-  jb.v = 2;
+  if ((d.v || 0) < 3) { jb.bucks *= 15; jb.rbucks *= 5; jb.rescaled = true; }   // prices went up about 15 times: balances follow
+  jb.v = 3;
 }
 /* the first time this version runs, anything already in use stays yours */
 function grantInUse() {
@@ -7239,33 +7419,31 @@ function grantInUse() {
   delete jb.migrateColours; delete jb.refunded; jbFirstRun = false; saveShop();
 }
 function earnBucks(n, at) {
-  jb.toward += n; let got = 0, rgot = 0;
-  while (jb.toward >= 10) { jb.toward -= 10; got++; }
-  if (diffKey === 'frantic' && !tutorialMode) {          // R# (rare bucks) only come from Frantic cities
-    jb.rtoward += n;
-    while (jb.rtoward >= R_EVERY) { jb.rtoward -= R_EVERY; rgot++; }
-  }
-  if (got) { jb.bucks += got; sfx('buck'); if (at) popText(bX(at), bY(at) - 38, '+' + got + ' #', '#ffd23a'); bump('v-jb'); }
-  if (rgot) { jb.rbucks += rgot; sfx('upgrade'); if (at) popText(bX(at), bY(at) - 52, '+' + rgot + ' R#', '#d58cff'); toast('+' + rgot + ' R# — a rare buck for your Frantic run', 'good'); }
+  const got = n * BUCKS_PER, rgot = diffKey === 'frantic' && !tutorialMode ? n * R_PER : 0;   // R# (rare bucks) only come from Frantic cities
+  if (got) { jb.bucks += got; if (at) popText(bX(at), bY(at) - 38, '+' + got + ' #', '#ffd23a'); bump('v-jb'); }
+  if (rgot) { jb.rbucks += rgot; if (at) popText(bX(at), bY(at) - 52, '+' + rgot + ' R#', '#d58cff'); }
   saveShop(); renderBucks();
 }
 function renderBucks() {
   const set = (id, t) => { const e = $(id); if (e && e.textContent !== t) e.textContent = t; };
   const b = '#' + jb.bucks.toLocaleString('en-US');
 const r = 'R#' + jb.rbucks;
-  set('mm-bucks', b); set('mm-rbucks', r); set('mm-next', jb.toward + '/10'); set('mm-store-bal', b + ' Junc Bucks \u00b7 ' + r);
-  set('v-jb', b); set('v-jbnext', r + ' · ' + jb.toward + '/10'); set('jb-bal', b + ' Junc Bucks · ' + r); set('jb-pill', b + ' · ' + r); set('cust-bal', b + ' · ' + r);
+  set('mm-bucks', b); set('mm-rbucks', r); set('mm-store-bal', b + ' Junc Bucks · ' + r);
+  set('v-jb', b); set('v-jbnext', r); set('jb-bal', b + ' Junc Bucks · ' + r); set('jb-pill', b + ' · ' + r); set('cust-bal', b + ' · ' + r);
 }
 const fmtLeft = ms => { const m = Math.ceil(ms / 60000); return m >= 60 ? Math.floor(m / 60) + 'h ' + (m % 60) + 'm' : m + 'm'; };
 /* two taps: the first asks, the second spends. kind is 'buy' or 'hire' (colours only) */
 function purchase(id, kind, fn) {
   const info = itemInfo(id); if (!info) return;
-  if (info[2] === 'A') { const a = ACH.find(x => x.id === info[3]); hint(name + ' can\u2019t be bought \u2014 earn the \u201c' + achName(info[3]) + '\u201d achievement to unlock it' + (a ? ': ' + a.hint.toLowerCase() + '.' : '.')); return; }
-  const price = kind === 'hire' ? HIRE_PRICE : info[0], name = info[1], rare = kind !== 'hire' && info[2] === 'R';
+  const name = info[1];
+  if (info[2] === 'A') { const a = ACH.find(x => x.id === info[3]); hint(name + ' can’t be bought — earn the “' + achName(info[3]) + '” achievement to unlock it' + (a ? ': ' + a.hint.toLowerCase() + '.' : '.')); return; }
+  if (info[2] === 'U') { hint(name + ' is unique — it only comes out of mystery crates in the Store.'); return; }
+  if (!inStock(id)) { hint(name + ' isn’t in the Store right now. The Store restocks every hour (new stock in ' + fmtLeft(HOUR_MS - Date.now() % HOUR_MS) + ')' + (info[2] === 'R' ? ' and has one special item a day.' : '.') + ' Crates can have it too.'); buyPending = null; renderLook(); return; }
+  const price = kind === 'hire' ? HIRE_PRICE : info[0], rare = kind !== 'hire' && info[2] === 'R';
   const sym = rare ? 'R#' : '#', have = rare ? jb.rbucks : jb.bucks;
   if (have < price) {
     hint(name + (kind === 'hire' ? ' costs #' + HIRE_PRICE + ' to hire' : ' costs ' + sym + price) + ' — you have ' + sym + have + '. ' +
-      (rare ? 'R# (rare bucks) only come from Frantic cities: one for every ' + R_EVERY + ' parcels.' : 'You earn one Junc Buck for every 10 parcels delivered.'));
+      (rare ? 'R# (rare bucks) only come from Frantic cities: one for every parcel.' : 'Every parcel you deliver earns ' + BUCKS_PER + ' #.'));
     buyPending = null; renderLook(); return;
   }
   const nowMs = performance.now();
@@ -7298,7 +7476,135 @@ function checkHires() {
   toast('Your hired colour' + (gone.length > 1 ? 's have' : ' has') + ' run out — buy it in the Store to keep it.', 'warn');
   renderLook();
 }
-setInterval(() => { if (typeof jb !== 'undefined') { checkHires(); if (!$('menu').hidden || !$('cust-panel').hidden) renderLook(true); } }, 15000);
+setInterval(() => { if (typeof jb !== 'undefined') { checkHires(); if (!$('menu').hidden || !$('cust-panel').hidden || (!$('m-start').hidden && mmPane === 'store')) renderLook(true); } }, 15000);
+
+/* ---- the hourly Store: 10 items and 5 colours every hour, one special item (R#) a day, and three mystery crates.
+   Each hour's stock is shuffled from the hour itself, so everyone's Store is alike, with things you don't own first. */
+const HOUR_MS = 3600e3, DAY_MS = 86400e3;
+const RARITY = {standard: 'Standard', rare: 'Rare', unique: 'Unique', special: 'Special', ach: 'Achievement'};
+function rarityOf(id) { const i = itemInfo(id); if (!i) return 'standard'; return i[2] === 'A' ? 'ach' : i[2] === 'R' ? 'special' : i[2] === 'U' ? 'unique' : i[0] >= 750 ? 'rare' : 'standard'; }
+const CRATES = {
+  colour: {name: 'Colour crate', price: 150, holds: 'a colour', test: id => id.startsWith('colour:')},
+  item:   {name: 'Item crate', price: 200, holds: 'a theme, map, panel style or decoration', test: id => /^(ui|style|map|decor):/.test(id)},
+  object: {name: 'Object crate', price: 250, holds: 'a design for cars, houses, roads, stores, lights, roundabouts, bridges or motorways', test: id => id.startsWith('design:')}
+};
+const CRATE_MAX = 3, CRATE_ODDS = [['standard', 70], ['rare', 25], ['unique', 5]];
+const allShopIds = () => Object.keys(COSMETICS).concat(Object.keys(COLOUR_PRICE).map(h => 'colour:' + h));
+function shuffleSeeded(arr, seed) { const r = seededRand(seed), a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+function ensureRotation() {
+  const h = Math.floor(Date.now() / HOUR_MS), d = Math.floor(Date.now() / DAY_MS);
+  let dirty = false;
+  if (!jb.rot || jb.rot.h !== h) {
+    const pool = allShopIds().filter(id => rarityOf(id) === 'standard' || rarityOf(id) === 'rare');
+    const pick = (list, n, salt) => { const q = shuffleSeeded(list, h * 7919 + salt); return q.filter(id => !owns(id)).concat(q.filter(id => owns(id))).slice(0, n); };
+    jb.rot = {h, items: pick(pool.filter(id => !id.startsWith('colour:')), 10, 1), cols: pick(pool.filter(id => id.startsWith('colour:')), 5, 2), crates: {colour: 0, item: 0, object: 0}};
+    dirty = true;
+  }
+  if (!jb.daily || jb.daily.d !== d) {
+    const q = shuffleSeeded(allShopIds().filter(id => rarityOf(id) === 'special'), d * 104729 + 3);
+    jb.daily = {d, id: q.find(id => !owns(id)) || q[0] || ''}; dirty = true;
+  }
+  if (dirty) saveShop();
+}
+function inStock(id) { ensureRotation(); return jb.rot.items.includes(id) || jb.rot.cols.includes(id) || jb.daily.id === id; }
+const crateLeft = kind => { ensureRotation(); return Math.max(0, CRATE_MAX - (jb.rot.crates[kind] || 0)); };
+const crateNew = kind => allShopIds().filter(id => CRATES[kind].test(id) && ['standard', 'rare', 'unique'].includes(rarityOf(id)) && !owns(id));
+/* two taps (like buying), then the crate shakes open and shows what was inside */
+let crateKind = '', crateGot = '';
+function openCrate(kind, sure) {
+  const C = CRATES[kind]; if (!C) return;
+  if (!crateLeft(kind)) { hint('You’ve opened ' + CRATE_MAX + ' ' + C.name.toLowerCase() + 's this hour. More in ' + fmtLeft(HOUR_MS - Date.now() % HOUR_MS) + '.'); return false; }
+  const left = crateNew(kind);
+  if (!left.length) { hint('You already own everything a ' + C.name.toLowerCase() + ' can hold.'); return false; }
+  if (jb.bucks < C.price) { hint(C.name + 's cost #' + C.price + ' — you have #' + jb.bucks + '. Every parcel you deliver earns ' + BUCKS_PER + ' #.'); return false; }
+  const nowMs = performance.now(), pid = 'crate:' + kind;
+  if (!sure && (!buyPending || buyPending.id !== pid || nowMs - buyPending.t > 4000)) {
+    buyPending = {id: pid, kind: 'buy', t: nowMs}; hint('Open a ' + C.name.toLowerCase() + ' for #' + C.price + '? Tap again to confirm.'); renderLook();
+    setTimeout(() => { if (buyPending && buyPending.id === pid && performance.now() - buyPending.t >= 4000) { buyPending = null; renderLook(); } }, 4100);
+    return false;
+  }
+  buyPending = null;
+  let roll = Math.random() * 100, tier = 'standard';
+  for (const [t, w] of CRATE_ODDS) { if (roll < w) { tier = t; break; } roll -= w; }
+  let got = '';
+  for (const t of [tier, 'rare', 'standard', 'unique']) { const l = left.filter(id => rarityOf(id) === t); if (l.length) { got = l[Math.floor(Math.random() * l.length)]; break; } }
+  jb.bucks -= C.price; jb.rot.crates[kind] = (jb.rot.crates[kind] || 0) + 1;
+  jb.owned[got] = 1; delete jb.hired[got];
+  saveShop(); renderBucks(); renderLook(); showCrate(kind, got);
+  return true;
+}
+function showCrate(kind, id) {
+  crateKind = kind; crateGot = id;
+  const m = $('m-crate'), box = $('crate-box'), prize = $('crate-prize'), r = rarityOf(id), info = itemInfo(id);
+  m.querySelector('.crate-card').className = 'card plate crate-card k-' + kind;
+  box.hidden = false; prize.hidden = true; box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake');
+  $('crate-name').textContent = 'Opening a ' + CRATES[kind].name.toLowerCase() + '…'; $('crate-rar').textContent = '';
+  for (const b of ['crate-use', 'crate-again']) $(b).hidden = true;
+  openModal('m-crate'); sfx('click');
+  setTimeout(() => {
+    if ($('m-crate').hidden || crateGot !== id) return;
+    box.hidden = true; prize.hidden = false; prize.innerHTML = '';
+    m.querySelector('.crate-card').classList.add('r-' + r, 'open');
+    if (id.startsWith('colour:')) prize.innerHTML = '<span class="csw" style="background:' + id.slice(7) + '"></span>';
+    else {
+      const it = shopItemById(id);
+      if (it && it.html) prize.innerHTML = it.html;
+      else if (it && it.canvas) { const c = document.createElement('canvas'); c.width = it.canvas[0]; c.height = it.canvas[1]; prize.append(c); it.canvas[2](c); }
+    }
+    $('crate-rar').textContent = RARITY[r]; $('crate-rar').className = 'rar r-' + r;
+    $('crate-name').textContent = info ? info[1] : id;
+    const it = shopItemById(id);
+    $('crate-use').hidden = !(it && it.apply);
+    const more = crateLeft(kind) && crateNew(kind).length && jb.bucks >= CRATES[kind].price;
+    $('crate-again').hidden = !more; $('crate-again').textContent = 'Open another · #' + CRATES[kind].price + ' (' + crateLeft(kind) + ' left this hour)';
+    sfx('upgrade');
+  }, REDUCED_MOTION ? 200 : 1300);
+}
+function shopItemById(id) {
+  if (id.startsWith('colour:')) return null;
+  const cat = id.startsWith('design:') ? id.split(':')[1] : id.split(':')[0];
+  return shopItems(cat).find(x => x.id === id) || null;
+}
+function bindCrates() {
+  $('crate-done').addEventListener('click', () => closeModal('m-crate'));
+  $('crate-use').addEventListener('click', () => { const it = shopItemById(crateGot); if (it && it.apply) it.apply(); closeModal('m-crate'); renderLook(); });
+  $('crate-again').addEventListener('click', () => openCrate(crateKind, true));
+}
+/* the Store page: crates, the daily special, this hour's items and colours */
+function storeCard(it, canvases) {
+  const r = rarityOf(it.id), own = owns(it.id), info = itemInfo(it.id);
+  const pv = it.html || '<canvas data-ci="' + (canvases.push([it.canvas, it.id]) - 1) + '"></canvas>';
+  return '<button type="button" class="shopcard st-card r-' + r + (own ? ' owned' : '') + '" data-act="' + (own ? 'apply' : 'buy') + '" data-id="' + it.id + '">' + pv +
+    '<em class="rar r-' + r + '">' + RARITY[r] + '</em><b>' + info[1].replace(/ design$/, '') + '</b>' + (own ? '<span class="using">Owned' + (it.active ? ' · in use' : '') + '</span>' : priceTag(it.id, info[0])) + '</button>';
+}
+function renderStore(box, light) {
+  ensureRotation();
+  const keepScroll = box.scrollTop, canvases = [], now = Date.now();
+  const tLeft = fmtLeft(HOUR_MS - now % HOUR_MS), dLeft = fmtLeft(DAY_MS - now % DAY_MS);
+  const parts = ['<div class="st-head"><div><b>New stock in ' + tLeft + '</b><small>Every hour: 10 items, 5 colours and 3 of each crate. Every parcel earns ' + BUCKS_PER + ' #.</small></div><span class="st-bal num">#' + jb.bucks.toLocaleString('en-US') + ' <i>·</i> <span class="rtag">R#' + jb.rbucks + '</span></span></div>'];
+  if (jb.rescaled) { parts.push('<p class="mnote st-note">Prices have gone up, so your balance was scaled up to match: every # you had is now #15, and every R# is R#5.</p>'); delete jb.rescaled; saveShop(); }
+  parts.push('<h3 class="shop-h">Mystery crates <small>' + CRATE_MAX + ' of each per hour · 70% standard · 25% rare · 5% unique · never something you own</small></h3><div class="crates">' +
+    Object.keys(CRATES).map(k => {
+      const C = CRATES[k], n = crateLeft(k), none = !crateNew(k).length, conf = buyPending && buyPending.id === 'crate:' + k;
+      return '<button type="button" class="crate-s k-' + k + (n && !none ? '' : ' spent') + '" data-act="crate" data-kind="' + k + '"><span class="crate-ico"><i></i></span><b>' + C.name + '</b><small>' + C.holds + '</small>' +
+        '<span class="crate-foot"><span class="lock' + (conf ? ' confirm' : '') + '">' + (conf ? 'Tap to open' : '#' + C.price) + '</span><em>' + (none ? 'All owned' : n + ' of ' + CRATE_MAX + ' left') + '</em></span></button>';
+    }).join('') + '</div>');
+  const sp = jb.daily.id && shopItemById(jb.daily.id);
+  if (sp) parts.push('<h3 class="shop-h">Daily special <small>costs R#, from Frantic cities · a new one in ' + dLeft + '</small></h3><div class="shopgrid st-items st-special">' + storeCard(sp, canvases) + '</div>');
+  parts.push('<h3 class="shop-h">This hour’s items</h3><div class="shopgrid st-items">' + jb.rot.items.map(shopItemById).filter(Boolean).map(it => storeCard(it, canvases)).join('') + '</div>');
+  parts.push('<h3 class="shop-h">This hour’s colours <small>buy to keep, or hire for 3 hours for #' + HIRE_PRICE + '</small></h3><div class="shopgrid colours">' + jb.rot.cols.map(id => {
+    const h = id.slice(7), r = rarityOf(id), left = hiredLeft(id), own = !!jb.owned[id], name = colourName(h);
+    return '<div class="colcard st-col r-' + r + '"><span class="csw" style="background:' + h + '"></span><em class="rar r-' + r + '">' + RARITY[r] + '</em><b>' + name + '</b>' + (left && !own ? '<small class="hired">Hired · ' + fmtLeft(left) + ' left</small>' : '') +
+      (own ? '<span class="using">Owned</span>' : '<span class="colbtns"><button type="button" data-act="buy" data-id="' + id + '">' + priceTag(id, colourPrice(h)) + '</button><button type="button" data-act="hire" data-id="' + id + '">' + priceTag(id, colourPrice(h), 'hire') + '</button></span>') + '</div>';
+  }).join('') + '</div>');
+  parts.push('<p class="mnote">Standard items cost #500–700 and rare ones #750–1000. Unique items only come out of crates. 🏆 items still unlock with achievements.</p>');
+  const html = parts.join('');
+  if (light && box._shopKey === 'st' + html.length) return;
+  box._shopKey = 'st' + html.length;
+  box.innerHTML = html;
+  box.querySelectorAll('canvas[data-ci]').forEach(c => { const [w, h, fn] = canvases[+c.dataset.ci][0]; c.width = w; c.height = h; fn(c); });
+  box.scrollTop = keepScroll;
+}
 
 /* ---- previews, drawn with the game's own artwork */
 function designPreview(g, cat, key, w, h) {
@@ -7402,6 +7708,7 @@ function priceTag(id, price, kind) {
 /* one list for all three views: 'store' (things to buy), 'owned' (things to wear) and 'quick' (the Customise drawer) */
 function renderShop(box, mode, light) {
   if (!box) return;
+  if (mode === 'store') { renderStore(box, light); return; }
   const keepScroll = box.scrollTop, parts = [], canvases = [];
   if (mode !== 'store') {
     parts.push('<h3 class="shop-h">Light and dark modes</h3><div class="shopgrid modes">' + ['light', 'dark'].map(m => {
@@ -7455,6 +7762,7 @@ function shopClick(e) {
   const act = b.dataset.act, id = b.dataset.id;
   if (act === 'buy') purchase(id, 'buy', () => { const it = SHOP_CATS.flatMap(([c]) => c === 'colour' ? [] : shopItems(c)).find(x => x.id === id); if (it && it.apply) it.apply(); });
   else if (act === 'hire') purchase(id, 'hire');
+  else if (act === 'crate') openCrate(b.dataset.kind);
   else if (act === 'apply') { const it = SHOP_CATS.flatMap(([c]) => c === 'colour' ? [] : shopItems(c)).find(x => x.id === id); if (it) it.apply(); }
   else if (act === 'mode') useMode(b.dataset.mode);
   else if (act === 'modereset') { modes[modes.cur] = null; useMode(modes.cur); }
