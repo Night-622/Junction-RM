@@ -4091,7 +4091,7 @@ function drawDecor(g, kind, X, Y, R, sway, k) {
       const layer = (rad, col, rot) => {
         g.fillStyle = col; g.beginPath();
         for (let i = 0; i < 16; i++) { const a = rot + i * Math.PI / 8, rr_ = i % 2 ? rad * 0.62 : rad; g.lineTo(X + sway + Math.cos(a) * rr_, Y + Math.sin(a) * rr_); }
-        g.closePath(); g.fill();
+        g.closePath(); gSoft(g);
       };
       layer(R, '#2f6a4a', h1); layer(R * 0.68, '#3d8259', h1 + 0.2); layer(R * 0.36, '#55a06e', h1 + 0.4);
       break;
@@ -4132,23 +4132,23 @@ function drawDecor(g, kind, X, Y, R, sway, k) {
       rr_(g, X - w / 2, Y - R * 0.95, w, R * 1.6, w / 2);
       rr_(g, X - R * 0.62, Y - R * 0.15, R * 0.42, R * 0.24, R * 0.12); rr_(g, X - R * 0.62, Y - R * 0.6, R * 0.22, R * 0.6, R * 0.11);
       if (h1 > 0.3) { rr_(g, X + R * 0.2, Y - R * 0.35, R * 0.42, R * 0.24, R * 0.12); rr_(g, X + R * 0.4, Y - R * 0.75, R * 0.22, R * 0.6, R * 0.11); }
-      g.fillStyle = hi; g.fillRect(X - w * 0.12, Y - R * 0.85, w * 0.18, R * 1.35);
+      g.fillStyle = hi; gsfr(g, X - w * 0.12, Y - R * 0.85, w * 0.18, R * 1.35);
       if (h2 > 0.55) dot(X, Y - R * 0.95, R * 0.14, '#ff6f91');
       break;
     }
     case 'snowpine': {                                  // a pine with snow settled on every tier
       sh(X, Y + R * 0.72, R * 0.78, R * 0.3, R * 0.35);
-      g.fillStyle = '#6b4a2e'; g.fillRect(X - R * 0.13, Y + R * 0.45, R * 0.26, R * 0.4);           // trunk
+      g.fillStyle = '#6b4a2e'; gsfr(g, X - R * 0.13, Y + R * 0.45, R * 0.26, R * 0.4);           // trunk
       const tiers = [[0.62, 0.92, 0.82], [0.2, 0.72, 0.74], [-0.2, 0.5, 0.72]];               // [base y, half width, height] x R
       tiers.forEach(([by, w, h], i) => {
         const sx = sway * (0.3 + i * 0.35), bx = X + sx, base = Y + by * R, apex = base - h * R, hw_ = w * R;
-        g.fillStyle = '#2f6a4a'; g.beginPath(); g.moveTo(bx, apex); g.lineTo(bx + hw_, base); g.lineTo(bx - hw_, base); g.closePath(); g.fill();
-        g.fillStyle = '#3f8459'; g.beginPath(); g.moveTo(bx, apex); g.lineTo(bx + hw_, base); g.lineTo(bx + hw_ * 0.15, base); g.closePath(); g.fill();
+        g.fillStyle = '#2f6a4a'; g.beginPath(); g.moveTo(bx, apex); g.lineTo(bx + hw_, base); g.lineTo(bx - hw_, base); g.closePath(); gSoft(g);
+        g.fillStyle = '#3f8459'; g.beginPath(); g.moveTo(bx, apex); g.lineTo(bx + hw_, base); g.lineTo(bx + hw_ * 0.15, base); g.closePath(); gSoft(g);
         // snow cap: the top part of the tier, with a soft scalloped lower edge
         const sb = apex + h * R * 0.55, sw = hw_ * 0.55;
-        g.fillStyle = '#fbfdff'; g.beginPath(); g.moveTo(bx, apex - 0.2); g.lineTo(bx + sw, sb); g.lineTo(bx - sw, sb); g.closePath(); g.fill();
+        g.fillStyle = '#fbfdff'; g.beginPath(); g.moveTo(bx, apex - 0.2); g.lineTo(bx + sw, sb); g.lineTo(bx - sw, sb); g.closePath(); gSoft(g);
         for (let j = 0; j < 3; j++) { const t = (j + 0.5) / 3; dot(bx - sw + sw * 2 * t, sb, sw * 0.36, '#fbfdff'); }
-        g.fillStyle = 'rgba(150,180,205,.35)'; g.beginPath(); g.moveTo(bx, apex); g.lineTo(bx + sw, sb); g.lineTo(bx + sw * 0.3, sb); g.closePath(); g.fill();
+        g.fillStyle = 'rgba(150,180,205,.35)'; g.beginPath(); g.moveTo(bx, apex); g.lineTo(bx + sw, sb); g.lineTo(bx + sw * 0.3, sb); g.closePath(); gSoft(g);
       });
       if (h1 > 0.5) dot(X + sway, Y - R * 0.95, R * 0.12, '#fbfdff');
       break;
@@ -4158,20 +4158,20 @@ function drawDecor(g, kind, X, Y, R, sway, k) {
       const o = '#ef8a22', od = '#cf6c14';
       g.fillStyle = od; g.beginPath(); g.ellipse(X - R * 0.32, Y, R * 0.42, R * 0.52, 0, 0, 6.3); g.ellipse(X + R * 0.32, Y, R * 0.42, R * 0.52, 0, 0, 6.3); g.fill();
       g.fillStyle = o; g.beginPath(); g.ellipse(X, Y, R * 0.42, R * 0.56, 0, 0, 6.3); g.fill();
-      g.fillStyle = '#4c7a2e'; g.fillRect(X - R * 0.07, Y - R * 0.72, R * 0.14, R * 0.24);
+      g.fillStyle = '#4c7a2e'; gsfr(g, X - R * 0.07, Y - R * 0.72, R * 0.14, R * 0.24);
       if (h1 > 0.45) {                                   // a jack-o'-lantern
         g.fillStyle = theme === 'dark' ? '#ffd35a' : '#5a2a08';
-        for (const sx of [-1, 1]) { g.beginPath(); g.moveTo(X + sx * R * 0.22, Y - R * 0.2); g.lineTo(X + sx * R * 0.08, Y - R * 0.02); g.lineTo(X + sx * R * 0.34, Y - R * 0.02); g.closePath(); g.fill(); }
-        g.fillRect(X - R * 0.26, Y + R * 0.14, R * 0.52, R * 0.1);
+        for (const sx of [-1, 1]) { g.beginPath(); g.moveTo(X + sx * R * 0.22, Y - R * 0.2); g.lineTo(X + sx * R * 0.08, Y - R * 0.02); g.lineTo(X + sx * R * 0.34, Y - R * 0.02); g.closePath(); gSoft(g); }
+        gsfr(g, X - R * 0.26, Y + R * 0.14, R * 0.52, R * 0.1);
       }
       break;
     }
     case 'mushroom': {
       sh(X, Y + R * 0.3, R * 0.6, R * 0.35, R * 0.5);
       g.fillStyle = '#f2e8d6'; rr_(g, X - R * 0.18, Y - R * 0.15, R * 0.36, R * 0.6, R * 0.12);
-      g.fillStyle = h1 > 0.5 ? '#d8443a' : '#b9702e'; g.beginPath(); g.ellipse(X, Y - R * 0.15, R * 0.62, R * 0.45, 0, Math.PI, 0); g.closePath(); g.fill();
+      g.fillStyle = h1 > 0.5 ? '#d8443a' : '#b9702e'; g.beginPath(); g.ellipse(X, Y - R * 0.15, R * 0.62, R * 0.45, 0, Math.PI, 0); g.closePath(); gSoft(g);
       dot(X - R * 0.28, Y - R * 0.32, R * 0.09, '#fff'); dot(X + R * 0.12, Y - R * 0.45, R * 0.1, '#fff'); dot(X + R * 0.35, Y - R * 0.25, R * 0.07, '#fff');
-      if (h2 > 0.5) { g.fillStyle = '#f2e8d6'; rr_(g, X + R * 0.45, Y + R * 0.05, R * 0.18, R * 0.32, R * 0.07); g.fillStyle = '#d8443a'; g.beginPath(); g.ellipse(X + R * 0.54, Y + R * 0.07, R * 0.28, R * 0.2, 0, Math.PI, 0); g.closePath(); g.fill(); }
+      if (h2 > 0.5) { g.fillStyle = '#f2e8d6'; rr_(g, X + R * 0.45, Y + R * 0.05, R * 0.18, R * 0.32, R * 0.07); g.fillStyle = '#d8443a'; g.beginPath(); g.ellipse(X + R * 0.54, Y + R * 0.07, R * 0.28, R * 0.2, 0, Math.PI, 0); g.closePath(); gSoft(g); }
       break;
     }
     case 'flowers': {
@@ -4189,8 +4189,8 @@ function drawDecor(g, kind, X, Y, R, sway, k) {
       const c1 = h1 < 0.5 ? '#8fd8ff' : '#c59bff', c2 = h1 < 0.5 ? '#5aa8e0' : '#9a6be0';
       const shard = (ox, oy, w, h, a) => {
         g.save(); g.translate(X + ox + sway * 0.3, Y + oy); g.rotate(a);
-        g.fillStyle = c1; g.beginPath(); g.moveTo(0, -h); g.lineTo(w, -h * 0.35); g.lineTo(w * 0.6, 0); g.lineTo(-w * 0.6, 0); g.lineTo(-w, -h * 0.35); g.closePath(); g.fill();
-        g.fillStyle = c2; g.beginPath(); g.moveTo(0, -h); g.lineTo(w, -h * 0.35); g.lineTo(w * 0.6, 0); g.lineTo(0, 0); g.closePath(); g.fill();
+        g.fillStyle = c1; g.beginPath(); g.moveTo(0, -h); g.lineTo(w, -h * 0.35); g.lineTo(w * 0.6, 0); g.lineTo(-w * 0.6, 0); g.lineTo(-w, -h * 0.35); g.closePath(); gSoft(g);
+        g.fillStyle = c2; g.beginPath(); g.moveTo(0, -h); g.lineTo(w, -h * 0.35); g.lineTo(w * 0.6, 0); g.lineTo(0, 0); g.closePath(); gSoft(g);
         g.restore();
       };
       shard(-R * 0.35, R * 0.25, R * 0.28, R * 0.9, -0.35); shard(R * 0.3, R * 0.3, R * 0.24, R * 0.75, 0.4); shard(0, R * 0.35, R * 0.34, R * 1.25, 0);
@@ -4202,7 +4202,7 @@ function drawDecor(g, kind, X, Y, R, sway, k) {
       const poly = (sc, col, ox, oy) => {
         g.fillStyle = col; g.beginPath();
         for (let i = 0; i < 7; i++) { const a = i * 0.8976 + h1, rad = R * sc * (0.75 + hash01(k, 110 + i) * 0.3); g.lineTo(X + ox + Math.cos(a) * rad, Y + oy + Math.sin(a) * rad * 0.8); }
-        g.closePath(); g.fill();
+        g.closePath(); gSoft(g);
       };
       poly(0.75, base, 0, 0); poly(0.42, lite, -R * 0.15, -R * 0.15);
       if (h2 > 0.5) { poly(0.32, base, R * 0.62, R * 0.32); }
@@ -4221,6 +4221,26 @@ function shade(hex, f) {
   return 'rgb(' + Math.round(lerp(r, t, p)) + ',' + Math.round(lerp(g, t, p)) + ',' + Math.round(lerp(b, t, p)) + ')';
 }
 function rgba(hex, a) { const [r, g, b] = rgbOf(hex); return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')'; }
+/* the game's soft look, used by every design: a rectangle with rounded corners (a thin strip becomes a pill),
+   and a pointed shape whose corners are rounded off by a stroke in its own colour.
+   Rounding is skipped where the corner would be under a pixel on screen, and the rounded shapes are kept for reuse. */
+let softZ = 0;                                        // the drawing scale for that test (0: the camera's zoom)
+const softPaths = new Map();
+function gsfr(g, x, y, w, h) {
+  if (w < 0) { x += w; w = -w; } if (h < 0) { y += h; h = -h; }
+  const r = Math.min(w, h) * 0.38;
+  if (r * (softZ || cam.z) < 0.8) { g.fillRect(x, y, w, h); return; }
+  const key = x + ',' + y + ',' + w + ',' + h;
+  let p = softPaths.get(key);
+  if (!p) {
+    if (softPaths.size > 3000) softPaths.clear();
+    p = new Path2D(); if (p.roundRect) p.roundRect(x, y, w, h, r); else p.rect(x, y, w, h); softPaths.set(key, p);
+  }
+  g.fill(p);
+}
+const sfr = (x, y, w, h) => gsfr(ctx, x, y, w, h);
+function gSoft(g, lw) { g.fill(); g.save(); g.lineJoin = 'round'; g.lineWidth = lw || 0.9; g.strokeStyle = g.fillStyle; g.stroke(); g.restore(); }
+const softFill = lw => gSoft(ctx, lw);
 function rr(x, y, w, h, r) {
   r = Math.min(r, w / 2, h / 2);
   ctx.beginPath(); ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r);
@@ -4656,7 +4676,7 @@ function drawRoundAt(x, y) {
   } else if (rd === 'carousel') {                          // a striped carousel canopy, turning slowly
     const a0 = REDUCED_MOTION ? 0 : animT * 0.9;
     dotShadow(x, y, IR, 2.6);
-    for (let i = 0; i < 8; i++) { ctx.fillStyle = i % 2 ? '#fff3e0' : '#ff5a7a'; ctx.beginPath(); ctx.moveTo(x, y); ctx.arc(x, y, IR + 0.4, a0 + i * 0.785, a0 + (i + 1) * 0.785); ctx.closePath(); ctx.fill(); }
+    for (let i = 0; i < 8; i++) { ctx.fillStyle = i % 2 ? '#fff3e0' : '#ff5a7a'; ctx.beginPath(); ctx.moveTo(x, y); ctx.arc(x, y, IR + 0.4, a0 + i * 0.785, a0 + (i + 1) * 0.785); ctx.closePath(); softFill(); }
     ctx.fillStyle = '#ffd23a'; ctx.beginPath(); ctx.arc(x, y, 1.5, 0, 6.3); ctx.fill();
   } else if (rd === 'fountain') {
     ctx.fillStyle = '#d6cfc2'; ctx.beginPath(); ctx.arc(x, y, IR + 0.6, 0, 6.3); ctx.fill();
@@ -4693,8 +4713,8 @@ function drawLightHeads(x, y, ls, dem) {
       ctx.fillStyle = lamp; ctx.beginPath(); ctx.arc(X, Y, 1.35, 0, 6.3); ctx.fill();
     } else if (ld === 'lantern') {
       ctx.save(); ctx.translate(X, Y); ctx.rotate(Math.PI / 4);
-      ctx.fillStyle = '#23272b'; ctx.fillRect(-2.8, -2.8, 5.6, 5.6);
-      ctx.fillStyle = lamp; ctx.fillRect(-1.8, -1.8, 3.6, 3.6);
+      ctx.fillStyle = '#23272b'; sfr(-2.8, -2.8, 5.6, 5.6);
+      ctx.fillStyle = lamp; sfr(-1.8, -1.8, 3.6, 3.6);
       ctx.strokeStyle = '#23272b'; ctx.lineWidth = 0.5; ctx.beginPath(); ctx.moveTo(-1.8, 0); ctx.lineTo(1.8, 0); ctx.moveTo(0, -1.8); ctx.lineTo(0, 1.8); ctx.stroke();
       ctx.restore();
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = green ? 'rgba(72,224,138,.22)' : 'rgba(255,170,90,.22)'; ctx.beginPath(); ctx.arc(X, Y, 4.6, 0, 6.3); ctx.fill(); ctx.restore();
@@ -4800,7 +4820,7 @@ function hipRoof(x, y, w, h, col) {
   ctx.beginPath(); ctx.moveTo(x + w, y); ctx.lineTo(cx1, my); ctx.lineTo(x + w, y + h); ctx.closePath(); ctx.fill();
   ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.lineWidth = 0.5; ctx.beginPath(); ctx.moveTo(cx0, my); ctx.lineTo(cx1, my); ctx.stroke();
 }
-function win(x, y, w, h) { ctx.fillStyle = 'rgba(24,44,58,.7)'; ctx.fillRect(x, y, w, h); ctx.fillStyle = 'rgba(160,210,240,.3)'; ctx.fillRect(x + 0.3, y + 0.3, w * 0.3, h - 0.6); }
+function win(x, y, w, h) { ctx.fillStyle = 'rgba(24,44,58,.7)'; sfr(x, y, w, h); ctx.fillStyle = 'rgba(160,210,240,.3)'; sfr(x + 0.3, y + 0.3, w * 0.3, h - 0.6); }
 /* Houses grow with the cars bought for them: cottage (none), family home with a garage (one), villa (two). */
 function drawHouse(b) {
   const x = tx(b.k), y = ty(b.k), col = COLORS[b.color].hex, s = spawnScale(b), model = Math.min(2, b.extra || 0);
@@ -4872,19 +4892,19 @@ function drawHouseDesign(hd, b, col, model) {
     ctx.fillStyle = '#d9ad5c'; rr(-11, -13, 22, 7.5, 5); ctx.fill();
     ctx.strokeStyle = 'rgba(110,75,25,.35)'; ctx.lineWidth = 0.35; ctx.beginPath();
     for (let xx = -10; xx < 11; xx += 1.6) { ctx.moveTo(xx, -12.5); ctx.lineTo(xx + 0.6, -6); ctx.moveTo(xx, -5.2); ctx.lineTo(xx + 0.6, 2.4); } ctx.stroke();
-    ctx.fillStyle = 'rgba(255,240,200,.6)'; ctx.fillRect(-10.5, -5.6, 21, 0.7);                                  // ridge
+    ctx.fillStyle = 'rgba(255,240,200,.6)'; sfr(-10.5, -5.6, 21, 0.7);                                  // ridge
     rr(-1.6, 0.2, 3.2, 3.4, 1.4); ctx.fillStyle = col; ctx.fill();
-    for (const wx of [-7.5, 4.5]) { ctx.fillStyle = col; ctx.fillRect(wx - 0.8, 0.8, 0.7, 2); ctx.fillRect(wx + 3.1, 0.8, 0.7, 2); win(wx, 0.8, 3, 2); }
+    for (const wx of [-7.5, 4.5]) { ctx.fillStyle = col; sfr(wx - 0.8, 0.8, 0.7, 2); sfr(wx + 3.1, 0.8, 0.7, 2); win(wx, 0.8, 3, 2); }
     if (model >= 1) { ctx.fillStyle = '#e8455a'; for (const fx of [-9, -8, 8, 9]) { ctx.beginPath(); ctx.arc(fx, 3.4, 0.6, 0, 6.3); ctx.fill(); } }   // window boxes
-    if (model >= 2) { ctx.fillStyle = '#7a6a58'; ctx.fillRect(5, -12, 2.4, 3); }                                                                 // chimney
+    if (model >= 2) { ctx.fillStyle = '#7a6a58'; sfr(5, -12, 2.4, 3); }                                                                 // chimney
     if (showSymbols) glyph(COLORS[b.color].glyph, 0, -8, 2.4, 'rgba(255,255,255,.92)');
   } else if (hd === 'beach') {                             // a striped beach hut on stilts with a little deck
     rr(-11, -13, 22, 16, 1.5); ctx.fillStyle = '#fbf8f1'; ctx.fill();
     ctx.save(); rr(-11, -13, 22, 16, 1.5); ctx.clip();
-    for (let xx = -11, i = 0; xx < 11; xx += 3.2, i++) if (i % 2 === 0) { ctx.fillStyle = col; ctx.fillRect(xx, -13, 3.2, 16); }
+    for (let xx = -11, i = 0; xx < 11; xx += 3.2, i++) if (i % 2 === 0) { ctx.fillStyle = col; sfr(xx, -13, 3.2, 16); }
     ctx.restore();
-    ctx.fillStyle = 'rgba(0,0,0,.14)'; ctx.fillRect(-11, -5.4, 22, 0.6);                                          // roof ridge
-    ctx.fillStyle = '#c99a62'; ctx.fillRect(-7, 2.4, 14, 1.4); ctx.fillStyle = 'rgba(0,0,0,.2)'; for (let xx = -6.5; xx < 7; xx += 1.4) ctx.fillRect(xx, 2.4, 0.3, 1.4);   // deck
+    ctx.fillStyle = 'rgba(0,0,0,.14)'; sfr(-11, -5.4, 22, 0.6);                                          // roof ridge
+    ctx.fillStyle = '#c99a62'; sfr(-7, 2.4, 14, 1.4); ctx.fillStyle = 'rgba(0,0,0,.2)'; for (let xx = -6.5; xx < 7; xx += 1.4) sfr(xx, 2.4, 0.3, 1.4);   // deck
     rr(-1.6, -0.2, 3.2, 2.8, 0.6); ctx.fillStyle = shade(col, -0.45); ctx.fill();
     if (model >= 1) { ctx.fillStyle = '#ff6f61'; ctx.beginPath(); ctx.arc(-8.5, 3.5, 1.6, Math.PI, 0); ctx.fill(); }          // parasol
     if (model >= 2) { ctx.fillStyle = '#ffd23a'; ctx.beginPath(); ctx.arc(8.5, 3.5, 1.6, Math.PI, 0); ctx.fill(); }
@@ -4897,13 +4917,13 @@ function drawHouseDesign(hd, b, col, model) {
     for (let i = 0; i < 8; i++) { const a = i * 0.785; ctx.moveTo(Math.cos(a) * 3, -5 + Math.sin(a) * 3); ctx.lineTo(Math.cos(a) * 8.5, -5 + Math.sin(a) * 8.5); } ctx.stroke();
     rr(-2.6, 1, 5.2, 3.2, 1.6); ctx.fillStyle = '#e8f1f6'; ctx.fill(); ctx.fillStyle = '#2f4250'; rr(-1.4, 2, 2.8, 2.2, 1.1); ctx.fill();
     ctx.strokeStyle = '#6b6f72'; ctx.lineWidth = 0.5; ctx.beginPath(); ctx.moveTo(5, -9); ctx.lineTo(5, -15); ctx.stroke();
-    ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(5, -15); ctx.lineTo(8.6, -13.9); ctx.lineTo(5, -12.8); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(5, -15); ctx.lineTo(8.6, -13.9); ctx.lineTo(5, -12.8); ctx.closePath(); softFill();
     if (model >= 1) { ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(-9.5, 1.5, 1.6, 0, 6.3); ctx.fill(); ctx.beginPath(); ctx.arc(-9.5, -0.6, 1.1, 0, 6.3); ctx.fill(); }   // a tiny snowman
     if (showSymbols) glyph(COLORS[b.color].glyph, 0, -5, 2.2, col);
   } else if (hd === 'castle') {                            // a stone keep with four turrets, roofs and banners in the house colour
     rr(-10, -12, 20, 15, 1); ctx.fillStyle = '#a8a397'; ctx.fill();
-    ctx.fillStyle = '#bdb8ac'; ctx.fillRect(-10, -12, 20, 3);
-    ctx.fillStyle = 'rgba(0,0,0,.16)'; for (let xx = -9; xx < 10; xx += 2.5) ctx.fillRect(xx, -12, 1.2, 1.2);   // battlements
+    ctx.fillStyle = '#bdb8ac'; sfr(-10, -12, 20, 3);
+    ctx.fillStyle = 'rgba(0,0,0,.16)'; for (let xx = -9; xx < 10; xx += 2.5) sfr(xx, -12, 1.2, 1.2);   // battlements
     ctx.strokeStyle = 'rgba(0,0,0,.12)'; ctx.lineWidth = 0.3; ctx.beginPath(); for (let yy = -8; yy < 3; yy += 2) { ctx.moveTo(-10, yy); ctx.lineTo(10, yy); } ctx.stroke();
     for (const [tx_, ty_] of [[-10, -12], [10, -12], [-10, 3], [10, 3]]) {
       ctx.fillStyle = '#9a9589'; ctx.beginPath(); ctx.arc(tx_, ty_, 3.2, 0, 6.3); ctx.fill();
@@ -4914,14 +4934,14 @@ function drawHouseDesign(hd, b, col, model) {
     rr(-2, 0, 4, 3, 2); ctx.fillStyle = '#4a3622'; ctx.fill();                                                    // gate
     ctx.strokeStyle = '#6b6f72'; ctx.lineWidth = 0.5; ctx.beginPath(); ctx.moveTo(0, -6); ctx.lineTo(0, -16); ctx.stroke();
     const wv = REDUCED_MOTION ? 0 : Math.sin(animT * 4 + b.k) * 0.8;
-    ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(0, -16); ctx.lineTo(5, -15 + wv); ctx.lineTo(0, -13.4); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(0, -16); ctx.lineTo(5, -15 + wv); ctx.lineTo(0, -13.4); ctx.closePath(); softFill();
     if (showSymbols) glyph(COLORS[b.color].glyph, 0, -6, 2.4, col);
   } else if (hd === 'treehouse') {                         // a hut up in a big tree, with a rope ladder down
     for (const [dx, dy, rr2, c2] of [[-5, -8, 7, PAL.tree2], [5, -9, 7, PAL.tree2], [0, -3, 7.5, PAL.tree2], [-4, -10, 4.5, PAL.tree1], [4, -5, 4.2, PAL.tree1]]) { ctx.fillStyle = c2; ctx.beginPath(); ctx.arc(dx, dy, rr2, 0, 6.3); ctx.fill(); }
     ctx.fillStyle = 'rgba(0,0,0,.25)'; rr(-4.6 + 1, -9.5 + 1.2, 9.2, 7.5, 1); ctx.fill();
     rr(-4.6, -9.5, 9.2, 7.5, 1); ctx.fillStyle = '#9a6a3c'; ctx.fill();
-    ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(-5.6, -9.5); ctx.lineTo(0, -13.5); ctx.lineTo(5.6, -9.5); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = 'rgba(24,44,58,.75)'; ctx.fillRect(-1.2, -7, 2.4, 2);
+    ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(-5.6, -9.5); ctx.lineTo(0, -13.5); ctx.lineTo(5.6, -9.5); ctx.closePath(); softFill();
+    ctx.fillStyle = 'rgba(24,44,58,.75)'; sfr(-1.2, -7, 2.4, 2);
     ctx.strokeStyle = '#7a5530'; ctx.lineWidth = 0.5; ctx.beginPath(); ctx.moveTo(-1, -2); ctx.lineTo(-1, 3.5); ctx.moveTo(1, -2); ctx.lineTo(1, 3.5); for (let yy = -1.2; yy < 3.5; yy += 1.1) { ctx.moveTo(-1, yy); ctx.lineTo(1, yy); } ctx.stroke();
     if (showSymbols) glyph(COLORS[b.color].glyph, 0, -11, 1.8, 'rgba(255,255,255,.92)');
   } else if (hd === 'windmill') {                          // a round mill with four turning sails in the house colour
@@ -4930,8 +4950,8 @@ function drawHouseDesign(hd, b, col, model) {
     ctx.save(); ctx.translate(0, -5); ctx.rotate(REDUCED_MOTION ? 0.4 : animT * 0.9 + b.k);
     for (let i = 0; i < 4; i++) {
       ctx.rotate(Math.PI / 2);
-      ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fillRect(1.6, -1.2 + 0.8, 9, 2.4);
-      ctx.fillStyle = '#f4efe3'; ctx.fillRect(1.6, -1.2, 9, 2.4); ctx.fillStyle = col; ctx.fillRect(3, -1.2, 7, 1.1);
+      ctx.fillStyle = 'rgba(0,0,0,.18)'; sfr(1.6, -1.2 + 0.8, 9, 2.4);
+      ctx.fillStyle = '#f4efe3'; sfr(1.6, -1.2, 9, 2.4); ctx.fillStyle = col; sfr(3, -1.2, 7, 1.1);
       ctx.strokeStyle = '#6b5b45'; ctx.lineWidth = 0.4; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(10.6, 0); ctx.stroke();
     }
     ctx.restore();
@@ -4946,16 +4966,16 @@ function drawHouseDesign(hd, b, col, model) {
     ctx.fillStyle = '#ffe58a'; ctx.beginPath(); ctx.arc(0, -5, 1.1, 0, 6.3); ctx.fill();
     const a = REDUCED_MOTION ? 0.6 : animT * 1.4;
     ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = 'rgba(255,230,140,.28)';
-    ctx.beginPath(); ctx.moveTo(0, -5); ctx.arc(0, -5, 18, a - 0.22, a + 0.22); ctx.closePath(); ctx.fill(); ctx.restore();
+    ctx.beginPath(); ctx.moveTo(0, -5); ctx.arc(0, -5, 18, a - 0.22, a + 0.22); ctx.closePath(); softFill(); ctx.restore();
     rr(-1.3, 0.6, 2.6, 2.4, 0.8); ctx.fillStyle = shade(col, -0.45); ctx.fill();
     if (showSymbols) glyph(COLORS[b.color].glyph, 0, -9.5, 1.4, col);
   } else if (hd === 'barn') {                                     // a gambrel-roofed barn in the house colour with white trim and a cross-braced door
     rr(-11, -13, 22, 16, 2); ctx.fillStyle = shade(col, -0.18); ctx.fill();
-    ctx.fillStyle = shade(col, 0.08); ctx.fillRect(-11, -13, 22, 4); ctx.fillRect(-11, -1, 22, 4);
-    ctx.fillStyle = shade(col, -0.05); ctx.fillRect(-11, -9, 22, 8);
-    ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.fillRect(-11, -5.3, 22, 0.6);                                    // ridge
+    ctx.fillStyle = shade(col, 0.08); sfr(-11, -13, 22, 4); sfr(-11, -1, 22, 4);
+    ctx.fillStyle = shade(col, -0.05); sfr(-11, -9, 22, 8);
+    ctx.fillStyle = 'rgba(255,255,255,.75)'; sfr(-11, -5.3, 22, 0.6);                                    // ridge
     ctx.strokeStyle = '#f6f2ea'; ctx.lineWidth = 0.9; rr(-11, -13, 22, 16, 2); ctx.stroke();
-    ctx.fillStyle = '#f6f2ea'; ctx.fillRect(-3.4, -0.2, 6.8, 3.4);                                                // barn door
+    ctx.fillStyle = '#f6f2ea'; sfr(-3.4, -0.2, 6.8, 3.4);                                                // barn door
     ctx.strokeStyle = shade(col, -0.35); ctx.lineWidth = 0.6; ctx.beginPath(); ctx.moveTo(-3.4, -0.2); ctx.lineTo(3.4, 3.2); ctx.moveTo(3.4, -0.2); ctx.lineTo(-3.4, 3.2); ctx.stroke();
     if (model >= 1) { ctx.fillStyle = '#c9a54a'; ctx.beginPath(); ctx.arc(-8, 1.6, 1.4, 0, 6.3); ctx.arc(8, 1.6, 1.4, 0, 6.3); ctx.fill(); }   // hay bales
     if (model >= 2) { ctx.fillStyle = '#8a9296'; ctx.beginPath(); ctx.arc(8.5, -10, 2, 0, 6.3); ctx.fill(); ctx.fillStyle = '#c3c9cc'; ctx.beginPath(); ctx.arc(8.5, -10, 1.2, 0, 6.3); ctx.fill(); }   // silo cap
@@ -4963,12 +4983,12 @@ function drawHouseDesign(hd, b, col, model) {
   } else if (hd === 'modern') {                            // a flat-roofed box: pale roof, a block of the house colour, long glazing
     rr(-11, -13, 22, 16, 1.5); ctx.fillStyle = '#ebebe6'; ctx.fill();
     rr(-11, -13, 8.5, 16, 1.5); ctx.fillStyle = col; ctx.fill();
-    ctx.fillStyle = 'rgba(0,0,0,.1)'; ctx.fillRect(-2.5, -13, 0.5, 16);
-    ctx.fillStyle = 'rgba(24,44,58,.82)'; ctx.fillRect(-1.5, 0.6, 11.5, 1.9);                                      // floor-to-ceiling window
-    ctx.fillStyle = 'rgba(160,210,240,.45)'; ctx.fillRect(-1, 0.9, 3.5, 1.3);
-    ctx.fillStyle = 'rgba(170,215,240,.55)'; ctx.fillRect(1, -10.5, 5, 3.5);                                       // skylight
-    if (model >= 1) { ctx.fillStyle = '#1f3552'; for (let i = 0; i < 2; i++) ctx.fillRect(1 + i * 4, -5.5, 3.4, 3); }   // solar
-    if (model >= 2) { rr(-10, -11.5, 5.5, 8, 1); ctx.fillStyle = '#5fc4e6'; ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.fillRect(-9.4, -10.5, 4.3, 0.6); }   // roof pool
+    ctx.fillStyle = 'rgba(0,0,0,.1)'; sfr(-2.5, -13, 0.5, 16);
+    ctx.fillStyle = 'rgba(24,44,58,.82)'; sfr(-1.5, 0.6, 11.5, 1.9);                                      // floor-to-ceiling window
+    ctx.fillStyle = 'rgba(160,210,240,.45)'; sfr(-1, 0.9, 3.5, 1.3);
+    ctx.fillStyle = 'rgba(170,215,240,.55)'; sfr(1, -10.5, 5, 3.5);                                       // skylight
+    if (model >= 1) { ctx.fillStyle = '#1f3552'; for (let i = 0; i < 2; i++) sfr(1 + i * 4, -5.5, 3.4, 3); }   // solar
+    if (model >= 2) { rr(-10, -11.5, 5.5, 8, 1); ctx.fillStyle = '#5fc4e6'; ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,.5)'; sfr(-9.4, -10.5, 4.3, 0.6); }   // roof pool
     if (showSymbols) glyph(COLORS[b.color].glyph, -6.7, -5, 2.4, 'rgba(255,255,255,.92)');
   } else if (hd === 'tower') {                             // a round stone tower with a conical roof in the house colour
     ctx.fillStyle = PAL.roofBase; ctx.beginPath(); ctx.arc(0, -4.5, 8.5, 0, 6.3); ctx.fill();
@@ -4979,7 +4999,7 @@ function drawHouseDesign(hd, b, col, model) {
     for (let i = 0; i < 8; i++) { const a = i * 0.785; ctx.moveTo(0, -4.5); ctx.lineTo(Math.cos(a) * 7.6, -4.5 + Math.sin(a) * 7.6); } ctx.stroke();
     ctx.fillStyle = '#f2d36b'; ctx.beginPath(); ctx.arc(0, -4.5, 1.1, 0, 6.3); ctx.fill();                          // finial
     rr(-1.4, 2.6, 2.8, 1.8, 0.8); ctx.fillStyle = shade(col, -0.5); ctx.fill();                                     // door
-    if (model >= 1) { ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(0, -4.5); ctx.lineTo(0, -15); ctx.strokeStyle = '#6b6f72'; ctx.lineWidth = 0.5; ctx.stroke(); ctx.beginPath(); ctx.moveTo(0, -15); ctx.lineTo(4, -13.8); ctx.lineTo(0, -12.6); ctx.closePath(); ctx.fill(); }   // pennant
+    if (model >= 1) { ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(0, -4.5); ctx.lineTo(0, -15); ctx.strokeStyle = '#6b6f72'; ctx.lineWidth = 0.5; ctx.stroke(); ctx.beginPath(); ctx.moveTo(0, -15); ctx.lineTo(4, -13.8); ctx.lineTo(0, -12.6); ctx.closePath(); softFill(); }   // pennant
     if (model >= 2) { ctx.fillStyle = PAL.roofBase; ctx.beginPath(); ctx.arc(8.5, -10, 3.2, 0, 6.3); ctx.fill(); ctx.fillStyle = shade(col, -0.1); ctx.beginPath(); ctx.arc(8.5, -10, 2.6, 0, 6.3); ctx.fill(); }   // a second turret
     if (showSymbols) glyph(COLORS[b.color].glyph, 0, -4.5, 2.2, 'rgba(255,255,255,.92)');
   }
@@ -5198,36 +5218,36 @@ function drawStore(b) {
 /* store designs re-roof the building (drawn clipped to the roof, in the store's own frame) */
 function storeRoofDesign(sdz, Bx, By, Bw, Bh, col) {
   if (sdz === 'arcade') {                                  // a dark roof lit by a chasing grid of neon tiles
-    ctx.fillStyle = '#16122a'; ctx.fillRect(Bx, By, Bw, Bh);
+    ctx.fillStyle = '#16122a'; sfr(Bx, By, Bw, Bh);
     const t = REDUCED_MOTION ? 0 : Math.floor(animT * 2);
     ctx.globalAlpha = 0.6;
-    for (let yy = By + 4, j = 0; yy < By + Bh - 6; yy += 6, j++) for (let xx = Bx + 4, i = 0; xx < Bx + Bw - 6; xx += 6, i++) if ((i + j + t) % 3 === 0) { ctx.fillStyle = (i + j) % 2 ? '#ff3df2' : '#00e1ff'; ctx.fillRect(xx, yy, 4, 4); }
+    for (let yy = By + 4, j = 0; yy < By + Bh - 6; yy += 6, j++) for (let xx = Bx + 4, i = 0; xx < Bx + Bw - 6; xx += 6, i++) if ((i + j + t) % 3 === 0) { ctx.fillStyle = (i + j) % 2 ? '#ff3df2' : '#00e1ff'; sfr(xx, yy, 4, 4); }
     ctx.globalAlpha = 1; ctx.strokeStyle = col; ctx.lineWidth = 1.4; ctx.strokeRect(Bx + 3, By + 3, Bw - 6, Bh - 6);
   } else if (sdz === 'brick') {                                   // a tar roof inside a red-brick parapet
-    ctx.fillStyle = '#4b4f52'; ctx.fillRect(Bx, By, Bw, Bh);
-    ctx.fillStyle = 'rgba(255,255,255,.05)'; for (let i = 0; i < 40; i++) ctx.fillRect(Bx + hash01(i, 71) * Bw, By + hash01(i, 72) * Bh, 1, 1);
+    ctx.fillStyle = '#4b4f52'; sfr(Bx, By, Bw, Bh);
+    ctx.fillStyle = 'rgba(255,255,255,.05)'; for (let i = 0; i < 40; i++) sfr(Bx + hash01(i, 71) * Bw, By + hash01(i, 72) * Bh, 1, 1);
     ctx.strokeStyle = '#a5523b'; ctx.lineWidth = 4; ctx.strokeRect(Bx + 2, By + 2, Bw - 4, Bh - 4);
     ctx.strokeStyle = 'rgba(255,225,200,.35)'; ctx.lineWidth = 0.4; ctx.setLineDash([1.6, 1]); ctx.strokeRect(Bx + 2, By + 2, Bw - 4, Bh - 4); ctx.setLineDash([]);
   } else if (sdz === 'eco') {                              // a living green roof with planters and a row of solar panels
-    ctx.fillStyle = '#6fae55'; ctx.fillRect(Bx, By, Bw, Bh);
+    ctx.fillStyle = '#6fae55'; sfr(Bx, By, Bw, Bh);
     for (let i = 0; i < 30; i++) { ctx.fillStyle = i % 3 ? '#86c46a' : '#4f8d3f'; ctx.beginPath(); ctx.arc(Bx + hash01(i, 81) * Bw, By + hash01(i, 82) * Bh, 1.2 + hash01(i, 83) * 1.6, 0, 6.3); ctx.fill(); }
-    ctx.fillStyle = '#1f3552'; for (let i = 0; i < 5; i++) ctx.fillRect(Bx + 4 + i * 6, By + 4, 5, 3.4);
-    ctx.fillStyle = '#c9b089'; ctx.fillRect(Bx + Bw / 2 - 0.8, By, 1.6, Bh);                                    // a gravel path
+    ctx.fillStyle = '#1f3552'; for (let i = 0; i < 5; i++) sfr(Bx + 4 + i * 6, By + 4, 5, 3.4);
+    ctx.fillStyle = '#c9b089'; sfr(Bx + Bw / 2 - 0.8, By, 1.6, Bh);                                    // a gravel path
   } else if (sdz === 'neon') {                             // a black roof outlined in glowing neon of the store colour
-    ctx.fillStyle = '#1d1f27'; ctx.fillRect(Bx, By, Bw, Bh);
+    ctx.fillStyle = '#1d1f27'; sfr(Bx, By, Bw, Bh);
     ctx.save(); ctx.shadowColor = col; ctx.shadowBlur = 6; ctx.strokeStyle = shade(col, 0.35); ctx.lineWidth = 1.4;
     ctx.strokeRect(Bx + 4, By + 4, Bw - 8, Bh - 8); ctx.strokeRect(Bx + 8, By + 8, Bw - 16, 4); ctx.restore();
   } else if (sdz === 'diner') {                            // a chrome-topped diner with a chequered band and a sign
     const g = ctx.createLinearGradient(Bx, By, Bx, By + Bh); g.addColorStop(0, '#e9edf0'); g.addColorStop(0.5, '#b9c1c7'); g.addColorStop(1, '#dfe4e8');
-    ctx.fillStyle = g; ctx.fillRect(Bx, By, Bw, Bh);
-    for (let xx = Bx, i = 0; xx < Bx + Bw; xx += 3, i++) { ctx.fillStyle = i % 2 ? '#1f262b' : '#ffffff'; ctx.fillRect(xx, By + Bh * 0.55, 3, 1.6); ctx.fillStyle = i % 2 ? '#ffffff' : '#1f262b'; ctx.fillRect(xx, By + Bh * 0.55 + 1.6, 3, 1.6); }
+    ctx.fillStyle = g; sfr(Bx, By, Bw, Bh);
+    for (let xx = Bx, i = 0; xx < Bx + Bw; xx += 3, i++) { ctx.fillStyle = i % 2 ? '#1f262b' : '#ffffff'; sfr(xx, By + Bh * 0.55, 3, 1.6); ctx.fillStyle = i % 2 ? '#ffffff' : '#1f262b'; sfr(xx, By + Bh * 0.55 + 1.6, 3, 1.6); }
     rr(Bx + Bw / 2 - 12, By + 8, 24, 9, 4.5); ctx.fillStyle = col; ctx.fill(); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 0.8; ctx.stroke();
   } else if (sdz === 'pagoda') {                           // tiered pagoda roofs in the store colour with gold finials
     for (let i = 0; i < 4; i++) { const ins = i * 6; rr(Bx + ins, By + ins, Bw - ins * 2, Bh - ins * 2, 3); ctx.fillStyle = shade(col, i % 2 ? 0.08 : -0.18); ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,.2)'; ctx.lineWidth = 0.6; ctx.stroke(); }
     ctx.fillStyle = '#f2c94c'; for (const [px, py] of [[Bx + 2, By + 2], [Bx + Bw - 2, By + 2], [Bx + 2, By + Bh - 2], [Bx + Bw - 2, By + Bh - 2]]) { ctx.beginPath(); ctx.arc(px, py, 1.4, 0, 6.3); ctx.fill(); }
     ctx.beginPath(); ctx.arc(Bx + Bw / 2, By + Bh / 2, 2, 0, 6.3); ctx.fill();
   } else if (sdz === 'helipad') {                          // a helipad on the roof, ringed with lights
-    ctx.fillStyle = '#4a5157'; ctx.fillRect(Bx, By, Bw, Bh);
+    ctx.fillStyle = '#4a5157'; sfr(Bx, By, Bw, Bh);
     const cx_ = Bx + Bw / 2, cy_ = By + Bh / 2, R_ = Math.min(Bw, Bh) * 0.36;
     ctx.strokeStyle = '#ffd23a'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(cx_, cy_, R_, 0, 6.3); ctx.stroke();
     ctx.fillStyle = '#ffffff'; ctx.font = '900 ' + (R_ * 1.2).toFixed(0) + 'px Overpass, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('H', cx_, cy_ + R_ * 0.08);
@@ -5236,30 +5256,30 @@ function storeRoofDesign(sdz, Bx, By, Bw, Bh, col) {
     const t = REDUCED_MOTION ? 0 : animT * 0.25;
     const g = ctx.createLinearGradient(Bx, By, Bx + Bw, By + Bh);
     for (let i = 0; i <= 4; i++) g.addColorStop(i / 4, 'hsl(' + (((t * 360) + i * 70) % 360).toFixed(0) + ',80%,78%)');
-    ctx.fillStyle = g; ctx.fillRect(Bx, By, Bw, Bh);
+    ctx.fillStyle = g; sfr(Bx, By, Bw, Bh);
     ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 0.6; ctx.beginPath();
     const cxr = Bx + Bw / 2, cyr = By + Bh / 2;
     for (const [px, py] of [[Bx, By], [Bx + Bw, By], [Bx + Bw, By + Bh], [Bx, By + Bh], [cxr, By], [Bx + Bw, cyr], [cxr, By + Bh], [Bx, cyr]]) { ctx.moveTo(cxr, cyr); ctx.lineTo(px, py); }
     ctx.stroke();
-    ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.beginPath(); ctx.moveTo(cxr, cyr); ctx.lineTo(Bx, By); ctx.lineTo(cxr, By); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.beginPath(); ctx.moveTo(cxr, cyr); ctx.lineTo(Bx, By); ctx.lineTo(cxr, By); ctx.closePath(); softFill();
   } else if (sdz === 'warehouse') {                               // dark corrugated metal
-    ctx.fillStyle = '#5b666e'; ctx.fillRect(Bx, By, Bw, Bh);
-    for (let xx = Bx; xx < Bx + Bw; xx += 3) { ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.fillRect(xx, By, 1, Bh); ctx.fillStyle = 'rgba(0,0,0,.14)'; ctx.fillRect(xx + 1.5, By, 0.8, Bh); }
-    ctx.fillStyle = 'rgba(170,215,240,.45)'; for (let j = 0; j < 3; j++) ctx.fillRect(Bx + Bw - 10, By + 8 + j * 12, 5, 6);
+    ctx.fillStyle = '#5b666e'; sfr(Bx, By, Bw, Bh);
+    for (let xx = Bx; xx < Bx + Bw; xx += 3) { ctx.fillStyle = 'rgba(255,255,255,.12)'; sfr(xx, By, 1, Bh); ctx.fillStyle = 'rgba(0,0,0,.14)'; sfr(xx + 1.5, By, 0.8, Bh); }
+    ctx.fillStyle = 'rgba(170,215,240,.45)'; for (let j = 0; j < 3; j++) sfr(Bx + Bw - 10, By + 8 + j * 12, 5, 6);
   } else if (sdz === 'market') {                           // a striped market-hall canopy in the store colour
-    for (let i = 0, xx = Bx; xx < Bx + Bw; xx += 6, i++) { ctx.fillStyle = i % 2 ? '#fbf8f1' : col; ctx.fillRect(xx, By, 6, Bh); }
+    for (let i = 0, xx = Bx; xx < Bx + Bw; xx += 6, i++) { ctx.fillStyle = i % 2 ? '#fbf8f1' : col; sfr(xx, By, 6, Bh); }
     const g = ctx.createLinearGradient(0, By, 0, By + Bh); g.addColorStop(0, 'rgba(255,255,255,.18)'); g.addColorStop(0.5, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.18)');
-    ctx.fillStyle = g; ctx.fillRect(Bx, By, Bw, Bh);
-    ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fillRect(Bx, By + Bh / 2 - 0.4, Bw, 0.8);                               // ridge
+    ctx.fillStyle = g; sfr(Bx, By, Bw, Bh);
+    ctx.fillStyle = 'rgba(0,0,0,.18)'; sfr(Bx, By + Bh / 2 - 0.4, Bw, 0.8);                               // ridge
   } else if (sdz === 'glass') {                            // a glass curtain-wall tower: sky reflections and mullions
     const g = ctx.createLinearGradient(Bx, By, Bx + Bw, By + Bh); g.addColorStop(0, '#d5eef8'); g.addColorStop(0.55, '#8cc4dd'); g.addColorStop(1, '#5d97b4');
-    ctx.fillStyle = g; ctx.fillRect(Bx, By, Bw, Bh);
-    ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.beginPath(); ctx.moveTo(Bx + Bw * 0.1, By); ctx.lineTo(Bx + Bw * 0.35, By); ctx.lineTo(Bx + Bw * 0.05, By + Bh); ctx.lineTo(Bx - Bw * 0.2, By + Bh); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = g; sfr(Bx, By, Bw, Bh);
+    ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.beginPath(); ctx.moveTo(Bx + Bw * 0.1, By); ctx.lineTo(Bx + Bw * 0.35, By); ctx.lineTo(Bx + Bw * 0.05, By + Bh); ctx.lineTo(Bx - Bw * 0.2, By + Bh); ctx.closePath(); softFill();
     ctx.strokeStyle = 'rgba(30,60,80,.35)'; ctx.lineWidth = 0.5; ctx.beginPath();
     for (let xx = Bx + 7; xx < Bx + Bw; xx += 7) { ctx.moveTo(xx, By); ctx.lineTo(xx, By + Bh); }
     for (let yy = By + 7; yy < By + Bh; yy += 7) { ctx.moveTo(Bx, yy); ctx.lineTo(Bx + Bw, yy); }
     ctx.stroke();
-    ctx.fillStyle = rgba(col, 0.55); ctx.fillRect(Bx, By, Bw, 2.5);
+    ctx.fillStyle = rgba(col, 0.55); sfr(Bx, By, Bw, 2.5);
   }
 }
 /* world-space box around a building's plot, for outlines */
@@ -5398,7 +5418,7 @@ function drawCar(c, sizeBoost) {
   if (bi === 4) ax.push(r + 5.9);
   for (const x of ax) for (const sy of [-1, 1]) {
     wheel(x, sy * hw, tw, th);
-    if (kit >= 3) { ctx.fillStyle = '#ffc933'; ctx.fillRect(x - 0.5, sy * hw - 0.3, 1, 0.6); }
+    if (kit >= 3) { ctx.fillStyle = '#ffc933'; sfr(x - 0.5, sy * hw - 0.3, 1, 0.6); }
   }
   // 1. the shell, and where its bonnet (paintable nose) and roof sit
   let bon0, bon1, roof0, roof1, nose0;                     // bonnet span, roof span (slots), start of the coloured nose
@@ -5414,7 +5434,7 @@ function drawCar(c, sizeBoost) {
     rr(f - cab, -hw, cab, Wd, 2); ctx.fillStyle = col; ctx.fill();
     rr(r, -hw, L - cab - 0.3, Wd, 1.1); ctx.fillStyle = '#aab3b8'; ctx.fill();                 // bed walls
     rr(r + 0.7, -hw + 0.7, L - cab - 1.7, Wd - 1.4, 0.7); ctx.fillStyle = '#3a4248'; ctx.fill();  // bed floor
-    ctx.fillStyle = 'rgba(255,255,255,.12)'; for (let x = r + 1.4; x < f - cab - 1; x += 1.4) ctx.fillRect(x, -hw + 0.8, 0.3, Wd - 1.6);
+    ctx.fillStyle = 'rgba(255,255,255,.12)'; for (let x = r + 1.4; x < f - cab - 1; x += 1.4) sfr(x, -hw + 0.8, 0.3, Wd - 1.6);
     bon0 = f - 2.2; bon1 = f - 0.4; roof0 = r + 1; roof1 = f - cab - 1.3; nose0 = f - cab;
   } else if (bi === 3) {                                   // panel van: tall white body with a coloured nose
     rr(r, -hw, L, Wd, 1.8); ctx.fillStyle = white; ctx.fill();
@@ -5424,7 +5444,7 @@ function drawCar(c, sizeBoost) {
   } else {                                                 // box truck: short cab, a gap, then a tall box
     const cab = 4.9;
     rr(f - cab, -hw + 0.4, cab, Wd - 0.8, 1.6); ctx.fillStyle = col; ctx.fill();
-    ctx.fillStyle = black; ctx.fillRect(f - cab - 0.7, -hw + 1.2, 0.7, Wd - 2.4);                 // the gap between cab and box
+    ctx.fillStyle = black; sfr(f - cab - 0.7, -hw + 1.2, 0.7, Wd - 2.4);                 // the gap between cab and box
     rr(r, -hw, L - cab - 0.7, Wd, 0.9); ctx.fillStyle = white; ctx.fill();
     ctx.lineWidth = 0.45; ctx.strokeStyle = 'rgba(0,0,0,.28)'; ctx.stroke();
     bon0 = f - 1.3; bon1 = f - 0.3; roof0 = r + 1; roof1 = f - cab - 1.6; nose0 = f - cab;
@@ -5433,14 +5453,14 @@ function drawCar(c, sizeBoost) {
   if (kit === 1) {                                         // sport: white twin racing stripes nose to tail
     ctx.fillStyle = 'rgba(255,255,255,.95)';
     const s0 = bi >= 2 ? nose0 : r + 0.3;
-    ctx.fillRect(s0, -1.35, f - 0.3 - s0, 0.8); ctx.fillRect(s0, 0.55, f - 0.3 - s0, 0.8);
+    sfr(s0, -1.35, f - 0.3 - s0, 0.8); sfr(s0, 0.55, f - 0.3 - s0, 0.8);
   } else if (kit === 2) {                                  // GT: black bonnet, gold pin stripes
     ctx.fillStyle = black; rr(bon0 - 0.4, -hw + 0.5, bon1 - bon0 + 0.4, Wd - 1, 0.8); ctx.fill();
     ctx.fillStyle = '#ffc933'; const s0 = bi >= 2 ? nose0 : r + 0.4;
-    ctx.fillRect(s0, -hw + 0.7, f - 0.6 - s0, 0.4); ctx.fillRect(s0, hw - 1.1, f - 0.6 - s0, 0.4);
+    sfr(s0, -hw + 0.7, f - 0.6 - s0, 0.4); sfr(s0, hw - 1.1, f - 0.6 - s0, 0.4);
   } else if (kit >= 3) {                                   // racer: chequered bonnet
     const cw = Math.max(0.8, (bon1 - bon0 + 0.4) / 3), y0 = -hw + 0.5, rows = 4, chh = (Wd - 1) / rows;
-    for (let i = 0; i < 3; i++) for (let j = 0; j < rows; j++) { ctx.fillStyle = (i + j) % 2 ? black : '#ffffff'; ctx.fillRect(bon0 - 0.4 + i * cw, y0 + j * chh, cw, chh); }
+    for (let i = 0; i < 3; i++) for (let j = 0; j < rows; j++) { ctx.fillStyle = (i + j) % 2 ? black : '#ffffff'; sfr(bon0 - 0.4 + i * cw, y0 + j * chh, cw, chh); }
   }
   if (cd === 'camo') {                                     // camouflage blotches in shades of the car's colour
     ctx.save(); rr(r, -hw, L, Wd, 1.5); ctx.clip();
@@ -5453,25 +5473,25 @@ function drawCar(c, sizeBoost) {
   if (cd === 'galaxy') {                                   // a starry night sky over the paint, the car's colour glowing through
     ctx.save(); rr(r, -hw, L, Wd, bi === 0 ? hw : 1.5); ctx.clip();
     const gg = ctx.createLinearGradient(r, -hw, f, hw); gg.addColorStop(0, 'rgba(26,15,61,.88)'); gg.addColorStop(0.55, rgba(col, 0.5)); gg.addColorStop(1, 'rgba(10,8,30,.9)');
-    ctx.fillStyle = gg; ctx.fillRect(r, -hw, L, Wd);
-    for (let i = 0; i < 6; i++) { const tw_ = REDUCED_MOTION ? 0.8 : 0.5 + 0.5 * Math.sin(animT * 3 + i * 1.7 + c.id); ctx.fillStyle = 'rgba(255,255,255,' + tw_.toFixed(2) + ')'; ctx.fillRect(r + hash01(c.id * 5 + i, 97) * L, -hw + hash01(c.id * 5 + i, 98) * Wd, 0.45, 0.45); }
+    ctx.fillStyle = gg; sfr(r, -hw, L, Wd);
+    for (let i = 0; i < 6; i++) { const tw_ = REDUCED_MOTION ? 0.8 : 0.5 + 0.5 * Math.sin(animT * 3 + i * 1.7 + c.id); ctx.fillStyle = 'rgba(255,255,255,' + tw_.toFixed(2) + ')'; sfr(r + hash01(c.id * 5 + i, 97) * L, -hw + hash01(c.id * 5 + i, 98) * Wd, 0.45, 0.45); }
     ctx.restore();
   }
   if (cd === 'police') {                                   // white doors on the car's own colour
-    ctx.save(); rr(r, -hw, L, Wd, bi === 0 ? hw : 1.5); ctx.clip(); ctx.fillStyle = '#f4f2ec'; ctx.fillRect(r + L * 0.3, -hw, L * 0.36, Wd); ctx.restore();
+    ctx.save(); rr(r, -hw, L, Wd, bi === 0 ? hw : 1.5); ctx.clip(); ctx.fillStyle = '#f4f2ec'; sfr(r + L * 0.3, -hw, L * 0.36, Wd); ctx.restore();
   }
   if (cd === 'pastel') {                                   // a soft pastel wash over the paint, with a white roof
-    ctx.save(); rr(r, -hw, L, Wd, bi === 0 ? hw : 1.5); ctx.clip(); ctx.fillStyle = 'rgba(255,255,255,.42)'; ctx.fillRect(r, -hw, L, Wd); ctx.restore();
+    ctx.save(); rr(r, -hw, L, Wd, bi === 0 ? hw : 1.5); ctx.clip(); ctx.fillStyle = 'rgba(255,255,255,.42)'; sfr(r, -hw, L, Wd); ctx.restore();
   }
   if (cd === 'champion') {                                 // a champion's livery: white centre stripe edged in gold
-    ctx.fillStyle = '#ffffff'; ctx.fillRect(r + 0.4, -1.1, L - 0.8, 2.2);
-    ctx.fillStyle = '#d4af37'; ctx.fillRect(r + 0.4, -1.4, L - 0.8, 0.35); ctx.fillRect(r + 0.4, 1.05, L - 0.8, 0.35);
+    ctx.fillStyle = '#ffffff'; sfr(r + 0.4, -1.1, L - 0.8, 2.2);
+    ctx.fillStyle = '#d4af37'; sfr(r + 0.4, -1.4, L - 0.8, 0.35); sfr(r + 0.4, 1.05, L - 0.8, 0.35);
   }
   if (cd === 'checker') {                                  // a taxi-style chequered band down each side
     ctx.save(); rr(r, -hw, L, Wd, 1.5); ctx.clip();
     const cw = 1.3;
     for (let x = r + 1.5, i = 0; x < f - 1.5; x += cw, i++) for (const [y0, j] of [[-hw, 0], [hw - 1.4, 1]]) {
-      ctx.fillStyle = (i + j) % 2 ? '#1f262b' : '#ffffff'; ctx.fillRect(x, y0, cw, 0.7); ctx.fillStyle = (i + j) % 2 ? '#ffffff' : '#1f262b'; ctx.fillRect(x, y0 + 0.7, cw, 0.7);
+      ctx.fillStyle = (i + j) % 2 ? '#1f262b' : '#ffffff'; sfr(x, y0, cw, 0.7); ctx.fillStyle = (i + j) % 2 ? '#ffffff' : '#1f262b'; sfr(x, y0 + 0.7, cw, 0.7);
     }
     ctx.restore();
   }
@@ -5480,15 +5500,15 @@ function drawCar(c, sizeBoost) {
     const fl = (c1, sc) => {
       ctx.fillStyle = c1; ctx.beginPath(); ctx.moveTo(f, -hw * sc);
       for (let i = 0; i <= 4; i++) { const t = i / 4, yy = -hw * sc + 2 * hw * sc * t; ctx.lineTo(f - L * (0.32 + (i % 2) * 0.18) * sc, yy - hw * 0.22 * sc); ctx.lineTo(f - L * 0.08, yy); }
-      ctx.lineTo(f, hw * sc); ctx.closePath(); ctx.fill();
+      ctx.lineTo(f, hw * sc); ctx.closePath(); softFill();
     };
     fl('#ff7a1a', 1); fl('#ffd23a', 0.65);
     ctx.restore();
   }
   if (cd === 'livery') {                                   // a bold white swoosh along the body
     ctx.save(); rr(r, -hw, L, Wd, 1.5); ctx.clip();
-    ctx.fillStyle = 'rgba(255,255,255,.92)'; ctx.beginPath(); ctx.moveTo(r, hw); ctx.lineTo(r + L * 0.35, hw); ctx.lineTo(r + L * 0.7, -hw); ctx.lineTo(r + L * 0.5, -hw); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = shade(col, -0.45); ctx.beginPath(); ctx.moveTo(r + L * 0.38, hw); ctx.lineTo(r + L * 0.46, hw); ctx.lineTo(r + L * 0.8, -hw); ctx.lineTo(r + L * 0.72, -hw); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.92)'; ctx.beginPath(); ctx.moveTo(r, hw); ctx.lineTo(r + L * 0.35, hw); ctx.lineTo(r + L * 0.7, -hw); ctx.lineTo(r + L * 0.5, -hw); ctx.closePath(); softFill();
+    ctx.fillStyle = shade(col, -0.45); ctx.beginPath(); ctx.moveTo(r + L * 0.38, hw); ctx.lineTo(r + L * 0.46, hw); ctx.lineTo(r + L * 0.8, -hw); ctx.lineTo(r + L * 0.72, -hw); ctx.closePath(); softFill();
     ctx.restore();
   }
   // 3. glass, roof and the details that make each body its own
@@ -5498,58 +5518,58 @@ function drawCar(c, sizeBoost) {
     glass(r + (bi === 0 ? 1 : 0.6), -hw + 1, bi === 0 ? 1.3 : 1, Wd - 2, 0.5);              // rear window
     rr(roof0, -hw + 0.8, roof1 - roof0, Wd - 1.6, 1.2); ctx.fillStyle = shade(col, kit === 2 ? -0.45 : 0.18); ctx.fill();
     if (bi === 1) {                                        // estate: side windows and a roof rack
-      ctx.fillStyle = 'rgba(24,44,58,.75)'; ctx.fillRect(roof0, -hw + 0.15, roof1 - roof0, 0.5); ctx.fillRect(roof0, hw - 0.65, roof1 - roof0, 0.5);
-      ctx.fillStyle = '#2a3036'; ctx.fillRect(roof0 + 0.1, -hw + 0.9, roof1 - roof0 - 0.2, 0.45); ctx.fillRect(roof0 + 0.1, hw - 1.35, roof1 - roof0 - 0.2, 0.45);
-      for (const t of [0.12, 0.88]) ctx.fillRect(roof0 + (roof1 - roof0) * t - 0.2, -hw + 0.9, 0.45, Wd - 1.8);
+      ctx.fillStyle = 'rgba(24,44,58,.75)'; sfr(roof0, -hw + 0.15, roof1 - roof0, 0.5); sfr(roof0, hw - 0.65, roof1 - roof0, 0.5);
+      ctx.fillStyle = '#2a3036'; sfr(roof0 + 0.1, -hw + 0.9, roof1 - roof0 - 0.2, 0.45); sfr(roof0 + 0.1, hw - 1.35, roof1 - roof0 - 0.2, 0.45);
+      for (const t of [0.12, 0.88]) sfr(roof0 + (roof1 - roof0) * t - 0.2, -hw + 0.9, 0.45, Wd - 1.8);
     }
   } else if (bi === 2) {
     rr(nose0 + 0.6, -hw + 0.5, 6.4 - 1.2, Wd * 0.28, 1); ctx.fillStyle = hi; ctx.fill();
     glass(f - 3.6, -hw + 0.8, 1.7, Wd - 1.6, 0.6);
     glass(nose0 + 0.4, -hw + 1.1, 0.9, Wd - 2.2, 0.4);
-    ctx.fillStyle = '#2a3036'; ctx.fillRect(nose0 - 1, -hw + 0.2, 0.7, Wd - 0.4);               // roll bar
-    ctx.fillStyle = '#8b9398'; ctx.fillRect(r, -hw + 0.4, 0.5, Wd - 0.8);                      // tailgate
+    ctx.fillStyle = '#2a3036'; sfr(nose0 - 1, -hw + 0.2, 0.7, Wd - 0.4);               // roll bar
+    ctx.fillStyle = '#8b9398'; sfr(r, -hw + 0.4, 0.5, Wd - 0.8);                      // tailgate
   } else if (bi === 3) {
     glass(f - 3, -hw + 0.8, 1.6, Wd - 1.6, 0.5);
-    ctx.fillStyle = col; ctx.fillRect(r + 0.6, -hw + 0.3, L - 5, 1); ctx.fillRect(r + 0.6, hw - 1.3, L - 5, 1);   // livery bands
-    ctx.fillStyle = 'rgba(0,0,0,.14)'; ctx.fillRect(roof0 + (roof1 - roof0) * 0.5, -hw + 1.4, 0.35, Wd - 2.8);   // roof seam
+    ctx.fillStyle = col; sfr(r + 0.6, -hw + 0.3, L - 5, 1); sfr(r + 0.6, hw - 1.3, L - 5, 1);   // livery bands
+    ctx.fillStyle = 'rgba(0,0,0,.14)'; sfr(roof0 + (roof1 - roof0) * 0.5, -hw + 1.4, 0.35, Wd - 2.8);   // roof seam
     ctx.fillStyle = '#c3c8cb'; rr(f - 5.3, -0.9, 1.4, 1.8, 0.3); ctx.fill();                   // roof vent
   } else {
     glass(f - 2, -hw + 1.1, 1.4, Wd - 2.2, 0.5);
     ctx.fillStyle = 'rgba(0,0,0,.09)';
-    for (let x = r + 1.6; x < f - 5.6; x += 1.6) ctx.fillRect(x, -hw + 0.3, 0.35, Wd - 0.6);    // box ribs
-    ctx.fillStyle = col; ctx.fillRect(f - 6.6, -hw + 0.2, 1.1, Wd - 0.4);                       // coloured band on the box front
-    ctx.fillRect(r + 0.3, -hw + 0.25, L - 7, 0.8); ctx.fillRect(r + 0.3, hw - 1.05, L - 7, 0.8);
+    for (let x = r + 1.6; x < f - 5.6; x += 1.6) sfr(x, -hw + 0.3, 0.35, Wd - 0.6);    // box ribs
+    ctx.fillStyle = col; sfr(f - 6.6, -hw + 0.2, 1.1, Wd - 0.4);                       // coloured band on the box front
+    sfr(r + 0.3, -hw + 0.25, L - 7, 0.8); sfr(r + 0.3, hw - 1.05, L - 7, 0.8);
   }
   if (cd === 'police') {                                   // a light bar across the roof, flashing red and blue
     const on = REDUCED_MOTION ? 0 : Math.floor(animT * 5 + c.id) % 2, mx = (roof0 + roof1) / 2;
-    ctx.fillStyle = '#1f262b'; ctx.fillRect(mx - 0.8, -hw + 0.8, 1.6, Wd - 1.6);
-    ctx.fillStyle = on ? '#ff3b3b' : '#8a2020'; ctx.fillRect(mx - 0.55, -hw + 1, 1.1, hw - 1.1);
-    ctx.fillStyle = on ? '#2f4fa0' : '#3d7bff'; ctx.fillRect(mx - 0.55, 0.1, 1.1, hw - 1.1);
+    ctx.fillStyle = '#1f262b'; sfr(mx - 0.8, -hw + 0.8, 1.6, Wd - 1.6);
+    ctx.fillStyle = on ? '#ff3b3b' : '#8a2020'; sfr(mx - 0.55, -hw + 1, 1.1, hw - 1.1);
+    ctx.fillStyle = on ? '#2f4fa0' : '#3d7bff'; sfr(mx - 0.55, 0.1, 1.1, hw - 1.1);
   }
   if (cd === 'retro') {                                    // chrome everywhere: bumpers, a roof trim line and whitewall tyres
-    ctx.fillStyle = '#e6eaee'; ctx.fillRect(f - 0.8, -hw - 0.2, 0.8, Wd + 0.4); ctx.fillRect(r, -hw - 0.2, 0.8, Wd + 0.4);
+    ctx.fillStyle = '#e6eaee'; sfr(f - 0.8, -hw - 0.2, 0.8, Wd + 0.4); sfr(r, -hw - 0.2, 0.8, Wd + 0.4);
     ctx.strokeStyle = 'rgba(235,240,245,.9)'; ctx.lineWidth = 0.35; rr(roof0 - 0.4, -hw + 0.4, roof1 - roof0 + 0.8, Wd - 0.8, 1.4); ctx.stroke();
-    ctx.fillStyle = '#f4f2ec'; for (const x of [f - 2.9, r + 2.9]) for (const sy of [-1, 1]) ctx.fillRect(x - 0.9, sy * hw - 0.25, 1.8, 0.5);
+    ctx.fillStyle = '#f4f2ec'; for (const x of [f - 2.9, r + 2.9]) for (const sy of [-1, 1]) sfr(x - 0.9, sy * hw - 0.25, 1.8, 0.5);
   }
   if (cd === 'gold') {                                     // gold plated: gold trim, gold wheels and a little sparkle (the body keeps its colour)
     const gg = ctx.createLinearGradient(r, -hw, f, hw); gg.addColorStop(0, '#fff1a8'); gg.addColorStop(0.5, '#d4af37'); gg.addColorStop(1, '#9c7a12');
     ctx.strokeStyle = gg; ctx.lineWidth = 0.75; rr(r + 0.35, -hw + 0.35, L - 0.7, Wd - 0.7, bi === 0 ? hw - 0.35 : 1.4); ctx.stroke();
-    ctx.fillStyle = gg; ctx.fillRect(f - 0.7, -hw + 0.3, 0.7, Wd - 0.6); ctx.fillRect(r, -hw + 0.3, 0.7, Wd - 0.6);
-    for (const x of [f - 2.9, r + 2.9]) for (const sy of [-1, 1]) { ctx.fillStyle = '#e8c547'; ctx.fillRect(x - 1.1, sy * hw - 0.35, 2.2, 0.7); }
+    ctx.fillStyle = gg; sfr(f - 0.7, -hw + 0.3, 0.7, Wd - 0.6); sfr(r, -hw + 0.3, 0.7, Wd - 0.6);
+    for (const x of [f - 2.9, r + 2.9]) for (const sy of [-1, 1]) { ctx.fillStyle = '#e8c547'; sfr(x - 1.1, sy * hw - 0.35, 2.2, 0.7); }
     if (!REDUCED_MOTION) { const tw_ = (animT * 1.3 + c.id * 0.37) % 1; if (tw_ < 0.25) { const sx = r + L * tw_ * 4, a = 1 - Math.abs(tw_ * 8 - 1); ctx.fillStyle = 'rgba(255,255,255,' + a.toFixed(2) + ')'; ctx.beginPath(); ctx.arc(sx, -hw * 0.3, 0.6, 0, 6.3); ctx.fill(); } }
   }
   if (cd === 'pastel' && bi <= 2) { rr(roof0 - 0.2, -hw + 0.6, roof1 - roof0 + 0.4, Wd - 1.2, 1.3); ctx.fillStyle = '#fbfaf6'; ctx.fill(); }
   if (cd === 'twotone') {                                  // a white roof and chrome bumpers (vans and trucks get a coloured roof stripe)
     if (bi <= 2) { rr(roof0 - 0.2, -hw + 0.6, roof1 - roof0 + 0.4, Wd - 1.2, 1.3); ctx.fillStyle = '#f6f4ee'; ctx.fill(); }
-    else { ctx.fillStyle = col; ctx.fillRect(roof0, -0.6, roof1 - roof0, 1.2); }
-    ctx.fillStyle = '#dfe4e8'; ctx.fillRect(f - 0.55, -hw + 0.3, 0.55, Wd - 0.6); ctx.fillRect(r, -hw + 0.3, 0.55, Wd - 0.6);
+    else { ctx.fillStyle = col; sfr(roof0, -0.6, roof1 - roof0, 1.2); }
+    ctx.fillStyle = '#dfe4e8'; sfr(f - 0.55, -hw + 0.3, 0.55, Wd - 0.6); sfr(r, -hw + 0.3, 0.55, Wd - 0.6);
   }
   drawSlots(c, roof0 + 0.4, roof1 - 0.4, Wd - (bi >= 3 ? 2.8 : 2.4));
   if (cd === 'champion') {                                 // a gold star on the roof
     const sx = (roof0 + roof1) / 2, R_ = Math.min(1.6, hw - 1);
     ctx.fillStyle = '#ffd23a'; ctx.beginPath();
     for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rd = i % 2 ? R_ * 0.45 : R_; ctx.lineTo(sx + Math.cos(a) * rd, Math.sin(a) * rd); }
-    ctx.closePath(); ctx.fill();
+    ctx.closePath(); softFill();
   }
   if (cd === 'neon') { ctx.strokeStyle = shade(col, 0.45); ctx.lineWidth = 0.45; rr(r + 0.2, -hw + 0.2, L - 0.4, Wd - 0.4, bi === 0 ? hw - 0.2 : 1.4); ctx.stroke(); }
   // trim around the painted nose shows the kit at a glance, even zoomed out
@@ -5560,18 +5580,18 @@ function drawCar(c, sizeBoost) {
     ctx.stroke();
   }
   // lights and mirrors
-  ctx.fillStyle = '#fff4c4'; ctx.fillRect(f - 0.7, -hw + 0.7, 0.7, 1.2); ctx.fillRect(f - 0.7, hw - 1.9, 0.7, 1.2);
-  ctx.fillStyle = c.brake ? '#ff3b30' : '#8f2a24'; ctx.fillRect(r, -hw + 0.7, 0.7, 1.2); ctx.fillRect(r, hw - 1.9, 0.7, 1.2);
+  ctx.fillStyle = '#fff4c4'; sfr(f - 0.7, -hw + 0.7, 0.7, 1.2); sfr(f - 0.7, hw - 1.9, 0.7, 1.2);
+  ctx.fillStyle = c.brake ? '#ff3b30' : '#8f2a24'; sfr(r, -hw + 0.7, 0.7, 1.2); sfr(r, hw - 1.9, 0.7, 1.2);
   const mx = bi <= 1 ? f - 4.4 : bi === 2 ? f - 3.6 : f - 2.8;
-  ctx.fillStyle = bi >= 3 ? col : dark; ctx.fillRect(mx, -hw - 0.7, 0.8, 0.7); ctx.fillRect(mx, hw, 0.8, 0.7);
+  ctx.fillStyle = bi >= 3 ? col : dark; sfr(mx, -hw - 0.7, 0.8, 0.7); sfr(mx, hw, 0.8, 0.7);
   // GT spoiler and skirts; racer wing and flames
   if (kit === 2) {
     ctx.fillStyle = black;
-    ctx.fillRect(r + 2, -hw - 0.4, L - 4, 0.5); ctx.fillRect(r + 2, hw - 0.1, L - 4, 0.5);     // side skirts
+    sfr(r + 2, -hw - 0.4, L - 4, 0.5); sfr(r + 2, hw - 0.1, L - 4, 0.5);     // side skirts
     rr(r - 1.1, -hw + 0.3, 1.2, Wd - 0.6, 0.4); ctx.fill();                                     // spoiler
   } else if (kit >= 3) {
     rr(r - 2, -hw - 1, 1.5, Wd + 2, 0.5); ctx.fillStyle = '#ffc933'; ctx.fill();                 // big gold wing
-    ctx.fillStyle = black; ctx.fillRect(r - 0.6, -hw + 1.2, 0.7, 0.5); ctx.fillRect(r - 0.6, hw - 1.7, 0.7, 0.5);   // wing stays
+    ctx.fillStyle = black; sfr(r - 0.6, -hw + 1.2, 0.7, 0.5); sfr(r - 0.6, hw - 1.7, 0.7, 0.5);   // wing stays
     if (c.v > 10 && !REDUCED_MOTION) {
       const fl = 0.6 + 0.4 * Math.sin(animT * 30 + c.id);
       ctx.fillStyle = 'rgba(255,140,30,' + fl.toFixed(2) + ')'; ctx.beginPath(); ctx.arc(r - 2.6, -hw + 1.6, 0.9, 0, 6.3); ctx.arc(r - 2.6, hw - 1.6, 0.9, 0, 6.3); ctx.fill();
@@ -5580,8 +5600,8 @@ function drawCar(c, sizeBoost) {
   // loading: an orange tail-lift with hazard marks, then amber roof beacons
   if (ld > 0) {
     const tl = kit >= 2 ? 0 : 0.3;
-    ctx.fillStyle = '#f39a1e'; ctx.fillRect(r - 1.1 - tl, -hw + 1, 1.1, Wd - 2);
-    ctx.fillStyle = black; for (let y = -hw + 1.5; y < hw - 1.4; y += 1.4) ctx.fillRect(r - 1.1 - tl, y, 1.1, 0.5);
+    ctx.fillStyle = '#f39a1e'; sfr(r - 1.1 - tl, -hw + 1, 1.1, Wd - 2);
+    ctx.fillStyle = black; for (let y = -hw + 1.5; y < hw - 1.4; y += 1.4) sfr(r - 1.1 - tl, y, 1.1, 0.5);
     if (ld >= 2) {
       const on = REDUCED_MOTION || Math.sin(animT * 9 + c.id) > -0.2;
       ctx.fillStyle = on ? '#ffb020' : '#a8661a';
@@ -5591,21 +5611,21 @@ function drawCar(c, sizeBoost) {
   // fuel: a green jerry can on the side, then long-range silver tanks down both sides
   if (fu === 1) {
     rr(r + 1.3, -hw - 1.1, 2.4, 1.2, 0.3); ctx.fillStyle = '#2f9a4a'; ctx.fill();
-    ctx.fillStyle = '#ffffff'; ctx.fillRect(r + 1.6, -hw - 0.95, 0.5, 0.4);
+    ctx.fillStyle = '#ffffff'; sfr(r + 1.6, -hw - 0.95, 0.5, 0.4);
   } else if (fu >= 2) {
     for (const sy of [-1, 1]) {
       const y0 = sy < 0 ? -hw - 1.1 : hw - 0.1;
       rr(r + L * 0.28, y0, L * 0.36, 1.2, 0.6); ctx.fillStyle = '#c9d1d6'; ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.fillRect(r + L * 0.3, y0 + 0.2, L * 0.32, 0.3);
-      ctx.fillStyle = '#ffc933'; ctx.fillRect(r + L * 0.28 + L * 0.36 - 1, y0 + 0.3, 0.6, 0.6);
+      ctx.fillStyle = 'rgba(255,255,255,.7)'; sfr(r + L * 0.3, y0 + 0.2, L * 0.32, 0.3);
+      ctx.fillStyle = '#ffc933'; sfr(r + L * 0.28 + L * 0.36 - 1, y0 + 0.3, 0.6, 0.6);
     }
   }
   if (c.broken > 0 && Math.sin(animT * 12) > 0) { ctx.fillStyle = '#ffab1a'; ctx.beginPath(); ctx.arc(r, -hw, 1.3, 0, 6.3); ctx.arc(r, hw, 1.3, 0, 6.3); ctx.arc(f, -hw, 1.3, 0, 6.3); ctx.arc(f, hw, 1.3, 0, 6.3); ctx.fill(); }
   ctx.restore();
   if (c.broken > 0) {
     ctx.save(); ctx.translate(c.x - Math.cos(c.ang) * 14, c.y - Math.sin(c.ang) * 14);
-    ctx.fillStyle = '#e63a2e'; ctx.beginPath(); ctx.moveTo(0, -3.4); ctx.lineTo(3, 2.4); ctx.lineTo(-3, 2.4); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(0, -1.6); ctx.lineTo(1.5, 1.4); ctx.lineTo(-1.5, 1.4); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#e63a2e'; ctx.beginPath(); ctx.moveTo(0, -3.4); ctx.lineTo(3, 2.4); ctx.lineTo(-3, 2.4); ctx.closePath(); softFill();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(0, -1.6); ctx.lineTo(1.5, 1.4); ctx.lineTo(-1.5, 1.4); ctx.closePath(); softFill();
     ctx.restore();
   }
   if (c.state === 'driving' && c.stopT > 6) {           // an angry car
@@ -6614,13 +6634,78 @@ function showMM(pane) {
   if (mmPane === 'weekly') { renderExpertCard(); renderWeekly(); }
   renderLook();
 }
-/* Weeklys: this week's seed, its top three, and the leader's city playing out on a little map */
+/* The map a seed makes. An Expert city's water comes from genWater() run on that week's seeded stream, so the
+   same can be worked out here, on the side (the city being played is left alone), to show everyone the map first. */
+const seedMaps = {};
+function seedWater(sd) {
+  if (seedMaps[sd.key]) return seedMaps[sd.key];
+  const keepW = water, keepR = rand;
+  water = new Uint8Array(N); rand = seededRand(sd.num);
+  let out; try { genWater(); out = water; } finally { water = keepW; rand = keepR; }
+  return (seedMaps[sd.key] = out);
+}
+/* draw it: land with soft patches, round-banked rivers and ponds, where the city starts and how big it is by week 10 */
+function drawSeedMap(cv2, ago, big) {
+  const sd = expertSeed(ago), w = seedWater(sd), S = cv2.width, k = S / MAXD, g = cv2.getContext('2d');
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.fillStyle = PAL.land; g.fillRect(0, 0, S, S);
+  g.fillStyle = PAL.patch; g.globalAlpha = 0.4;
+  for (let i = 0; i < 90; i++) { const x = hash01(i, sd.num % 997) * S, y = hash01(i, 7 + sd.num % 991) * S, r = (3 + hash01(i, 11) * 6) * k; g.beginPath(); g.arc(x, y, r, 0, 6.3); g.arc(x + r * 0.9, y + r * 0.3, r * 0.7, 0, 6.3); g.fill(); }
+  g.globalAlpha = 1;
+  if (big) { g.strokeStyle = 'rgba(127,127,127,.14)'; g.lineWidth = 1; g.beginPath(); for (let t = 8; t < MAXD; t += 8) { g.moveTo(t * k, 0); g.lineTo(t * k, S); g.moveTo(0, t * k); g.lineTo(S, t * k); } g.stroke(); }
+  // the water tiles, scaled up smoothly and traced where they cross halfway: banks come out as smooth curves
+  const m = document.createElement('canvas'); m.width = m.height = MAXD;
+  const mg = m.getContext('2d'), md = mg.createImageData(MAXD, MAXD);
+  let f = new Float32Array(N); for (let t = 0; t < N; t++) f[t] = w[t] ? 1 : 0;
+  for (let pass = 0; pass < 4; pass++) {                // a soft blur across and down, twice, so the tile steps melt into curves
+    const o = new Float32Array(N), hz = pass % 2 === 0;
+    for (let r = 0; r < MAXD; r++) for (let c = 0; c < MAXD; c++) {
+      let sum = 0, n = 0;
+      for (let j = -1; j <= 1; j++) { const cc = hz ? c + j : c, rr2 = hz ? r : r + j; if (cc >= 0 && rr2 >= 0 && cc < MAXD && rr2 < MAXD) { sum += f[rr2 * MAXD + cc] * (j ? 1 : 2); n += j ? 1 : 2; } }
+      o[r * MAXD + c] = sum / n;
+    }
+    f = o;
+  }
+  for (let t = 0; t < N; t++) md.data[t * 4 + 3] = Math.round((w[t] ? Math.max(f[t], 0.62) : Math.min(f[t], 0.38)) * 255);   // every tile keeps its side: no pond or island is lost
+  mg.putImageData(md, 0, 0);
+  const up = document.createElement('canvas'); up.width = up.height = S;
+  const ug = up.getContext('2d'); ug.imageSmoothingEnabled = true; ug.imageSmoothingQuality = 'high'; ug.drawImage(m, 0, 0, S, S);
+  const px = ug.getImageData(0, 0, S, S), d = px.data, wc = rgbOf(PAL.water), fc = rgbOf(PAL.foam || mixHex(PAL.water, '#ffffff', 0.45));
+  for (let i = 0; i < d.length; i += 4) {
+    const v = d[i + 3], fa = clamp((v - 70) / 22, 0, 1), wa = clamp((v - 112) / 22, 0, 1);
+    d[i] = fc[0] + (wc[0] - fc[0]) * wa; d[i + 1] = fc[1] + (wc[1] - fc[1]) * wa; d[i + 2] = fc[2] + (wc[2] - fc[2]) * wa; d[i + 3] = 255 * fa;
+  }
+  ug.putImageData(px, 0, 0); g.drawImage(up, 0, 0);
+  const ring = (sp, dash, col, label) => {
+    const o = (MAXD - sp) / 2 * k, L = sp * k;
+    g.save(); g.setLineDash(dash); g.lineWidth = Math.max(1.5, k * 0.45); g.strokeStyle = col; g.lineJoin = 'round';
+    g.beginPath(); if (g.roundRect) g.roundRect(o, o, L, L, k * 1.5); else g.rect(o, o, L, L); g.stroke(); g.restore();
+    if (big || label === 'Start') { g.font = '800 ' + Math.max(10, Math.round(S / (big ? 52 : 34))) + 'px Overpass, system-ui, sans-serif'; g.fillStyle = col; g.textAlign = 'left'; g.textBaseline = 'bottom'; g.fillText(label, o + 2, o - 3); }
+  };
+  ring(CFG.startSpan + CFG.growPerWeek * 2 * 24, [k * 1.2, k * 1.8], 'rgba(255,255,255,.6)', 'Week 25');
+  ring(CFG.startSpan + CFG.growPerWeek * 2 * 9, [k * 2, k * 1.5], 'rgba(255,255,255,.85)', 'Week 10');
+  ring(CFG.startSpan, [], uiColours().accent, 'Start');
+  return sd;
+}
+function openSeedMap() {
+  const sd = expertSeed();
+  $('sm-name').textContent = sd.name; $('sm-sub').textContent = sd.label + ' · code ' + sd.code;
+  openModal('m-seedmap'); drawSeedMap($('sm-map'), 0, true);
+}
+/* Weeklys: this week's seed, its top three, its map, and the leaders' cities playing out */
 const escH = t => String(t).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
-let wkRows = [], wkSel = 0;
+let wkRows = [], wkSel = 0, wkView = 'seed';
+function setWkView(v) {
+  wkView = v;
+  document.querySelectorAll('[data-wkv]').forEach(b => b.setAttribute('aria-pressed', b.dataset.wkv === v ? 'true' : 'false'));
+  $('wk-seedmap').hidden = v !== 'seed'; $('wk-map').hidden = v !== 'city';
+  if (v === 'seed') { drawSeedMap($('wk-seedmap'), 0, false); $('wk-cap').textContent = 'Everyone gets this same map this week · tap it to look closer'; }
+  else showWkMap(wkSel);
+}
 function renderWeekly() {
   const top = $('wk-top'), cv2 = $('wk-map'); if (!top || !cv2) return;
   const on = window.JunctionOnline;
-  wkRows = []; showWkMap(0);
+  wkRows = []; wkSel = 0; setWkView('seed');
   if (!on || !on.ready || !on.expertTop) { top.innerHTML = '<li class="mini">The weekly leaderboard needs the online service. It may still be connecting — try again in a moment.</li>'; return; }
   top.innerHTML = '<li class="mini">Loading the top three…</li>';
   on.expertTop(0, 3).then(rows => {
@@ -6628,12 +6713,13 @@ function renderWeekly() {
     wkRows = rows || [];
     top.innerHTML = wkRows.length ? wkRows.map((d, i) => '<li class="wk-p p' + (i + 1) + '" data-i="' + i + '" tabindex="0"><span class="medal">' + (i + 1) + '</span><span class="who"><b>' + escH(d.name) + '</b><small>reached week ' + d.weeks + '</small></span><b class="num">' + d.parcels.toLocaleString('en-US') + '<small>parcels</small></b></li>').join('')
       : '<li class="mini">No one has played this seed yet. Be the first on the podium.</li>';
-    top.querySelectorAll('[data-i]').forEach(li => { li.onclick = () => showWkMap(+li.dataset.i); li.onkeydown = e => { if (e.key === 'Enter') showWkMap(+li.dataset.i); }; });
-    showWkMap(0);
+    top.querySelectorAll('[data-i]').forEach(li => { li.onclick = () => { wkSel = +li.dataset.i; setWkView('city'); }; li.onkeydown = e => { if (e.key === 'Enter') li.onclick(); }; });
+    if (wkView === 'city') showWkMap(wkSel);
   }).catch(() => { top.innerHTML = '<li class="mini">Couldn’t load the leaderboard.</li>'; });
 }
 function showWkMap(i) {
   wkSel = i; const d = wkRows[i];
+  if (wkView !== 'city') return;
   document.querySelectorAll('#wk-top [data-i]').forEach(li => li.classList.toggle('sel', +li.dataset.i === i));
   $('wk-cap').textContent = d ? (d.city ? d.name + '’s city · tap it to see their whole run' : d.name + ' didn’t save a map') : 'The leader’s city shows here';
   animCitySnap($('wk-map'), d && d.city || null);
@@ -6723,6 +6809,10 @@ function bindMainMenu() {
   for (const id of ['mm-custom', 'mm-store']) $(id).addEventListener('click', shopClick);
   $('wk-map').addEventListener('click', () => { const d = wkRows[wkSel], on = window.JunctionOnline; if (d && on && on.openRun) on.openRun(0, d.uid); });
   $('wk-board').addEventListener('click', () => $('btn-expert-board').click());
+  $('wk-seedmap').addEventListener('click', openSeedMap);
+  document.querySelectorAll('[data-wkv]').forEach(b => b.addEventListener('click', () => setWkView(b.dataset.wkv)));
+  $('sm-close').addEventListener('click', () => closeModal('m-seedmap'));
+  $('sm-play').addEventListener('click', () => { closeModal('m-seedmap'); $('btn-expert').click(); });
   $('m-start').addEventListener('click', e => { if (e.target === $('m-start') && $('m-start').classList.contains('center-pane')) showMM(null); });   // the dimmed backdrop closes the Store or Weeklys
   bindCrates();
 }
@@ -7389,7 +7479,7 @@ function loadShop() {
   jb.bucks = Math.max(0, Math.floor(+d.bucks || 0)); jb.toward = clamp(Math.floor(+d.toward || 0), 0, 9);
   jb.rbucks = Math.max(0, Math.floor(+d.rbucks || 0)); jb.rtoward = 0;
   const strs = a => Array.isArray(a) ? a.filter(x => typeof x === 'string') : [];
-  if (d.rot && typeof d.rot === 'object') { const c = d.rot.crates || {}; jb.rot = {h: +d.rot.h || 0, items: strs(d.rot.items), cols: strs(d.rot.cols), crates: {colour: +c.colour || 0, item: +c.item || 0, object: +c.object || 0}}; }
+  if (d.rot && typeof d.rot === 'object') { const c = d.rot.crates || {}; jb.rot = {h: +d.rot.h || 0, n: +d.rot.n || 0, items: strs(d.rot.items), cols: strs(d.rot.cols), crates: {colour: +c.colour || 0, item: +c.item || 0, object: +c.object || 0}}; }
   if (d.daily && typeof d.daily === 'object') jb.daily = {d: +d.daily.d || 0, id: typeof d.daily.id === 'string' ? d.daily.id : ''};
   jb.owned = {}; const old = d.owned && typeof d.owned === 'object' ? d.owned : {};
   for (const k in old) if (COSMETICS[k] || /^colour:#[0-9a-f]{6}$/.test(k)) jb.owned[k] = 1;
@@ -7478,7 +7568,7 @@ function checkHires() {
 }
 setInterval(() => { if (typeof jb !== 'undefined') { checkHires(); if (!$('menu').hidden || !$('cust-panel').hidden || (!$('m-start').hidden && mmPane === 'store')) renderLook(true); } }, 15000);
 
-/* ---- the hourly Store: 10 items and 5 colours every hour, one special item (R#) a day, and three mystery crates.
+/* ---- the hourly Store: 6 items and 6 colours every hour, one special item (R#) a day, and three mystery crates.
    Each hour's stock is shuffled from the hour itself, so everyone's Store is alike, with things you don't own first. */
 const HOUR_MS = 3600e3, DAY_MS = 86400e3;
 const RARITY = {standard: 'Standard', rare: 'Rare', unique: 'Unique', special: 'Special', ach: 'Achievement'};
@@ -7494,10 +7584,11 @@ function shuffleSeeded(arr, seed) { const r = seededRand(seed), a = arr.slice();
 function ensureRotation() {
   const h = Math.floor(Date.now() / HOUR_MS), d = Math.floor(Date.now() / DAY_MS);
   let dirty = false;
-  if (!jb.rot || jb.rot.h !== h) {
+  if (!jb.rot || jb.rot.h !== h || jb.rot.n !== 6) {
     const pool = allShopIds().filter(id => rarityOf(id) === 'standard' || rarityOf(id) === 'rare');
     const pick = (list, n, salt) => { const q = shuffleSeeded(list, h * 7919 + salt); return q.filter(id => !owns(id)).concat(q.filter(id => owns(id))).slice(0, n); };
-    jb.rot = {h, items: pick(pool.filter(id => !id.startsWith('colour:')), 10, 1), cols: pick(pool.filter(id => id.startsWith('colour:')), 5, 2), crates: {colour: 0, item: 0, object: 0}};
+    jb.rot = {h, n: 6, items: pick(pool.filter(id => !id.startsWith('colour:')), 6, 1), cols: pick(pool.filter(id => id.startsWith('colour:')), 6, 2),
+              crates: jb.rot && jb.rot.h === h ? jb.rot.crates : {colour: 0, item: 0, object: 0}};
     dirty = true;
   }
   if (!jb.daily || jb.daily.d !== d) {
@@ -7581,7 +7672,7 @@ function renderStore(box, light) {
   ensureRotation();
   const keepScroll = box.scrollTop, canvases = [], now = Date.now();
   const tLeft = fmtLeft(HOUR_MS - now % HOUR_MS), dLeft = fmtLeft(DAY_MS - now % DAY_MS);
-  const parts = ['<div class="st-head"><div><b>New stock in ' + tLeft + '</b><small>Every hour: 10 items, 5 colours and 3 of each crate. Every parcel earns ' + BUCKS_PER + ' #.</small></div><span class="st-bal num">#' + jb.bucks.toLocaleString('en-US') + ' <i>·</i> <span class="rtag">R#' + jb.rbucks + '</span></span></div>'];
+  const parts = ['<div class="st-head"><div><b>New stock in ' + tLeft + '</b><small>Every hour: 6 items, 6 colours and 3 of each crate. Every parcel earns ' + BUCKS_PER + ' #.</small></div><span class="st-bal num">#' + jb.bucks.toLocaleString('en-US') + ' <i>·</i> <span class="rtag">R#' + jb.rbucks + '</span></span></div>'];
   if (jb.rescaled) { parts.push('<p class="mnote st-note">Prices have gone up, so your balance was scaled up to match: every # you had is now #15, and every R# is R#5.</p>'); delete jb.rescaled; saveShop(); }
   parts.push('<h3 class="shop-h">Mystery crates <small>' + CRATE_MAX + ' of each per hour · 70% standard · 25% rare · 5% unique · never something you own</small></h3><div class="crates">' +
     Object.keys(CRATES).map(k => {
@@ -7608,7 +7699,7 @@ function renderStore(box, light) {
 
 /* ---- previews, drawn with the game's own artwork */
 function designPreview(g, cat, key, w, h) {
-  const keepD = jb.designs[cat]; jb.designs[cat] = key;
+  const keepD = jb.designs[cat]; jb.designs[cat] = key; softZ = 3;
   const keepPal = PAL, keepSun = Object.assign({}, SUN); SUN.x = 0.55; SUN.y = 0.8; SUN.a = 1;
   if (cat === 'road' || cat === 'bridge' || cat === 'moto') PAL = palFor(mapPrefs.theme, Object.assign({}, mapPrefs, cat === 'moto' ? {moto: ''} : {}));
   g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, w, h); g.fillStyle = PAL.land2; g.fillRect(0, 0, w, h);
@@ -7644,7 +7735,7 @@ function designPreview(g, cat, key, w, h) {
   });
   g.setTransform(1, 0, 0, 1, 0, 0);
   if (keepD === undefined) delete jb.designs[cat]; else jb.designs[cat] = keepD;
-  PAL = keepPal; Object.assign(SUN, keepSun);
+  softZ = 0; PAL = keepPal; Object.assign(SUN, keepSun);
 }
 function mapPreview(cvs, id, custom, decor) {
   const g = cvs.getContext('2d'), w = cvs.width, h = cvs.height, keep = PAL, keepTheme = theme;

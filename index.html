@@ -164,7 +164,7 @@
           <p class="ver">Junction v1.6</p>
         </div>
         <div class="mtab-pane" data-mtab="store" hidden>
-          <div class="jbbar"><span class="jbcoin" aria-hidden="true">#</span><div><b id="jb-bal">#0 Junc Bucks</b><small>Every parcel earns 3 #. The Store restocks every hour with 10 items and 5 colours; the daily special costs <b class="rtag">R#</b>, which only come from <b>Frantic</b> cities (1 for every parcel). Mystery crates can hold unique items you can't buy. Tap once to see the price, again to buy.</small></div></div>
+          <div class="jbbar"><span class="jbcoin" aria-hidden="true">#</span><div><b id="jb-bal">#0 Junc Bucks</b><small>Every parcel earns 3 #. The Store restocks every hour with 6 items and 6 colours; the daily special costs <b class="rtag">R#</b>, which only come from <b>Frantic</b> cities (1 for every parcel). Mystery crates can hold unique items you can't buy. Tap once to see the price, again to buy.</small></div></div>
           <div id="store-list" class="shoplist"></div>
         </div>
         <div class="mtab-pane" data-mtab="owned" hidden>
@@ -353,7 +353,12 @@
                 <button id="btn-expert-board" type="button" hidden></button>
                 <p class="mini">Everyone gets the same map, tougher than Frantic. Your best run goes on the leaderboard.</p>
               </div>
-              <figure class="wk-r"><canvas id="wk-map" width="520" height="520" title="See this run"></canvas><figcaption id="wk-cap"></figcaption></figure>
+              <figure class="wk-r">
+                <div class="seg wk-tabs"><button type="button" data-wkv="seed" aria-pressed="true">Seed map</button><button type="button" data-wkv="city" aria-pressed="false">Leaders' cities</button></div>
+                <canvas id="wk-seedmap" width="520" height="520" title="Open the whole map"></canvas>
+                <canvas id="wk-map" width="520" height="520" title="See this run" hidden></canvas>
+                <figcaption id="wk-cap"></figcaption>
+              </figure>
             </div>
           </div>
                 </div>
@@ -369,6 +374,17 @@
         <div id="start-online" hidden></div>
       </aside>
       <div class="rl-foot">Esc closes a panel · Junction v1.8</div>
+    </div>
+
+    <!-- the whole map of this week's Expert seed -->
+    <div class="modal" id="m-seedmap" hidden>
+      <div class="card plate seedcard">
+        <div class="sm-head"><div><small>Expert Survival · this week's map</small><h2 id="sm-name">Seed</h2><span id="sm-sub"></span></div><button class="act" id="sm-close" type="button">Close</button></div>
+        <canvas id="sm-map" width="900" height="900"></canvas>
+        <p class="sm-legend"><span><i class="lg-land"></i>Land</span><span><i class="lg-water"></i>Rivers and ponds</span><span><i class="lg-start"></i>Where the city starts</span><span><i class="lg-grow"></i>Its size by weeks 10 and 25</span></p>
+        <p class="mini">Seeds work like Minecraft seeds: the seed of the week makes this exact map for every player, along with the same first store and house. It changes every Monday.</p>
+        <button class="bigbtn" id="sm-play" type="button">Play this seed</button>
+      </div>
     </div>
 
     <!-- a mystery crate opening -->
@@ -663,7 +679,7 @@
           <details><summary>Can I undo a mistake?</summary><p>Yes — Ctrl+Z undoes, Ctrl+Y redoes. Both work back through everything from your last press-and-drag.</p></details>
           <details><summary>Can I change the colours?</summary><p>Yes. Open Settings. Under Appearance, pick an interface theme, or choose your own colours for menus, buttons and highlights, and switch the panels between Clean, Glass and Road sign styles. Under Colour mode, pick red–green safe, blue–yellow safe, high contrast, or custom city colours you choose one by one. You can also switch on a shape for each colour on houses and stores.</p></details>
           <details><summary>What is Expert Survival?</summary><p>A new seeded city every week (Monday to Sunday, UTC). Everyone gets the same map, the same first store and house and the same early events, so runs are directly comparable. It's tougher than Frantic. Your best run on the week's seed goes on the Expert leaderboard, labelled with the week's dates, the seed's name and its code. Tap any player there to see their city — who placed what — and their stats, and to send them a message. Messages live under Account → Messages, and the speech-bubble button on the top bar shows when you have new ones.</p></details>
-          <details><summary>What are Junc Bucks (#)?</summary><p>A currency for looks. You earn 3 for every parcel delivered, in any city and any difficulty, and keep them between cities. The Store restocks every hour with 10 items (themes, maps, decorations and designs, #500–1000) and 5 colours (bought, or hired for 3 hours for #150). One special item a day costs R# (rare bucks) instead, and R# only come from Frantic cities: one for every parcel. Mystery crates (colour #150, item #200, object #250, three of each an hour) always hold something you don't own, and are the only way to get unique items. Everything you own is under Owned, and the palette button next to Settings opens a quick Customise panel. The standard light and dark looks and the colour-blind colour modes are always free.</p></details>
+          <details><summary>What are Junc Bucks (#)?</summary><p>A currency for looks. You earn 3 for every parcel delivered, in any city and any difficulty, and keep them between cities. The Store restocks every hour with 6 items (themes, maps, decorations and designs, #500–1000) and 6 colours (bought, or hired for 3 hours for #150). One special item a day costs R# (rare bucks) instead, and R# only come from Frantic cities: one for every parcel. Mystery crates (colour #150, item #200, object #250, three of each an hour) always hold something you don't own, and are the only way to get unique items. Everything you own is under Owned, and the palette button next to Settings opens a quick Customise panel. The standard light and dark looks and the colour-blind colour modes are always free.</p></details>
           <details><summary>What's a tow truck actually for?</summary><p>Hired at a store, it drives out to stuck or broken-down cars nearby, hooks them, hauls them clear and saves their parcels — handy once a city is busy enough that a single stuck car can back up a whole street.</p></details>
           <details><summary>Is a bigger city always a better city?</summary><p>No — score comes from steady throughput, not size. A small, tightly controlled loop consistently out-earns a sprawling network that's constantly jammed.</p></details>
           <details><summary>Is there a "correct" way to play?</summary><p>No. There's no correct way to play Junction — take any path you want.</p></details>
