@@ -327,6 +327,11 @@ function renderAccount() {
   renderLiveCode();
 }
 $('btn-account').addEventListener('click', () => { $('menu').hidden = true; openUserModal(); });
+/* the Account button on the top bar */
+window.__junctionAccount = () => {
+  if (!O.ready || !O.user) { API.toast('Online features are still connecting — try again in a moment.', 'warn'); return; }
+  openUserModal();
+};
 
 /* ============================================================ ACCOUNT SCREEN
    Profile (rename, shortcuts, upgrade or sign out), lifetime Stats, and Security for accounts
@@ -339,6 +344,7 @@ function openAcct(pane) {
   acctPane = pane || 'profile';
   renderAcct();
   openM('m-acct');
+  acctPaneOpened();
 }
 function renderAcct() {
   const perm = isPerm(), name = myName(), pv = providers();
@@ -371,6 +377,7 @@ function renderAcct() {
   $('sec-del-pass').hidden = !pw;
   ['sec-err', 'sec-ok'].forEach(id => { $(id).textContent = ''; });
   ['sec-cur', 'sec-new', 'sec-addpass', 'sec-del-name', 'sec-del-pass'].forEach(id => { $(id).value = ''; });
+  const lc = O.liveCode; $('acct-live-code').textContent = lc ? lc.slice(0, 3) + ' ' + lc.slice(3) : '—';
   // stats + achievements
   renderStats();
   renderAch();
@@ -388,7 +395,14 @@ function renderAch() {
       (t ? ' \u00b7 ' + new Date(t).toLocaleDateString(undefined, {day: 'numeric', month: 'short', year: 'numeric'}) : '') + '</span></div></div>';
   }).join('')).join('');
 }
-$('acct-tabs').addEventListener('click', e => { const b = e.target.closest('button[data-pane]'); if (b) { acctPane = b.dataset.pane; renderAcct(); } });
+$('acct-tabs').addEventListener('click', e => { const b = e.target.closest('button[data-pane]'); if (b) { acctPane = b.dataset.pane; renderAcct(); acctPaneOpened(); } });
+function acctPaneOpened() {
+  if (acctPane === 'saves') {
+    $('acct-saves-lead').textContent = isPerm() ? 'Three cloud save slots, kept with your account on any device.' : 'Three cloud save slots for this browser. Make a permanent account to keep them everywhere.';
+    renderSlots($('acct-slots'));
+  }
+  if (acctPane === 'watch') { $('acct-watch-err').textContent = ''; $('acct-watch-code').value = ''; setTimeout(() => $('acct-watch-code').focus(), 50); }
+}
 $('acct-close').addEventListener('click', () => closeM('m-acct'));
 async function acctBusy(errId, fn) {
   const all = document.querySelectorAll('#m-acct button'); all.forEach(b => { b.disabled = true; });
@@ -543,11 +557,16 @@ async function openSaves(mode) {
     ? 'Three cloud save slots, kept with your account on any device.'
     : 'Three cloud save slots for this browser. Make a permanent account to keep them everywhere.';
   $('saves-diff').textContent = 'New cities use the difficulty picked on the start screen: ' + API.diffLabel(API.startDiff) + '.';
-  $('save-slots').innerHTML = '<p class="mini">Loading\u2026</p>';
   openM('m-saves');
+  await renderSlots($('save-slots'));
+}
+let slotsBox = null;
+async function renderSlots(box) {
+  slotsBox = box;
+  box.innerHTML = '<p class="mini">Loading\u2026</p>';
   await cloudSave(true);
   const rows = await Promise.all(SLOTS.map(n => getDoc(slotRef(n)).then(s => [n, s.exists() ? s.data() : null]).catch(() => [n, null])));
-  const box = $('save-slots'); box.innerHTML = '';
+  box.innerHTML = '';
   for (const [n, d] of rows) {
     const el = document.createElement('div'); el.className = 'slot-card' + (O.slot === n ? ' current' : '');
     let desc, btns = '';
@@ -567,6 +586,7 @@ async function openSaves(mode) {
   }
 }
 async function slotAction(n, act, d) {
+  if (act !== 'del') closeM('m-acct');
   if (act === 'load') {
     let city = null; try { city = JSON.parse(d.data); } catch (e) {}
     if (!city || !API.loadCity(city)) { API.toast('That save file couldn\u2019t be opened.', 'warn'); return; }
@@ -581,7 +601,7 @@ async function slotAction(n, act, d) {
     if (!confirm('Delete slot ' + n + '? This can\u2019t be undone.')) return;
     await deleteDoc(slotRef(n)).catch(e => API.toast('Couldn\u2019t delete: ' + e.message, 'warn'));
     if (O.slot === n) O.slot = null;
-    openSaves(savesMode);
+    if (slotsBox) renderSlots(slotsBox);
   }
 }
 async function cloudSave(urgent) {
@@ -819,21 +839,24 @@ $('btn-watch-s').addEventListener('click', openWatch);
 $('watch-cancel').addEventListener('click', () => closeM('m-watch'));
 $('watch-code').addEventListener('input', e => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6); });
 $('watch-code').addEventListener('keydown', e => { if (e.key === 'Enter') $('watch-go').click(); });
-$('watch-go').addEventListener('click', async () => {
-  const code = $('watch-code').value;
-  if (!/^\d{6}$/.test(code)) { $('watch-err').textContent = 'Live codes are 6 digits.'; return; }
-  if (code === O.liveCode) { $('watch-err').textContent = 'That\u2019s your own code.'; return; }
-  $('watch-go').disabled = true;
+async function tryWatch(code, errEl, btn) {
+  if (!/^\d{6}$/.test(code)) { errEl.textContent = 'Live codes are 6 digits.'; return; }
+  if (code === O.liveCode) { errEl.textContent = 'That\u2019s your own code.'; return; }
+  btn.disabled = true;
   try {
     const s = await getDoc(doc(db, 'live', code));
-    if (!s.exists()) { $('watch-err').textContent = 'No player has that code right now.'; return; }
+    if (!s.exists()) { errEl.textContent = 'No player has that code right now.'; return; }
     const d = s.data();
-    if (d.uid === O.user.uid) { $('watch-err').textContent = 'That\u2019s your own code.'; return; }
-    closeM('m-watch');
+    if (d.uid === O.user.uid) { errEl.textContent = 'That\u2019s your own code.'; return; }
+    closeM('m-watch'); closeM('m-acct');
     startWatching(code, d);
-  } catch (e) { $('watch-err').textContent = 'Couldn\u2019t reach that player: ' + e.message; }
-  finally { $('watch-go').disabled = false; }
-});
+  } catch (e) { errEl.textContent = 'Couldn\u2019t reach that player: ' + e.message; }
+  finally { btn.disabled = false; }
+}
+$('watch-go').addEventListener('click', () => tryWatch($('watch-code').value, $('watch-err'), $('watch-go')));
+$('acct-watch-go').addEventListener('click', () => tryWatch($('acct-watch-code').value, $('acct-watch-err'), $('acct-watch-go')));
+$('acct-watch-code').addEventListener('input', e => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6); });
+$('acct-watch-code').addEventListener('keydown', e => { if (e.key === 'Enter') $('acct-watch-go').click(); });
 
 /* The shape of a city: anything that changes the roads or buildings. When it differs from the last
    snapshot we reload the whole city; otherwise we only patch the numbers so the traffic keeps moving. */
