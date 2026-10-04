@@ -233,10 +233,42 @@ const DIFFS = {
   chill:    {label:'Relaxed',  note:'Slower parcels, more patience, extra road to start.',  pin:1.3,  over:1.5, spawn:1.25, roads:8, cash:15, grant:1.5},
   standard: {label:'Standard', note:'The intended pace.',                                    pin:1,    over:1,   spawn:1,    roads:0, cash:0, grant:1},
   frantic:  {label:'Frantic',  note:'Parcels arrive fast and stores lose patience sooner.',  pin:0.78, over:0.8, spawn:0.85, roads:-4, cash:-10, grant:0.75},
+  expert:   {label:'Expert Survival', note:'This week\u2019s seeded city: the same map for everyone. Tighter than Frantic \u2014 survive as long as you can.',
+             pin:0.7,  over:0.72, spawn:0.8, roads:-6, cash:-15, grant:0.65, expert:true},
   zen:      {label:'Zen',      note:'Nothing you build can lose the game. Rare weather, gentle traffic, slower camera.',
              pin:1.4, over:999, spawn:1.3, roads:12, cash:30, grant:1.3, noFail:true, calm:true}
 };
 
+/* ---- Expert Survival seeds: one per ISO week (Monday to Sunday, UTC), each with a name and a code ---- */
+const SEED_NAMES = ['Amber Crossing', 'Velvet Loop', 'Copper Harbour', 'Quiet Meridian', 'Lantern Row', 'Saffron Bend', 'Iron Orchard', 'Mossy Junction',
+  'Silver Causeway', 'Tidewater Lane', 'Paper Lanterns', 'Cobalt Fields', 'Hollow Pines', 'Rust Belt Run', 'Glass Garden', 'Northern Lights', 'Maple Interchange',
+  'Ember Hills', 'Cinder Docks', 'Lilac Avenue', 'Granite Gate', 'Willow Weir', 'Thunder Flats', 'Pebble Point', 'Opal Ring', 'Driftwood Quay', 'Crimson Crescent',
+  'Fernwood Spur', 'Harbour Lights', 'Sable Square', 'Kestrel Ridge', 'Moonlit Mews', 'Chalk Downs', 'Indigo Terrace', 'Juniper Junction', 'Marble Bridge',
+  'Oakmoss Circle', 'Pewter Park', 'Quartz Quarter', 'Riverbend Reach', 'Sandstone Strand', 'Tamarind Turn', 'Umber Underpass', 'Verdant Vale', 'Whistle Stop',
+  'Yarrow Yard', 'Zephyr Heights', 'Aurora Approach', 'Birchwood Bypass', 'Cedar Cut', 'Dune Drive', 'Elm Exchange', 'Foxglove Flyover', 'Gull Harbour',
+  'Heather Hollow', 'Ivy Interchange', 'Jasper Junction', 'Kelp Coast', 'Lumen Lanes', 'Mistral Mile', 'Nettle Nook', 'Orchid Overpass', 'Poppy Plaza',
+  'Quill Quay', 'Rosemary Ring', 'Starling Street', 'Thistle Track', 'Urchin Bay', 'Violet Viaduct', 'Wren Way', 'Xenon Yards', 'Yew Corner', 'Zinc Zone',
+  'Basalt Basin', 'Clover Cross', 'Dew Point', 'Echo Esplanade', 'Frost Ferry', 'Gilded Grove', 'Honey Haven', 'Inkwell Isle', 'Jade Jetty', 'Kite Knoll',
+  'Larch Landing', 'Mango Market', 'Nimbus Narrows', 'Olive Outskirts', 'Prism Pass', 'Quarry Quay', 'Rain Run', 'Sorrel Sidings', 'Tulip Tunnel', 'Upland Union',
+  'Vesper Village', 'Wharf Walk', 'Saltmarsh Spur', 'Bramble Bend', 'Cascade Corner', 'Lighthouse Loop', 'Midnight Market'];
+function strHash(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+/* the ISO week a date falls in, plus its Monday-to-Sunday dates */
+function isoWeek(date) {
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const day = d.getUTCDay() || 7; d.setUTCDate(d.getUTCDate() + 4 - day);
+  const y = d.getUTCFullYear(), w = Math.ceil(((d - Date.UTC(y, 0, 1)) / 86400000 + 1) / 7);
+  const mon = new Date(d); mon.setUTCDate(d.getUTCDate() - 3); const sun = new Date(mon); sun.setUTCDate(mon.getUTCDate() + 6);
+  return {key: y + '-W' + String(w).padStart(2, '0'), mon, sun};
+}
+/* this week's seed (or one from weeksAgo weeks back) */
+function expertSeed(weeksAgo) {
+  const now = new Date(Date.now() - (weeksAgo || 0) * 7 * 86400000), w = isoWeek(now), h = strHash('junction-expert-' + w.key);
+  const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let code = '', x = strHash(w.key + '#code');
+  for (let i = 0; i < 6; i++) { code += A[x % A.length]; x = (Math.floor(x / A.length) ^ strHash(code + i)) >>> 0; }
+  const fmt = d => d.toLocaleDateString('en-US', {day: 'numeric', month: 'short', timeZone: 'UTC'});
+  return {key: w.key, num: h, name: SEED_NAMES[h % SEED_NAMES.length], code, label: fmt(w.mon) + ' \u2013 ' + fmt(w.sun) + ', ' + w.sun.getUTCFullYear()};
+}
+let expWeek = '', prevDiff = 'standard';             // prevDiff: the ordinary difficulty to go back to after an Expert start                                      // the seed week of the Expert city being played ('' otherwise)
 const CELL = 32, MAXD = CFG.maxSpan, COLS = MAXD, ROWS = MAXD, N = COLS * ROWS;
 const DX = [0, 1, 1, 1, 0, -1, -1, -1], DY = [-1, -1, 0, 1, 1, 1, 0, -1];
 const DIAG = d => (d & 1) === 1;
@@ -246,8 +278,16 @@ const tx = k => (cx(k) + 0.5) * CELL, ty = k => (cy(k) + 0.5) * CELL;
 const relDir = (a, b) => (((b - a) % 8) + 8) % 8;
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const lerp = (a, b, t) => a + (b - a) * t;
-const rnd = (a, b) => a + Math.random() * (b - a);
-const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+/* All the game's randomness goes through rand(). Normally that's Math.random; an Expert Survival city swaps in a
+   seeded stream so everyone playing that week starts from the same map, the same first store and house, and the
+   same early events (what happens later still depends on how each player builds). */
+let rand = Math.random;
+function seededRand(seed) {                            // mulberry32
+  let a = seed >>> 0;
+  return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+const rnd = (a, b) => a + rand() * (b - a);
+const pick = arr => arr[Math.floor(rand() * arr.length)];
 function nbr(k, d) {
   const c = cx(k) + DX[d], r = cy(k) + DY[d];
   return (c < 0 || r < 0 || c >= COLS || r >= ROWS) ? -1 : idx(c, r);
@@ -401,7 +441,7 @@ function freshStats() {
    is used first, otherwise it is paid for from cash.
    --------------------------------------------------------------------- */
 const fmt$ = n => '$' + Math.floor(n + 1e-9).toLocaleString('en-US');
-function shuffle(arr) { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; }
+function shuffle(arr) { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; }
 let incomeLog = [];
 function earn(n) { money += n; stats.earned += n; if (incomeLog.length && incomeLog[incomeLog.length - 1][0] > clock) incomeLog = []; incomeLog.push([clock, n]); }
 function incomePerMin() {
@@ -1518,6 +1558,8 @@ function resetGame(dk) {
   setTutorialUI(false);
   if (dk) diffKey = dk;
   DIFF = DIFFS[diffKey] || DIFFS.standard; best = bestFor(diffKey);
+  if (DIFF.expert) { const sd = expertSeed(); expWeek = sd.key; rand = seededRand(sd.num); if (startDiff === 'expert') startDiff = prevDiff; }
+  else { expWeek = ''; rand = Math.random; }
   water = new Uint8Array(N); road = new Uint8Array(N); lnk = new Uint8Array(N);
   sign = new Array(N).fill(null); special = new Array(N).fill(null);
   bAt = new Int32Array(N).fill(-1); parkAt = new Int32Array(N).fill(-1); depotAt = new Int32Array(N).fill(-1);
@@ -1557,12 +1599,12 @@ function genWater() {
   };
   // a river that winds from one edge of the map to another
   const river = () => {
-    const side = Math.floor(Math.random() * 4), along = () => 10 + Math.random() * (MAXD - 20);
+    const side = Math.floor(rand() * 4), along = () => 10 + rand() * (MAXD - 20);
     const ends = [[along(), 0], [MAXD, along()], [along(), MAXD], [0, along()]];
     let [x, y] = ends[side];
     const [tx_, ty_] = ends[(side + 2) % 4];
     let head = Math.atan2(ty_ - y, tx_ - x);
-    const ph1 = Math.random() * 6.3, ph2 = Math.random() * 6.3, wiggle = 0.35 + Math.random() * 0.5, wide = Math.random() < 0.4 ? 1.1 : 0.75;
+    const ph1 = rand() * 6.3, ph2 = rand() * 6.3, wiggle = 0.35 + rand() * 0.5, wide = rand() < 0.4 ? 1.1 : 0.75;
     for (let t = 0; t < 900; t++) {
       const want = Math.atan2(ty_ - y, tx_ - x);
       let d = want - head; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2;
@@ -1575,20 +1617,20 @@ function genWater() {
   // a pond: a cluster of overlapping circles, and sometimes an island left dry in the middle
   const pond = (big) => {
     let x, y, tries = 0;
-    do { const a = Math.random() * 6.3, d = 7 + Math.random() * 30; x = mid + Math.cos(a) * d; y = mid + Math.sin(a) * d; } while (++tries < 20 && Math.hypot(x - mid, y - mid) < 6);
-    const R = big ? 3.4 + Math.random() * 2.2 : 1.4 + Math.random() * 1.8;
+    do { const a = rand() * 6.3, d = 7 + rand() * 30; x = mid + Math.cos(a) * d; y = mid + Math.sin(a) * d; } while (++tries < 20 && Math.hypot(x - mid, y - mid) < 6);
+    const R = big ? 3.4 + rand() * 2.2 : 1.4 + rand() * 1.8;
     stamp(x, y, R, 1);
-    for (let i = 0, n = 2 + Math.floor(Math.random() * 3); i < n; i++) {
-      const a = Math.random() * 6.3, d = R * (0.4 + Math.random() * 0.4);
-      stamp(x + Math.cos(a) * d, y + Math.sin(a) * d, R * (0.5 + Math.random() * 0.4), 1);
+    for (let i = 0, n = 2 + Math.floor(rand() * 3); i < n; i++) {
+      const a = rand() * 6.3, d = R * (0.4 + rand() * 0.4);
+      stamp(x + Math.cos(a) * d, y + Math.sin(a) * d, R * (0.5 + rand() * 0.4), 1);
     }
-    if (big && Math.random() < 0.6) stamp(x + (Math.random() - 0.5) * 0.8, y + (Math.random() - 0.5) * 0.8, Math.max(1, R * (0.28 + Math.random() * 0.12)), 0);
+    if (big && rand() < 0.6) stamp(x + (rand() - 0.5) * 0.8, y + (rand() - 0.5) * 0.8, Math.max(1, R * (0.28 + rand() * 0.12)), 0);
   };
-  const style = Math.random();
-  if (style < 0.3) { river(); for (let i = Math.floor(Math.random() * 3); i > 0; i--) pond(false); }        // a river and a few ponds
-  else if (style < 0.55) { for (let i = 3 + Math.floor(Math.random() * 3); i > 0; i--) pond(Math.random() < 0.5); pond(true); }   // lake country
-  else if (style < 0.85) { river(); pond(true); for (let i = 1 + Math.floor(Math.random() * 3); i > 0; i--) pond(Math.random() < 0.4); }
-  else { river(); river(); pond(Math.random() < 0.5); }                                       // two rivers that may cross
+  const style = rand();
+  if (style < 0.3) { river(); for (let i = Math.floor(rand() * 3); i > 0; i--) pond(false); }        // a river and a few ponds
+  else if (style < 0.55) { for (let i = 3 + Math.floor(rand() * 3); i > 0; i--) pond(rand() < 0.5); pond(true); }   // lake country
+  else if (style < 0.85) { river(); pond(true); for (let i = 1 + Math.floor(rand() * 3); i > 0; i--) pond(rand() < 0.4); }
+  else { river(); river(); pond(rand() < 0.5); }                                       // two rivers that may cross
 }
 function growMap() {
   const ns = Math.min(MAXD, span + CFG.growPerWeek * 2);
@@ -1599,12 +1641,12 @@ function growMap() {
 function freeSpot(minGap, edgeBias) {
   for (let t = 0; t < 600; t++) {
     let c, r;
-    if (edgeBias && span > CFG.startSpan && Math.random() < 0.45) {
-      const ring = Math.floor(Math.random() * Math.max(1, CFG.growPerWeek)), side = Math.floor(Math.random() * 4);
-      const along = org + 1 + Math.floor(Math.random() * (span - 2));
+    if (edgeBias && span > CFG.startSpan && rand() < 0.45) {
+      const ring = Math.floor(rand() * Math.max(1, CFG.growPerWeek)), side = Math.floor(rand() * 4);
+      const along = org + 1 + Math.floor(rand() * (span - 2));
       if (side === 0) { c = along; r = org + ring; } else if (side === 1) { c = org + span - 1 - ring; r = along; }
       else if (side === 2) { c = along; r = org + span - 1 - ring; } else { c = org + ring; r = along; }
-    } else { c = org + 1 + Math.floor(Math.random() * (span - 2)); r = org + 1 + Math.floor(Math.random() * (span - 2)); }
+    } else { c = org + 1 + Math.floor(rand() * (span - 2)); r = org + 1 + Math.floor(rand() * (span - 2)); }
     const k = idx(c, r);
     if (!inPlay(k) || water[k] || occupied(k) || storeFront(k)) continue;
     let ok = true;
@@ -1625,8 +1667,8 @@ function storeFront(k) {
 /* a random spot for a whole 3x4 store, at least `gap` tiles clear of every other building */
 function storeSpot(gap) {
   for (let t = 0; t < 900; t++) {
-    const c = org + 1 + Math.floor(Math.random() * Math.max(1, span - 2)), r = org + 1 + Math.floor(Math.random() * Math.max(1, span - 2));
-    const k = idx(c, r), sd = ORTH[Math.floor(Math.random() * 4)], ends = randomEnds();
+    const c = org + 1 + Math.floor(rand() * Math.max(1, span - 2)), r = org + 1 + Math.floor(rand() * Math.max(1, span - 2));
+    const k = idx(c, r), sd = ORTH[Math.floor(rand() * 4)], ends = randomEnds();
     if (!storeFits(k, sd, inPlay, ends)) continue;
     let ok = true;
     for (const tl of storeTilesAt(k, sd)) {
@@ -1641,7 +1683,7 @@ function storeSpot(gap) {
   return null;
 }
 /* half of all stores open at both ends of their car park, the rest at just one */
-const randomEnds = () => Math.random() < 0.5 ? 0 : Math.random() < 0.5 ? 1 : 2;
+const randomEnds = () => rand() < 0.5 ? 0 : rand() < 0.5 ? 1 : 2;
 function newBuilding(k, type, colorIdx, sd, ends) {
   const b = {k, type, color: colorIdx, pins: 0, claimed: 0, timer: 0, tier: 0, cars: [], carsN: 0, park: 0, lvl: 0, trucks: 0,
              docks: [], served: 0, acc: -1, face: 0, pref: -1, unreach: 0, born: clock, bornAnim: animT, contract: null,
@@ -3172,7 +3214,7 @@ function update(dt) {
       s.evolveTimer -= dt;
       if (s.evolveTimer <= 0) {
         s.evolveTimer = rnd(CFG.storeEvolveCheckMin, CFG.storeEvolveCheckMax);
-        if (Math.random() < CFG.storeEvolveChance) {
+        if (rand() < CFG.storeEvolveChance) {
           s.tier++;
           toast('The ' + COLORS[s.color].name + ' store is busier now (tier ' + s.tier + ') \u2014 parcels arrive faster', 'warn');
           popRing(bX(s), bY(s), COLORS[s.color].hex); sfx('upgrade');
@@ -3182,7 +3224,7 @@ function update(dt) {
     s.pinTimer -= dt;
     if (s.pinTimer <= 0) {
       const base = ramp(CFG.pinIntervalBase, CFG.pinIntervalRamp, CFG.pinIntervalMin) * DIFF.pin;
-      s.pinTimer = base * Math.pow(CFG.storeEvolvePinStep, s.tier) / (rush.t > 0 ? CFG.rushRate : 1) + Math.random() * CFG.pinJitter;
+      s.pinTimer = base * Math.pow(CFG.storeEvolvePinStep, s.tier) / (rush.t > 0 ? CFG.rushRate : 1) + rand() * CFG.pinJitter;
       if (s.pins < storeCap(s) + 8) { s.pins++; }
     }
     // a full store (8/8, 10/10...) brings one house of its colour now and one more a little later
@@ -3213,10 +3255,10 @@ function update(dt) {
   // (no timed house spawning any more: houses arrive with new stores or when a store fills up)
   storeTimer -= dt;
   if (storeTimer <= 0) {
-    storeTimer = ramp(CFG.storeIntervalBase, CFG.storeIntervalRamp, CFG.storeIntervalMin) * DIFF.spawn + Math.random() * CFG.storeJitter;
+    storeTimer = ramp(CFG.storeIntervalBase, CFG.storeIntervalRamp, CFG.storeIntervalMin) * DIFF.spawn + rand() * CFG.storeJitter;
     const cols = [...new Set(buildings.filter(b => b.type === 'store').map(b => b.color))];
     let c;
-    if (cols.length < COLORS.length && Math.random() < CFG.newColourChance) c = pick(COLORS.map((_, i) => i).filter(i => !cols.includes(i)));
+    if (cols.length < COLORS.length && rand() < CFG.newColourChance) c = pick(COLORS.map((_, i) => i).filter(i => !cols.includes(i)));
     else c = pick(cols);
     const ns = addBuilding('store', c);
     if (ns) {
@@ -3350,7 +3392,7 @@ function houseColour() {
   for (const b of buildings) { if (b.type === 'store') st[b.color] = (st[b.color] || 0) + 1; else hs[b.color] = (hs[b.color] || 0) + 1; }
   const cols = Object.keys(st).map(Number); if (!cols.length) return null;
   const w = cols.map(c => st[c] / Math.pow((hs[c] || 0) + 1, 1.6));
-  let r = Math.random() * w.reduce((a, b) => a + b, 0);
+  let r = rand() * w.reduce((a, b) => a + b, 0);
   for (let i = 0; i < cols.length; i++) { r -= w[i]; if (r <= 0) return cols[i]; }
   return cols[cols.length - 1];
 }
@@ -3466,7 +3508,7 @@ const ACH = [
   {id: 'frantic500', g: 'Modes', name: 'Under pressure',  hint: 'Deliver 500 parcels on Frantic',    hit: () => inMode('frantic') && score >= 500},
   {id: 'chill15',    g: 'Modes', name: 'Easy does it',    hint: 'Reach week 15 on Relaxed',          hit: () => inMode('chill') && week >= 15},
   {id: 'zen1h',      g: 'Modes', name: 'Zen master',      hint: 'Play one Zen city for an hour of game time', hit: () => inMode('zen') && clock >= 3600},
-  {id: 'allmodes',   g: 'Modes', name: 'Well rounded',    hint: 'Play a city on every mode',         life: L => Object.keys(DIFFS).every(m => L[m].cities > 0)},
+  {id: 'allmodes',   g: 'Modes', name: 'Well rounded',    hint: 'Play a city on every mode',         life: L => Object.keys(DIFFS).filter(m => !DIFFS[m].expert).every(m => L[m] && L[m].cities > 0)},
   // lifetime
   {id: 'cities10',  g: 'Lifetime', name: 'Urban planner',  hint: 'Start 10 cities',                 life: L => lifeSum(L, 'cities') >= 10},
   {id: 'cities50',  g: 'Lifetime', name: 'Serial builder', hint: 'Start 50 cities',                 life: L => lifeSum(L, 'cities') >= 50},
@@ -3528,7 +3570,7 @@ function hasSave() { try { return !!localStorage.getItem(SAVE_KEY); } catch (e) 
 function serialize() {
   const list = a => { const o = []; for (let k = 0; k < N; k++) if (a[k]) o.push(k); return o; };
   return {
-    v: 3, sv: 3, diffKey, score, week, weekTimer, span, houseTimer, storeTimer, clock, keepLeft, carCapacity, money,
+    v: 3, sv: 3, expWeek, diffKey, score, week, weekTimer, span, houseTimer, storeTimer, clock, keepLeft, carCapacity, money,
     inv, perks, water: list(water), road: list(road),
     links: (() => { const o = []; for (let k = 0; k < N; k++) if (lnk[k]) o.push([k, lnk[k]]); return o; })(),
     sign: sign.map((s, k) => s ? [k, s] : null).filter(Boolean),
@@ -3611,6 +3653,7 @@ function loadGameCore(data) {
     for (const [k, s] of d.special) special[k] = s;
     if (d.lights) for (const [k, a, b] of d.lights) if (special[k] === 'light') { setLightQ(k, 0, a); setLightQ(k, 1, b); }
     if (d.oneway) for (const [k, dir] of d.oneway) if (onewayDir && road[k]) onewayDir[k] = dir;
+    if (DIFF.expert) { expWeek = typeof d.expWeek === 'string' ? d.expWeek : expertSeed().key; rand = seededRand(strHash(expWeek) ^ Math.floor(d.clock || 0)); }
     score = d.score; week = d.week; weekTimer = d.weekTimer; span = d.span; org = Math.floor((MAXD - span) / 2); camSpan = span; camOrg = org;
     houseTimer = d.houseTimer; storeTimer = d.storeTimer; clock = d.clock; keepLeft = d.keepLeft; laneSign = keepLeft ? -1 : 1;
     inv = d.inv; perks = Object.assign({}, PERK_DEFAULTS, d.perks); carCapacity = d.carCapacity;
@@ -3664,6 +3707,7 @@ function resetGameBlank(dk) {
   tutorialMode = false;
   setTutorialUI(false);
   DIFF = DIFFS[dk] || DIFFS.standard; diffKey = dk in DIFFS ? dk : 'standard'; best = bestFor(diffKey);
+  rand = Math.random; expWeek = '';
   water = new Uint8Array(N); road = new Uint8Array(N); lnk = new Uint8Array(N);
   sign = new Array(N).fill(null); special = new Array(N).fill(null);
   bAt = new Int32Array(N).fill(-1); parkAt = new Int32Array(N).fill(-1); depotAt = new Int32Array(N).fill(-1);
@@ -3741,6 +3785,9 @@ function palFor(id, custom) {
   else if (rd === 'concrete') { P.road = '#d3d1cb'; P.roadWet = '#bebcb5'; P.edge = '#8d8b85'; P.lane = '#e2b022'; }
   else if (rd === 'brick') { P.road = '#b4644a'; P.roadWet = '#9b533c'; P.edge = '#6c3426'; P.lane = 'rgba(255,240,220,.7)'; }
   else if (rd === 'snowy') { P.road = '#e9eef2'; P.roadWet = '#dfe6ea'; P.edge = '#9fb3c2'; P.lane = 'rgba(110,140,160,.45)'; }
+  else if (rd === 'candy') { P.road = '#f8c9db'; P.roadWet = '#efb6cc'; P.edge = '#d3779d'; P.lane = '#ffffff'; }
+  else if (rd === 'boardwalk') { P.road = '#b48a5a'; P.roadWet = '#9f7748'; P.edge = '#6b4a2b'; P.lane = 'rgba(0,0,0,0)'; }
+  else if (rd === 'racetrack') { P.road = '#3e4448'; P.roadWet = '#34393d'; P.edge = '#e8473a'; P.lane = '#ffffff'; }
   else if (rd === 'gold') { P.road = '#efc23a'; P.roadWet = '#d9ad27'; P.edge = '#8a6a10'; P.lane = 'rgba(255,255,255,.75)'; }
   if (cu.road) {                                     // road surface; its kerb and the wet look follow it
     P.road = cu.road; P.roadWet = mixHex(cu.road, '#000000', 0.09);
@@ -3751,6 +3798,9 @@ function palFor(id, custom) {
   else if (md === 'ivy') { P.deck = '#4f8f4a'; P.deckEdge = '#2c5629'; }
   else if (md === 'lights') { P.deck = '#2b3240'; P.deckEdge = '#141921'; }
   else if (md === 'rainbow') { P.deck = '#8a5bff'; P.deckEdge = '#3b2a6b'; }
+  else if (md === 'sunset') { P.deck = '#ff8a5c'; P.deckEdge = '#6b2a4a'; }
+  else if (md === 'glass') { P.deck = 'rgba(170,220,245,.55)'; P.deckEdge = 'rgba(70,140,175,.85)'; }
+  else if (md === 'skyline') { P.deck = '#151a28'; P.deckEdge = '#00e1ff'; }
   if (cu.moto) { P.deck = cu.moto; P.deckEdge = mixHex(cu.moto, '#000000', 0.55); }
   P.tone = tone;
   return P;
@@ -4001,13 +4051,13 @@ function updateSun() {
 }
 /* a solid shadow for rounded boxes standing `h` high, drawn as the sweep from the base to the offset copy so
    it stays joined to its object. (x, y, ang, sc) is the object's own frame; rects are in that frame. */
-function dropShadow(x, y, ang, sc, h, rects) {
+function dropShadow(x, y, ang, sc, h, rects, alphaMul) {
   const ox = SUN.x * h, oy = SUN.y * h, c = Math.cos(ang), s = Math.sin(ang);
   const lx = (ox * c + oy * s) / sc, ly = (-ox * s + oy * c) / sc, steps = h > 3 ? 5 : 3;
   ctx.save(); ctx.translate(x, y); ctx.rotate(ang); if (sc !== 1) ctx.scale(sc, sc);
   ctx.beginPath();
   for (const [rx, ry, rw, rh, r] of rects) for (let i = 1; i <= steps; i++) { const t = i / steps; rrp(rx + lx * t, ry + ly * t, rw, rh, r); }
-  ctx.globalAlpha = SUN.a; ctx.fillStyle = PAL.sh; ctx.fill();
+  ctx.globalAlpha = SUN.a * (alphaMul === undefined ? 1 : alphaMul); ctx.fillStyle = PAL.sh; ctx.fill();
   ctx.restore();
 }
 /* a round shadow (trees, cones, sign posts, badges) */
@@ -4232,7 +4282,15 @@ function paintMoto(path, dash, pillars) {
   ctx.strokeStyle = PAL.deckEdge; ctx.lineWidth = 15; ctx.stroke(path);
   if (md === 'rainbow' && !custom) {
     ['#ff4d4d', '#ff9f1a', '#ffd23a', '#3fd16a', '#2f9bff', '#8a5bff'].forEach((c, i) => { ctx.strokeStyle = c; ctx.lineWidth = 12.6 - i * 2.1; ctx.stroke(path); });
+  } else if (md === 'sunset' && !custom) {
+    ['#ffcf5c', '#ff8a5c', '#e3527a', '#8a4fb0'].forEach((c, i) => { ctx.strokeStyle = c; ctx.lineWidth = 12.6 - i * 3; ctx.stroke(path); });
   } else { ctx.strokeStyle = PAL.deck; ctx.lineWidth = 12.6; ctx.stroke(path); }
+  if (md === 'glass') { ctx.strokeStyle = 'rgba(255,255,255,.75)'; ctx.lineWidth = 13.6; ctx.setLineDash([8, 12]); ctx.lineCap = 'butt'; ctx.stroke(path); ctx.setLineDash([]); ctx.lineCap = 'round'; ctx.strokeStyle = PAL.deck; ctx.lineWidth = 11; ctx.stroke(path); }
+  if (md === 'skyline') {                                  // glowing edges and pulses of light racing along
+    ctx.save(); ctx.shadowColor = '#00e1ff'; ctx.shadowBlur = 8; ctx.strokeStyle = '#00e1ff'; ctx.lineWidth = 14; ctx.globalAlpha = 0.5; ctx.stroke(path); ctx.restore();
+    ctx.strokeStyle = PAL.deck; ctx.lineWidth = 12; ctx.stroke(path);
+    if (!REDUCED_MOTION) { ctx.strokeStyle = 'rgba(255,61,242,.9)'; ctx.lineWidth = 2; ctx.setLineDash([3, 26]); ctx.lineDashOffset = -animT * 60; ctx.stroke(dash); ctx.setLineDash([]); ctx.lineDashOffset = 0; }
+  }
   if (md === 'ivy') {                                      // leafy hedges along both edges
     ctx.strokeStyle = '#6fb35e'; ctx.lineWidth = 14.5; ctx.setLineDash([1.6, 2.4]); ctx.lineCap = 'round'; ctx.stroke(path);
     ctx.setLineDash([]); ctx.strokeStyle = PAL.deck; ctx.lineWidth = 10.4; ctx.stroke(path);
@@ -4269,11 +4327,29 @@ function roadTexture(path, bridgePath) {
     ctx.lineWidth = RW - 9; ctx.lineDashOffset = 1.6; ctx.stroke(path);
     if (rd === 'gold' && !REDUCED_MOTION) { ctx.setLineDash([2, 40]); ctx.lineDashOffset = -animT * 30; ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = RW - 6; ctx.stroke(path); }
     ctx.restore();
+  } else if (rd === 'candy') {                             // sugar sprinkles
+    ctx.save(); ctx.lineCap = 'round';
+    ['#ff6b8b', '#6bc8ff', '#ffd23a', '#9be36b'].forEach((c2, i) => { ctx.strokeStyle = c2; ctx.lineWidth = 0.9; ctx.setLineDash([0.4, 9 + i]); ctx.lineDashOffset = i * 2.3; ctx.stroke(path); });
+    ctx.restore();
+  } else if (rd === 'boardwalk') {                         // planks across the way
+    ctx.save(); ctx.lineCap = 'butt'; ctx.strokeStyle = 'rgba(70,45,20,.38)'; ctx.lineWidth = RW; ctx.setLineDash([0.7, 2.4]); ctx.stroke(path); ctx.restore();
+  } else if (rd === 'racetrack') {                         // red-and-white kerbs and a chequered feel
+    ctx.save(); ctx.lineCap = 'butt';
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = RW + 3.4; ctx.setLineDash([4, 4]); ctx.stroke(path);
+    ctx.setLineDash([]); ctx.strokeStyle = PAL.road; ctx.lineWidth = RW; ctx.lineCap = 'round'; ctx.stroke(path);
+    ctx.restore();
   } else if (rd === 'snowy') {                             // packed snow with grey tyre tracks
     ctx.save(); ctx.strokeStyle = 'rgba(120,140,155,.28)'; ctx.lineWidth = RW * 0.55; ctx.stroke(path);
     ctx.strokeStyle = PAL.road; ctx.lineWidth = RW * 0.28; ctx.stroke(path); ctx.restore();
   } else if (rd === 'neon') {                              // a soft glow running down the middle
     ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = 'rgba(0,225,255,.08)'; ctx.lineWidth = RW - 6; ctx.stroke(path); ctx.restore();
+  }
+  if (bridgePath && design('bridge') === 'covered') {      // a covered bridge: a shingled roof over the crossing
+    ctx.save(); ctx.lineCap = 'butt'; ctx.globalAlpha = 0.9;
+    ctx.strokeStyle = '#9b3d2c'; ctx.lineWidth = RW + 5; ctx.stroke(bridgePath);
+    ctx.strokeStyle = 'rgba(0,0,0,.22)'; ctx.lineWidth = RW + 5; ctx.setLineDash([0.6, 2]); ctx.stroke(bridgePath);
+    ctx.setLineDash([]); ctx.strokeStyle = 'rgba(255,220,190,.55)'; ctx.lineWidth = 1; ctx.stroke(bridgePath);
+    ctx.restore();
   }
   if (bridgePath && (design('bridge') === 'wood' || design('bridge') === 'rope')) {   // wooden and rope bridges show their planks
     ctx.save(); ctx.lineCap = 'butt'; ctx.strokeStyle = 'rgba(90,55,25,.35)'; ctx.lineWidth = RW; ctx.setLineDash([0.8, 2.6]); ctx.stroke(bridgePath); ctx.restore();
@@ -4290,6 +4366,12 @@ function bridgeParapet(path) {
     ctx.strokeStyle = '#a93226'; ctx.lineWidth = RW + 8; ctx.stroke(path);
     ctx.strokeStyle = '#d24a3a'; ctx.lineWidth = RW + 8; ctx.setLineDash([2, 4]); ctx.lineCap = 'butt'; ctx.stroke(path);
     ctx.setLineDash([]); ctx.strokeStyle = '#7b1f17'; ctx.lineWidth = RW + 3.6; ctx.stroke(path);
+  } else if (bd === 'brick') {
+    ctx.strokeStyle = '#a5523b'; ctx.lineWidth = RW + 7.5; ctx.stroke(path);
+    ctx.strokeStyle = 'rgba(255,225,200,.45)'; ctx.lineWidth = RW + 7.5; ctx.setLineDash([0.5, 2.2]); ctx.lineCap = 'butt'; ctx.stroke(path);
+    ctx.setLineDash([]); ctx.strokeStyle = '#7d3a28'; ctx.lineWidth = RW + 3.6; ctx.stroke(path);
+  } else if (bd === 'covered') {
+    ctx.strokeStyle = '#7a4a2a'; ctx.lineWidth = RW + 7; ctx.stroke(path);
   } else if (bd === 'rope') {
     ctx.strokeStyle = '#c9a46a'; ctx.lineWidth = RW + 6; ctx.stroke(path);
     ctx.strokeStyle = '#7d5a2e'; ctx.lineWidth = RW + 6; ctx.setLineDash([0.9, 3.2]); ctx.lineCap = 'butt'; ctx.stroke(path);
@@ -4358,6 +4440,24 @@ function drawRoundAt(x, y) {
     const cols = ['#ff6b8b', '#ffd23a', '#ffffff', '#b07bff'];
     for (let i = 0; i < 8; i++) { const a = i * 0.785 + 0.3, d = IR * 0.68; ctx.fillStyle = cols[i % 4]; ctx.beginPath(); ctx.arc(x + Math.cos(a) * d, y + Math.sin(a) * d, 0.9, 0, 6.3); ctx.fill(); }
     dotShadow(x, y, 2.6, 2.4); ctx.fillStyle = '#3f8a4a'; ctx.beginPath(); ctx.arc(x, y, 2.6, 0, 6.3); ctx.fill(); ctx.fillStyle = '#5cab5f'; ctx.beginPath(); ctx.arc(x - 0.7, y - 0.7, 1.5, 0, 6.3); ctx.fill();
+  } else if (rd === 'sundial') {                           // a sundial whose shadow follows the time of day
+    ctx.fillStyle = '#d8d1c3'; ctx.beginPath(); ctx.arc(x, y, IR + 0.6, 0, 6.3); ctx.fill();
+    ctx.strokeStyle = 'rgba(80,70,55,.6)'; ctx.lineWidth = 0.45; ctx.beginPath();
+    for (let i = 0; i < 12; i++) { const a = i * Math.PI / 6; ctx.moveTo(x + Math.cos(a) * (IR - 1.6), y + Math.sin(a) * (IR - 1.6)); ctx.lineTo(x + Math.cos(a) * IR, y + Math.sin(a) * IR); } ctx.stroke();
+    const a = dayPhase() * Math.PI * 2 + Math.PI / 2;
+    ctx.strokeStyle = 'rgba(40,35,30,.55)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(a) * (IR - 1.2), y + Math.sin(a) * (IR - 1.2)); ctx.stroke();
+    ctx.fillStyle = '#8a7a5c'; ctx.beginPath(); ctx.arc(x, y, 1, 0, 6.3); ctx.fill();
+  } else if (rd === 'pond') {                              // a little pond with lily pads
+    ctx.fillStyle = '#7cc9a6'; ctx.beginPath(); ctx.arc(x, y, IR + 0.6, 0, 6.3); ctx.fill();
+    ctx.fillStyle = '#5fb4d6'; ctx.beginPath(); ctx.arc(x, y, IR - 0.6, 0, 6.3); ctx.fill();
+    for (const [dx, dy, r2] of [[-2, -1.5, 1.4], [2.2, 1, 1.2], [0, 2.6, 1]]) { ctx.fillStyle = '#4f9b4f'; ctx.beginPath(); ctx.arc(x + dx, y + dy, r2, 0.4, 6); ctx.lineTo(x + dx, y + dy); ctx.fill(); }
+    ctx.fillStyle = '#ff9ec7'; ctx.beginPath(); ctx.arc(x - 2, y - 1.5, 0.5, 0, 6.3); ctx.fill();
+  } else if (rd === 'statue') {                            // a golden statue on a stone plinth
+    ctx.fillStyle = '#6fb35e'; ctx.beginPath(); ctx.arc(x, y, IR + 0.4, 0, 6.3); ctx.fill();
+    dotShadow(x, y, 2.8, 5);
+    ctx.fillStyle = '#bdb6a8'; rr(x - 2.6, y - 2.6, 5.2, 5.2, 0.8); ctx.fill();
+    const gg = ctx.createRadialGradient(x - 0.6, y - 0.8, 0.2, x, y, 2); gg.addColorStop(0, '#fff1a8'); gg.addColorStop(1, '#b8901c');
+    ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(x, y, 1.7, 0, 6.3); ctx.fill();
   } else if (rd === 'fountain') {
     ctx.fillStyle = '#d6cfc2'; ctx.beginPath(); ctx.arc(x, y, IR + 0.6, 0, 6.3); ctx.fill();
     ctx.fillStyle = '#6fc3e6'; ctx.beginPath(); ctx.arc(x, y, IR - 0.8, 0, 6.3); ctx.fill();
@@ -4378,7 +4478,8 @@ function drawLightHeads(x, y, ls, dem) {
   const heads = [[-11, -11, 0], [11, 11, 0], [11, -11, 1], [-11, 11, 1]], ld = design('light');
   for (const [hx, hy] of heads) {
     if (ld === 'modern') dropShadow(x + hx, y + hy, 0, 1, 3, [[-3.4, -1.3, 6.8, 2.6, 1.3]]);
-    else if (ld === 'retro') dotShadow(x + hx, y + hy, 3, 3);
+    else if (ld === 'retro' || ld === 'lantern') dotShadow(x + hx, y + hy, 3, 3.5);
+    else if (ld === 'minimal') dotShadow(x + hx, y + hy, 1.8, 2.5);
     else dropShadow(x + hx, y + hy, 0, 1, 3, [[-2.6, -2.6, 5.2, 5.2, 1.6]]);
   }
   for (const [hx, hy, g] of heads) {
@@ -4387,6 +4488,21 @@ function drawLightHeads(x, y, ls, dem) {
       rr(X - 3.4, Y - 1.3, 6.8, 2.6, 1.3); ctx.fillStyle = '#11161a'; ctx.fill();
       rr(X - 2.7, Y - 0.6, 5.4, 1.2, 0.6); ctx.fillStyle = lamp; ctx.fill();
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = green ? 'rgba(72,224,138,.25)' : 'rgba(255,90,74,.22)'; rr(X - 4, Y - 2, 8, 4, 2); ctx.fill(); ctx.restore();
+    } else if (ld === 'minimal') {
+      ctx.fillStyle = '#2a3238'; ctx.beginPath(); ctx.arc(X, Y, 2, 0, 6.3); ctx.fill();
+      ctx.fillStyle = lamp; ctx.beginPath(); ctx.arc(X, Y, 1.35, 0, 6.3); ctx.fill();
+    } else if (ld === 'lantern') {
+      ctx.save(); ctx.translate(X, Y); ctx.rotate(Math.PI / 4);
+      ctx.fillStyle = '#23272b'; ctx.fillRect(-2.8, -2.8, 5.6, 5.6);
+      ctx.fillStyle = lamp; ctx.fillRect(-1.8, -1.8, 3.6, 3.6);
+      ctx.strokeStyle = '#23272b'; ctx.lineWidth = 0.5; ctx.beginPath(); ctx.moveTo(-1.8, 0); ctx.lineTo(1.8, 0); ctx.moveTo(0, -1.8); ctx.lineTo(0, 1.8); ctx.stroke();
+      ctx.restore();
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = green ? 'rgba(72,224,138,.22)' : 'rgba(255,170,90,.22)'; ctx.beginPath(); ctx.arc(X, Y, 4.6, 0, 6.3); ctx.fill(); ctx.restore();
+    } else if (ld === 'gold') {
+      const gg = ctx.createLinearGradient(X - 3, Y - 3, X + 3, Y + 3); gg.addColorStop(0, '#fff1a8'); gg.addColorStop(0.5, '#d4af37'); gg.addColorStop(1, '#8f6d10');
+      rr(X - 2.9, Y - 2.9, 5.8, 5.8, 1.8); ctx.fillStyle = gg; ctx.fill();
+      ctx.fillStyle = '#1a1a1a'; ctx.beginPath(); ctx.arc(X, Y, 1.9, 0, 6.3); ctx.fill();
+      ctx.fillStyle = lamp; ctx.beginPath(); ctx.arc(X, Y, 1.5, 0, 6.3); ctx.fill();
     } else if (ld === 'retro') {
       ctx.fillStyle = '#e8b82e'; ctx.beginPath(); ctx.arc(X, Y, 3, 0, 6.3); ctx.fill();
       ctx.strokeStyle = '#7a5a10'; ctx.lineWidth = 0.6; ctx.stroke();
@@ -4488,6 +4604,9 @@ function drawHouse(b) {
   if (hd === 'tower') dropShadow(x, y, b.face || 0, s, 7, [[-8.5, -13, 17, 17, 8.5]]);
   else if (hd === 'igloo') dropShadow(x, y, b.face || 0, s, 3.6, [[-9, -12.5, 18, 15, 7.5]]);
   else if (hd === 'castle') dropShadow(x, y, b.face || 0, s, 6.5, [[-12, -14, 24, 18, 3]]);
+  else if (hd === 'treehouse') dropShadow(x, y, b.face || 0, s, 8, [[-11.5, -15, 23, 20, 10]]);
+  else if (hd === 'windmill') dropShadow(x, y, b.face || 0, s, 8, [[-7, -12, 14, 14, 7]]);
+  else if (hd === 'lighthouse') dropShadow(x, y, b.face || 0, s, 11, [[-6.5, -11.5, 13, 13, 6.5]]);
   else if (hd !== 'standard') dropShadow(x, y, b.face || 0, s, hd === 'modern' ? 3.4 : 4.2, [[-11, -13, 22, 16, 2]]);
   else dropShadow(x, y, b.face || 0, s, model === 2 ? 4.4 : 3.6, model === 0 ? [[-9, -12, 18, 15.5, 2.6]] : model === 1 ? [[-11.5, -13, 14.5, 16.5, 2.6], [3.4, -8.5, 8.1, 12, 1.4]] : [[-11.5, -13.5, 23, 17, 2.6]]);
   ctx.save(); ctx.translate(x, y); ctx.rotate(b.face || 0); ctx.scale(s, s);
@@ -4582,6 +4701,39 @@ function drawHouseDesign(hd, b, col, model) {
     const wv = REDUCED_MOTION ? 0 : Math.sin(animT * 4 + b.k) * 0.8;
     ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(0, -16); ctx.lineTo(5, -15 + wv); ctx.lineTo(0, -13.4); ctx.closePath(); ctx.fill();
     if (showSymbols) glyph(COLORS[b.color].glyph, 0, -6, 2.4, col);
+  } else if (hd === 'treehouse') {                         // a hut up in a big tree, with a rope ladder down
+    for (const [dx, dy, rr2, c2] of [[-5, -8, 7, PAL.tree2], [5, -9, 7, PAL.tree2], [0, -3, 7.5, PAL.tree2], [-4, -10, 4.5, PAL.tree1], [4, -5, 4.2, PAL.tree1]]) { ctx.fillStyle = c2; ctx.beginPath(); ctx.arc(dx, dy, rr2, 0, 6.3); ctx.fill(); }
+    ctx.fillStyle = 'rgba(0,0,0,.25)'; rr(-4.6 + 1, -9.5 + 1.2, 9.2, 7.5, 1); ctx.fill();
+    rr(-4.6, -9.5, 9.2, 7.5, 1); ctx.fillStyle = '#9a6a3c'; ctx.fill();
+    ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(-5.6, -9.5); ctx.lineTo(0, -13.5); ctx.lineTo(5.6, -9.5); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(24,44,58,.75)'; ctx.fillRect(-1.2, -7, 2.4, 2);
+    ctx.strokeStyle = '#7a5530'; ctx.lineWidth = 0.5; ctx.beginPath(); ctx.moveTo(-1, -2); ctx.lineTo(-1, 3.5); ctx.moveTo(1, -2); ctx.lineTo(1, 3.5); for (let yy = -1.2; yy < 3.5; yy += 1.1) { ctx.moveTo(-1, yy); ctx.lineTo(1, yy); } ctx.stroke();
+    if (showSymbols) glyph(COLORS[b.color].glyph, 0, -11, 1.8, 'rgba(255,255,255,.92)');
+  } else if (hd === 'windmill') {                          // a round mill with four turning sails in the house colour
+    ctx.fillStyle = '#d9cfbd'; ctx.beginPath(); ctx.arc(0, -5, 6.5, 0, 6.3); ctx.fill();
+    ctx.fillStyle = shade(col, -0.2); ctx.beginPath(); ctx.arc(0, -5, 4.6, 0, 6.3); ctx.fill();
+    ctx.save(); ctx.translate(0, -5); ctx.rotate(REDUCED_MOTION ? 0.4 : animT * 0.9 + b.k);
+    for (let i = 0; i < 4; i++) {
+      ctx.rotate(Math.PI / 2);
+      ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fillRect(1.6, -1.2 + 0.8, 9, 2.4);
+      ctx.fillStyle = '#f4efe3'; ctx.fillRect(1.6, -1.2, 9, 2.4); ctx.fillStyle = col; ctx.fillRect(3, -1.2, 7, 1.1);
+      ctx.strokeStyle = '#6b5b45'; ctx.lineWidth = 0.4; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(10.6, 0); ctx.stroke();
+    }
+    ctx.restore();
+    ctx.fillStyle = '#4a3a2a'; ctx.beginPath(); ctx.arc(0, -5, 1, 0, 6.3); ctx.fill();
+    rr(-1.4, 1.2, 2.8, 2.2, 0.8); ctx.fillStyle = shade(col, -0.5); ctx.fill();
+    if (showSymbols) glyph(COLORS[b.color].glyph, 0, -5, 1.6, 'rgba(255,255,255,.92)');
+  } else if (hd === 'lighthouse') {                        // a striped lighthouse with a sweeping beam
+    const R_ = 6;
+    ctx.fillStyle = '#f6f4ef'; ctx.beginPath(); ctx.arc(0, -5, R_, 0, 6.3); ctx.fill();
+    ctx.strokeStyle = col; ctx.lineWidth = 1.6; for (const rr2 of [5.1, 2.9]) { ctx.beginPath(); ctx.arc(0, -5, rr2, 0, 6.3); ctx.stroke(); }
+    ctx.fillStyle = '#2b3036'; ctx.beginPath(); ctx.arc(0, -5, 1.8, 0, 6.3); ctx.fill();
+    ctx.fillStyle = '#ffe58a'; ctx.beginPath(); ctx.arc(0, -5, 1.1, 0, 6.3); ctx.fill();
+    const a = REDUCED_MOTION ? 0.6 : animT * 1.4;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = 'rgba(255,230,140,.28)';
+    ctx.beginPath(); ctx.moveTo(0, -5); ctx.arc(0, -5, 18, a - 0.22, a + 0.22); ctx.closePath(); ctx.fill(); ctx.restore();
+    rr(-1.3, 0.6, 2.6, 2.4, 0.8); ctx.fillStyle = shade(col, -0.45); ctx.fill();
+    if (showSymbols) glyph(COLORS[b.color].glyph, 0, -9.5, 1.4, col);
   } else if (hd === 'barn') {                                     // a gambrel-roofed barn in the house colour with white trim and a cross-braced door
     rr(-11, -13, 22, 16, 2); ctx.fillStyle = shade(col, -0.18); ctx.fill();
     ctx.fillStyle = shade(col, 0.08); ctx.fillRect(-11, -13, 22, 4); ctx.fillRect(-11, -1, 22, 4);
@@ -4713,8 +4865,7 @@ function drawStore(b) {
   const [Bx, By, Bw, Bh] = STORE_BOX[tier], front = By + Bh, roof = tier === 3 ? shade(PAL.roofBase, -0.12) : PAL.roofBase;
   const ends = b.ends || 0, open = [ends !== 2 ? 1 : 0, ends !== 1 ? 1 : 0];        // [+x end, -x end]
   dropShadow(x, y, th, s, 0.5, [[-31, -47, 62, 94, 6]]);                                    // the plot's kerb
-  const H = (8 + tier * 2.2) * s;                                                             // how tall it stands, in world px
-  dropShadow(x, y, th, s, H * 1.25, [[Bx, By, Bw, Bh, 4]]);                                    // the building's shadow, as long as it is tall
+  const H = (13 + tier * 3.2) * s;                                                            // how tall it stands, in world px
   ctx.save(); ctx.translate(x, y); ctx.rotate(th); ctx.scale(s, s);
   // plot and kerb
   rr(-31, -47, 62, 94, 6); ctx.fillStyle = PAL.lot; ctx.fill();
@@ -4747,56 +4898,17 @@ function drawStore(b) {
     for (const [gx, gy, gr, sd] of [[-27.5, -43, 3.2, 1], [27.5, -42.5, 3.4, 2], [-27.5, -14, 2.9, 3], [27.5, 2, 3, 4]]) drawDecor(ctx, dk, gx, gy, gr, 0, b.k * 7 + sd);
   }
   ctx.restore();
-  // The building is a solid block standing in its own footprint, seen a little from the front and left: you see its
-  // roof, the wall facing you and its left-hand wall. The sun is up and to the left, so the left wall is lit and the
-  // front wall is in shade. Roof and walls together fill exactly the footprint, so nothing spills over the car park.
+  // Seen straight from above. How tall the building is shows in its shadow: a soft outer shadow and a darker core,
+  // both cast across its own lot and car park (so they're drawn on top of the ground, not hidden under it), plus
+  // light falling across the roof and a lit and a shaded rim round its parapet.
+  const sdz = storeDesign();
+  dropShadow(x, y, th, s, H * 1.55, [[Bx, By, Bw, Bh, 4]], 0.45);
+  dropShadow(x, y, th, s, H * 0.95, [[Bx, By, Bw, Bh, 4]], 0.9);
+  dropShadow(x, y, th, s, 2.2, [[Bx - 0.5, By - 0.5, Bw + 1, Bh + 1, 4.5]], 1);                 // a crisp contact shadow at its foot
   const cs = [[Bx, By], [Bx + Bw, By], [Bx + Bw, By + Bh], [Bx, By + Bh]].map(([lx, ly]) => rot(x, y, th, lx * s, ly * s));
   const wx0 = Math.min(...cs.map(q => q.x)), wx1 = Math.max(...cs.map(q => q.x)), wy0 = Math.min(...cs.map(q => q.y)), wy1 = Math.max(...cs.map(q => q.y));
-  const bw = wx1 - wx0, bh = wy1 - wy0, Hh = Math.min(H, bh * 0.34), Dx = Math.min(Hh * 0.75, bw * 0.15);
-  const bx1 = wx1 - Dx, by0 = wy0 + Hh;              // the base on the ground: wx0..bx1 by by0..wy1
-  const rx0 = wx0 + Dx, ry1 = wy1 - Hh;              // the roof: the base lifted by Hh and nudged right by Dx
-  const frontFaces = Math.abs(((th % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) < 0.1;    // the shopfront is the wall you see
-  const sdz = storeDesign();
-  const wallCol = ({warehouse: '#4d575e', glass: '#6fa3bb', brick: '#9b4a36', eco: '#7d8f6a', neon: '#262833', crystal: '#a395dc', market: '#d9cdb8'})[sdz] || shade(PAL.roofBase, -0.18);
-  {
-    ctx.fillStyle = 'rgba(0,0,0,.24)'; ctx.fillRect(wx0 - 0.6, wy1 - 1, bx1 - wx0 + 1.2, 2.4);                    // where the block meets the ground
-    // the left-hand wall, catching the sun
-    ctx.beginPath(); ctx.moveTo(wx0, by0); ctx.lineTo(rx0, wy0); ctx.lineTo(rx0, ry1); ctx.lineTo(wx0, wy1); ctx.closePath();
-    ctx.fillStyle = shade(wallCol, 0.1); ctx.fill();
-    const g2 = ctx.createLinearGradient(0, wy0, 0, wy1); g2.addColorStop(0, 'rgba(255,255,255,.18)'); g2.addColorStop(1, 'rgba(0,0,0,.14)'); ctx.fillStyle = g2; ctx.fill();
-    // the wall facing you, in shade
-    ctx.beginPath(); ctx.moveTo(wx0, wy1); ctx.lineTo(bx1, wy1); ctx.lineTo(wx1, ry1); ctx.lineTo(rx0, ry1); ctx.closePath();
-    ctx.fillStyle = shade(wallCol, -0.16); ctx.fill();
-    const g1 = ctx.createLinearGradient(0, ry1, 0, wy1); g1.addColorStop(0, 'rgba(255,255,255,.1)'); g1.addColorStop(1, 'rgba(0,0,0,.3)'); ctx.fillStyle = g1; ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(wx0, wy1); ctx.lineTo(rx0, ry1); ctx.stroke();   // the corner between them
-    ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 0.6; ctx.beginPath(); ctx.moveTo(wx1 - 0.3, ry1); ctx.lineTo(bx1 - 0.3, wy1); ctx.stroke();  // the far corner
-    const dh = Hh * 0.7;
-    // front wall details, sheared to follow it (x along the wall, y upwards negative)
-    ctx.save(); ctx.transform(1, 0, -Dx / Hh, 1, wx0, wy1);
-    const fw = bx1 - wx0;
-    ctx.fillStyle = col; ctx.fillRect(0, -Hh, fw, Math.max(1.2, Hh * 0.17));                                     // the store's colour band under the roof
-    ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fillRect(0, -Hh + Math.max(1.2, Hh * 0.17), fw, 0.6);
-    if (frontFaces) {                                                                                    // shopfront: two garage doors and a glass entrance
-      for (const gx of [-18, 18]) rollerDoor(x + (gx - 6) * s - wx0, -dh, 12 * s, dh, col);
-      rr(x - 7 * s - wx0, -dh, 14 * s, dh, 1); ctx.fillStyle = 'rgba(24,44,58,.88)'; ctx.fill();
-      ctx.fillStyle = 'rgba(170,215,240,.42)'; ctx.fillRect(x - 6 * s - wx0, -dh + 1, 5 * s, dh - 1.5); ctx.fillRect(x + 1 * s - wx0, -dh + 1, 5 * s, dh - 1.5);
-    } else {                                                                                             // a row of windows along any other wall
-      for (let wx = 5; wx < fw - 7; wx += 8) {
-        ctx.fillStyle = 'rgba(24,44,58,.62)'; ctx.fillRect(wx, -dh * 0.88, 4.5, dh * 0.5);
-        ctx.fillStyle = 'rgba(170,215,240,.32)'; ctx.fillRect(wx + 0.5, -dh * 0.85, 1.3, dh * 0.44);
-      }
-    }
-    ctx.restore();
-    // windows down the left-hand wall (x up the wall, y upwards negative)
-    ctx.save(); ctx.transform(0, -1, -Dx / Hh, 1, wx0, wy1);
-    for (let d = 5; d < (wy1 - by0) - 5; d += 8) { ctx.fillStyle = 'rgba(16,30,40,.55)'; ctx.fillRect(d, -dh * 0.88, 4, dh * 0.5); ctx.fillStyle = 'rgba(170,215,240,.16)'; ctx.fillRect(d + 0.4, -dh * 0.85, 1.1, dh * 0.44); }
-    ctx.restore();
-  }
-  // the roof: the building's own frame, fitted into the footprint above the walls
-  const sxR = (wx1 - rx0) / bw, syR = (ry1 - wy0) / bh;
-  ctx.save(); ctx.translate((rx0 + wx1) / 2, (wy0 + ry1) / 2); ctx.scale(sxR, syR); ctx.rotate(th); ctx.scale(s, s);
-  ctx.translate(-(Bx + Bw / 2), -(By + Bh / 2));
-  const so = (() => { const vx = 1.6 / sxR, vy = 1.6 / syR, c_ = Math.cos(th), s_ = Math.sin(th); return [(c_ * vx + s_ * vy) / s, (-s_ * vx + c_ * vy) / s]; })();   // a small shadow offset, in roof space
+  ctx.save(); ctx.translate(x, y); ctx.rotate(th); ctx.scale(s, s);
+  const so = (() => { const c_ = Math.cos(th), s_ = Math.sin(th); return [(c_ * 1.6 + s_ * 1.6) / s, (-s_ * 1.6 + c_ * 1.6) / s]; })();   // a small shadow offset, in roof space
   // walls and roof
   rr(Bx, By, Bw, Bh, 4); ctx.fillStyle = shade(roof, -0.14); ctx.fill();
   rr(Bx + 2.5, By + 2.5, Bw - 5, Bh - 5, 3); ctx.fillStyle = roof; ctx.fill();
@@ -4827,6 +4939,7 @@ function drawStore(b) {
   if (b.pins > pc * pr) { const ox = px0 + (pc - 1) * 10, oy = py0 + pr * 8; ctx.fillStyle = '#d6342a'; rr(ox, oy, 8, 7, 2); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = '800 6px Overpass, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('+', ox + 4, oy + 3.8); }
   // fascia in the store's colour, shop window and the two tow-truck garages
   ctx.fillStyle = col; ctx.fillRect(Bx, front - 7, Bw, 7);
+  for (const gx of [-18, 18]) { ctx.fillStyle = 'rgba(14,24,30,.8)'; ctx.fillRect(gx - 6, front - 2.6, 12, 2.6); }
   ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.fillRect(Bx, front - 7, Bw, 1);
   if (tier === 0) {                                                                            // striped awning over the shop window
     for (let i = 0; i < 6; i++) { ctx.fillStyle = i % 2 ? '#fff' : col; ctx.fillRect(-10.5 + i * 3.5, front - 0.5, 3.5, 2.8); }
@@ -4858,12 +4971,12 @@ function drawStore(b) {
   if (lvl >= 3) { ctx.strokeStyle = '#ffc933'; ctx.lineWidth = 0.9; rr(Bx - 1, By - 1, Bw + 2, Bh + 2, 5); ctx.stroke(); }
   ctx.restore();
   {
-    const rw = wx1 - rx0, rh = ry1 - wy0;
+    const rx0 = wx0, ry1 = wy1, rw = wx1 - wx0, rh = wy1 - wy0;
     ctx.fillStyle = 'rgba(0,0,0,.16)'; ctx.fillRect(rx0 + 2.5, wy0 + 2.5, rw - 5, 2); ctx.fillRect(rx0 + 2.5, wy0 + 4.5, 2, rh - 7);   // the parapet's shadow on the roof
-    const g = ctx.createLinearGradient(rx0, wy0, wx1, ry1); g.addColorStop(0, 'rgba(255,255,255,.16)'); g.addColorStop(0.55, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(0,0,0,.14)');
+    const g = ctx.createLinearGradient(rx0, wy0, wx1, ry1); g.addColorStop(0, 'rgba(255,255,255,.18)'); g.addColorStop(0.55, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(0,0,0,.16)');
     rr(rx0, wy0, rw, rh, 3.5); ctx.fillStyle = g; ctx.fill();
-    ctx.lineWidth = 1.1; ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.beginPath(); ctx.moveTo(rx0 + 0.8, ry1 - 2); ctx.lineTo(rx0 + 0.8, wy0 + 0.8); ctx.lineTo(wx1 - 2, wy0 + 0.8); ctx.stroke();   // sunlit rim
-    ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.moveTo(wx1 - 0.6, wy0 + 2); ctx.lineTo(wx1 - 0.6, ry1 - 0.6); ctx.lineTo(rx0 + 2, ry1 - 0.6); ctx.stroke();   // shaded rim
+    ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.beginPath(); ctx.moveTo(rx0 + 0.8, ry1 - 2); ctx.lineTo(rx0 + 0.8, wy0 + 0.8); ctx.lineTo(wx1 - 2, wy0 + 0.8); ctx.stroke();   // sunlit rim
+    ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.moveTo(wx1 - 0.6, wy0 + 2); ctx.lineTo(wx1 - 0.6, ry1 - 0.6); ctx.lineTo(rx0 + 2, ry1 - 0.6); ctx.stroke();   // shaded rim
   }
   if (b.acc < 0) drawUnlinked(x, y, b);
 }
@@ -4883,6 +4996,21 @@ function storeRoofDesign(sdz, Bx, By, Bw, Bh, col) {
     ctx.fillStyle = '#1d1f27'; ctx.fillRect(Bx, By, Bw, Bh);
     ctx.save(); ctx.shadowColor = col; ctx.shadowBlur = 6; ctx.strokeStyle = shade(col, 0.35); ctx.lineWidth = 1.4;
     ctx.strokeRect(Bx + 4, By + 4, Bw - 8, Bh - 8); ctx.strokeRect(Bx + 8, By + 8, Bw - 16, 4); ctx.restore();
+  } else if (sdz === 'diner') {                            // a chrome-topped diner with a chequered band and a sign
+    const g = ctx.createLinearGradient(Bx, By, Bx, By + Bh); g.addColorStop(0, '#e9edf0'); g.addColorStop(0.5, '#b9c1c7'); g.addColorStop(1, '#dfe4e8');
+    ctx.fillStyle = g; ctx.fillRect(Bx, By, Bw, Bh);
+    for (let xx = Bx, i = 0; xx < Bx + Bw; xx += 3, i++) { ctx.fillStyle = i % 2 ? '#1f262b' : '#ffffff'; ctx.fillRect(xx, By + Bh * 0.55, 3, 1.6); ctx.fillStyle = i % 2 ? '#ffffff' : '#1f262b'; ctx.fillRect(xx, By + Bh * 0.55 + 1.6, 3, 1.6); }
+    rr(Bx + Bw / 2 - 12, By + 8, 24, 9, 4.5); ctx.fillStyle = col; ctx.fill(); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 0.8; ctx.stroke();
+  } else if (sdz === 'pagoda') {                           // tiered pagoda roofs in the store colour with gold finials
+    for (let i = 0; i < 4; i++) { const ins = i * 6; rr(Bx + ins, By + ins, Bw - ins * 2, Bh - ins * 2, 3); ctx.fillStyle = shade(col, i % 2 ? 0.08 : -0.18); ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,.2)'; ctx.lineWidth = 0.6; ctx.stroke(); }
+    ctx.fillStyle = '#f2c94c'; for (const [px, py] of [[Bx + 2, By + 2], [Bx + Bw - 2, By + 2], [Bx + 2, By + Bh - 2], [Bx + Bw - 2, By + Bh - 2]]) { ctx.beginPath(); ctx.arc(px, py, 1.4, 0, 6.3); ctx.fill(); }
+    ctx.beginPath(); ctx.arc(Bx + Bw / 2, By + Bh / 2, 2, 0, 6.3); ctx.fill();
+  } else if (sdz === 'helipad') {                          // a helipad on the roof, ringed with lights
+    ctx.fillStyle = '#4a5157'; ctx.fillRect(Bx, By, Bw, Bh);
+    const cx_ = Bx + Bw / 2, cy_ = By + Bh / 2, R_ = Math.min(Bw, Bh) * 0.36;
+    ctx.strokeStyle = '#ffd23a'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(cx_, cy_, R_, 0, 6.3); ctx.stroke();
+    ctx.fillStyle = '#ffffff'; ctx.font = '900 ' + (R_ * 1.2).toFixed(0) + 'px Overpass, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('H', cx_, cy_ + R_ * 0.08);
+    for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4, on = REDUCED_MOTION || ((animT * 2 + i / 8) % 1) < 0.5; ctx.fillStyle = on ? '#7dffb0' : '#2f6b4a'; ctx.beginPath(); ctx.arc(cx_ + Math.cos(a) * (R_ + 3), cy_ + Math.sin(a) * (R_ + 3), 0.9, 0, 6.3); ctx.fill(); }
   } else if (sdz === 'crystal') {                          // an iridescent crystal roof that shifts colour slowly
     const t = REDUCED_MOTION ? 0 : animT * 0.25;
     const g = ctx.createLinearGradient(Bx, By, Bx + Bw, By + Bh);
@@ -5093,6 +5221,21 @@ function drawCar(c, sizeBoost) {
     const cw = Math.max(0.8, (bon1 - bon0 + 0.4) / 3), y0 = -hw + 0.5, rows = 4, chh = (Wd - 1) / rows;
     for (let i = 0; i < 3; i++) for (let j = 0; j < rows; j++) { ctx.fillStyle = (i + j) % 2 ? black : '#ffffff'; ctx.fillRect(bon0 - 0.4 + i * cw, y0 + j * chh, cw, chh); }
   }
+  if (cd === 'camo') {                                     // camouflage blotches in shades of the car's colour
+    ctx.save(); rr(r, -hw, L, Wd, 1.5); ctx.clip();
+    for (let i = 0; i < 7; i++) {
+      ctx.fillStyle = i % 2 ? shade(col, -0.4) : shade(col, 0.25);
+      ctx.beginPath(); ctx.ellipse(r + hash01(c.id * 7 + i, 91) * L, (hash01(c.id * 7 + i, 92) - 0.5) * Wd, 1.2 + hash01(i, 93) * 1.6, 0.9 + hash01(i, 94), hash01(i, 95) * 3, 0, 6.3); ctx.fill();
+    }
+    ctx.restore();
+  }
+  if (cd === 'pastel') {                                   // a soft pastel wash over the paint, with a white roof
+    ctx.save(); rr(r, -hw, L, Wd, bi === 0 ? hw : 1.5); ctx.clip(); ctx.fillStyle = 'rgba(255,255,255,.42)'; ctx.fillRect(r, -hw, L, Wd); ctx.restore();
+  }
+  if (cd === 'champion') {                                 // a champion's livery: white centre stripe edged in gold
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(r + 0.4, -1.1, L - 0.8, 2.2);
+    ctx.fillStyle = '#d4af37'; ctx.fillRect(r + 0.4, -1.4, L - 0.8, 0.35); ctx.fillRect(r + 0.4, 1.05, L - 0.8, 0.35);
+  }
   if (cd === 'checker') {                                  // a taxi-style chequered band down each side
     ctx.save(); rr(r, -hw, L, Wd, 1.5); ctx.clip();
     const cw = 1.3;
@@ -5158,12 +5301,19 @@ function drawCar(c, sizeBoost) {
     for (const x of [f - 2.9, r + 2.9]) for (const sy of [-1, 1]) { ctx.fillStyle = '#e8c547'; ctx.fillRect(x - 1.1, sy * hw - 0.35, 2.2, 0.7); }
     if (!REDUCED_MOTION) { const tw_ = (animT * 1.3 + c.id * 0.37) % 1; if (tw_ < 0.25) { const sx = r + L * tw_ * 4, a = 1 - Math.abs(tw_ * 8 - 1); ctx.fillStyle = 'rgba(255,255,255,' + a.toFixed(2) + ')'; ctx.beginPath(); ctx.arc(sx, -hw * 0.3, 0.6, 0, 6.3); ctx.fill(); } }
   }
+  if (cd === 'pastel' && bi <= 2) { rr(roof0 - 0.2, -hw + 0.6, roof1 - roof0 + 0.4, Wd - 1.2, 1.3); ctx.fillStyle = '#fbfaf6'; ctx.fill(); }
   if (cd === 'twotone') {                                  // a white roof and chrome bumpers (vans and trucks get a coloured roof stripe)
     if (bi <= 2) { rr(roof0 - 0.2, -hw + 0.6, roof1 - roof0 + 0.4, Wd - 1.2, 1.3); ctx.fillStyle = '#f6f4ee'; ctx.fill(); }
     else { ctx.fillStyle = col; ctx.fillRect(roof0, -0.6, roof1 - roof0, 1.2); }
     ctx.fillStyle = '#dfe4e8'; ctx.fillRect(f - 0.55, -hw + 0.3, 0.55, Wd - 0.6); ctx.fillRect(r, -hw + 0.3, 0.55, Wd - 0.6);
   }
   drawSlots(c, roof0 + 0.4, roof1 - 0.4, Wd - (bi >= 3 ? 2.8 : 2.4));
+  if (cd === 'champion') {                                 // a gold star on the roof
+    const sx = (roof0 + roof1) / 2, R_ = Math.min(1.6, hw - 1);
+    ctx.fillStyle = '#ffd23a'; ctx.beginPath();
+    for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rd = i % 2 ? R_ * 0.45 : R_; ctx.lineTo(sx + Math.cos(a) * rd, Math.sin(a) * rd); }
+    ctx.closePath(); ctx.fill();
+  }
   if (cd === 'neon') { ctx.strokeStyle = shade(col, 0.45); ctx.lineWidth = 0.45; rr(r + 0.2, -hw + 0.2, L - 0.4, Wd - 0.4, bi === 0 ? hw - 0.2 : 1.4); ctx.stroke(); }
   // trim around the painted nose shows the kit at a glance, even zoomed out
   if (kit) {
@@ -6208,13 +6358,13 @@ function offerUpgrade(grew) {
 }
 let upRoads = 12;
 function renderUpgrade(reroll) {
-  if (!reroll) upRoads = CFG.roadsPerWeekMin + Math.floor(Math.random() * (CFG.roadsPerWeekMax - CFG.roadsPerWeekMin + 1));
+  if (!reroll) upRoads = CFG.roadsPerWeekMin + Math.floor(rand() * (CFG.roadsPerWeekMax - CFG.roadsPerWeekMin + 1));
   const pool = UPGRADES.filter(u => !u.avail || u.avail());
   const picks = [];
   const perkPool = pool.filter(u => u.kind === 'perk'), itemPool = pool.filter(u => u.kind === 'item');
-  const take = (arr) => { if (!arr.length) return; const u = arr.splice(Math.floor(Math.random() * arr.length), 1)[0]; picks.push(u); const i = pool.indexOf(u); if (i >= 0) pool.splice(i, 1); };
+  const take = (arr) => { if (!arr.length) return; const u = arr.splice(Math.floor(rand() * arr.length), 1)[0]; picks.push(u); const i = pool.indexOf(u); if (i >= 0) pool.splice(i, 1); };
   take(perkPool); take(itemPool);
-  while (picks.length < 3 && pool.length) { const u = pool.splice(Math.floor(Math.random() * pool.length), 1)[0]; picks.push(u); }
+  while (picks.length < 3 && pool.length) { const u = pool.splice(Math.floor(rand() * pool.length), 1)[0]; picks.push(u); }
   $('up-title').textContent = 'Week ' + week;
   $('up-sub').textContent = (lastGrew ? 'The city now reaches ' + span + ' × ' + span + ' tiles. ' : 'The city has reached its limits. ') + 'Pick one reward.';
   const wrap = $('up-picks'); wrap.innerHTML = '';
@@ -6245,6 +6395,43 @@ function showGameOver(why) {
 
 /* ---------------------------------------------------------------- input */
 let startDiff = 'standard';       // difficulty highlighted on the start screen (the running game keeps diffKey until a new one starts)
+function renderExpertCard() {
+  const sd = expertSeed(), n = $('exp-name'); if (!n) return;
+  n.textContent = sd.name; $('exp-code').textContent = sd.code; $('exp-week').textContent = sd.label;
+}
+/* a compact copy of a city's layout for the Expert leaderboard ("who placed what") */
+function citySnap() {
+  const inBox = k => { const c = cx(k), r = cy(k); return c >= org - 1 && r >= org - 1 && c <= org + span && r <= org + span; };
+  const list = a => { const o = []; for (let k = 0; k < N; k++) if (a[k] && inBox(k)) o.push(k); return o; };
+  return JSON.stringify({org, span, water: list(water), road: list(road),
+    links: (() => { const o = []; for (let k = 0; k < N; k++) if (lnk[k] && inBox(k)) o.push([k, lnk[k]]); return o; })(),
+    special: special.map((v, k) => v ? [k, v === 'light' ? 1 : 2] : null).filter(Boolean),
+    b: buildings.map(b => [b.k, b.type === 'store' ? 1 : 0, b.color, isBig(b) ? b.sd : -1]),
+    moto: motorways.map(m => [m.a, m.b]), pal: COLORS.map(c => c.hex)});
+}
+/* draw such a layout into a canvas: water, roads, motorways, junction controls, houses and stores */
+function drawCitySnap(cv2, str) {
+  let d; try { d = JSON.parse(str); } catch (e) { return false; }
+  const g = cv2.getContext('2d'), S = cv2.width, k = S / (d.span + 2), o = d.org - 1, X = t => (cx(t) - o + 0.5) * k, Y = t => (cy(t) - o + 0.5) * k;
+  g.fillStyle = PAL.land; g.fillRect(0, 0, S, S);
+  g.fillStyle = PAL.land2; g.fillRect(k, k, d.span * k, d.span * k);
+  g.fillStyle = PAL.water; for (const t of d.water) g.fillRect((cx(t) - o) * k, (cy(t) - o) * k, k + 0.5, k + 0.5);
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  const roads = new Path2D();
+  for (const [t, m] of d.links) for (let dd = 0; dd < 8; dd++) if ((m >> dd) & 1) { const n = nbr(t, dd); if (n > t) { roads.moveTo(X(t), Y(t)); roads.lineTo(X(n), Y(n)); } }
+  for (const t of d.road) { roads.moveTo(X(t), Y(t)); roads.lineTo(X(t), Y(t)); }
+  g.strokeStyle = PAL.edge; g.lineWidth = k * 0.78; g.stroke(roads); g.strokeStyle = PAL.road; g.lineWidth = k * 0.62; g.stroke(roads);
+  g.strokeStyle = PAL.deck; g.lineWidth = k * 0.4; g.beginPath(); for (const [a, b] of d.moto) { g.moveTo(X(a), Y(a)); g.lineTo(X(b), Y(b)); } g.stroke();
+  for (const [t, kind] of d.special) { g.fillStyle = kind === 1 ? '#ff5a4a' : '#48e08a'; g.beginPath(); g.arc(X(t), Y(t), k * 0.24, 0, 6.3); g.fill(); }
+  for (const [t, isStore, ci, sd] of d.b) {
+    const c = (d.pal && d.pal[ci]) || COLORS[ci].hex;
+    g.fillStyle = c;
+    if (isStore && sd >= 0) { const tl = storeTilesAt(t, sd) || [t]; for (const q of tl) g.fillRect((cx(q) - o) * k + 0.5, (cy(q) - o) * k + 0.5, k - 1, k - 1); }
+    else if (isStore) g.fillRect((cx(t) - o) * k + 1, (cy(t) - o) * k + 1, k - 2, k - 2);
+    else { g.beginPath(); g.arc(X(t), Y(t), k * 0.38, 0, 6.3); g.fill(); g.strokeStyle = 'rgba(255,255,255,.8)'; g.lineWidth = 1; g.stroke(); }
+  }
+  return true;
+}
 function showStartBest() {
   const b = bestFor(startDiff), lb = DIFFS[startDiff].label;
   $('start-best').textContent = b ? 'Best on ' + lb + ': ' + b + ' parcels' : 'No games yet on ' + lb;
@@ -6427,15 +6614,25 @@ function bindInput() {
   $('btn-again').addEventListener('click', () => { closeModal('m-over'); showStartBest(); openModal('m-start'); });
   const dp = $('diff-picks'); dp.innerHTML = '';
   for (const k in DIFFS) {
+    if (DIFFS[k].expert) continue;
     const b = document.createElement('button'); b.type = 'button'; b.className = 'diff'; b.dataset.id = k; b.setAttribute('aria-pressed', k === startDiff ? 'true' : 'false');
     b.innerHTML = '<b>' + DIFFS[k].label + '</b><small>' + DIFFS[k].note + '</small>';
     b.addEventListener('click', () => { startDiff = k; dp.querySelectorAll('.diff').forEach(x => x.setAttribute('aria-pressed', x.dataset.id === k ? 'true' : 'false')); showStartBest(); });
     dp.append(b);
   }
   $('btn-start').addEventListener('click', () => {
+    if (startDiff === 'expert') startDiff = prevDiff;
     if (window.JunctionOnline && window.JunctionOnline.ready) { window.JunctionOnline.openSaves('new'); return; }
     closeModal('m-start'); resetGame(startDiff); running = true; refreshHud(); layout();
   });
+  renderExpertCard();
+  $('btn-expert').addEventListener('click', () => {
+    if (startDiff !== 'expert') prevDiff = startDiff;
+    startDiff = 'expert';
+    if (window.JunctionOnline && window.JunctionOnline.ready) { window.JunctionOnline.openSaves('new'); return; }
+    closeModal('m-start'); resetGame('expert'); running = true; refreshHud(); layout();
+  });
+  $('btn-expert-board').addEventListener('click', () => { if (window.JunctionOnline && window.JunctionOnline.openExpert) window.JunctionOnline.openExpert(0); else toast('The Expert leaderboard needs the online service, which isn\u2019t available right now.', 'warn'); });
   $('btn-resume').addEventListener('click', () => { if (loadGame()) { closeModal('m-start'); running = true; refreshHud(); layout(); } else toast('No saved city found', 'warn'); });
   $('btn-try-tutorial').addEventListener('click', () => { closeModal('m-start'); startTutorial(); refreshHud(); layout(); });
   $('tut-exit').addEventListener('click', exitTutorial);
@@ -6732,18 +6929,18 @@ const R_EVERY = 20;                                    // parcels delivered in a
 /* [name, price, currency] — currency 'R' means R# (rare bucks, only from Frantic games): the super-rare few */
 const DESIGNS = {
   car:    {label: 'Car designs', one: 'car design', items: {standard: ['Standard', 0], twotone: ['Two-tone', 35], checker: ['Checker band', 35], livery: ['Racing livery', 40],
-           retro: ['Retro chrome', 40], flames: ['Flames', 45], neon: ['Neon underglow', 60], gold: ['Gold plated', 10, 'R']}},
+           retro: ['Retro chrome', 40], flames: ['Flames', 45], camo: ['Camo', 40], pastel: ['Pastel', 35], neon: ['Neon underglow', 60], gold: ['Gold plated', 30, 'R'], champion: ['Champion', 0, 'A', 'p1000']}},
   house:  {label: 'House designs', one: 'house design', items: {standard: ['Standard', 0], barn: ['Barn', 35], thatch: ['Thatched cottage', 35], beach: ['Beach hut', 35],
-           modern: ['Modern', 40], igloo: ['Igloo', 40], tower: ['Tower', 60], castle: ['Castle', 10, 'R']}},
+           modern: ['Modern', 40], igloo: ['Igloo', 40], treehouse: ['Treehouse', 45], windmill: ['Windmill', 45], tower: ['Tower', 60], castle: ['Castle', 30, 'R'], lighthouse: ['Lighthouse', 0, 'A', 'w20']}},
   road:   {label: 'Road designs', one: 'road design', items: {standard: ['Asphalt', 0], dirt: ['Dirt track', 30], concrete: ['Concrete slabs', 30], brick: ['Red brick', 35],
-           snowy: ['Snowy', 35], cobble: ['Cobblestone', 40], neon: ['Neon', 60], gold: ['Yellow brick road', 10, 'R']}},
+           snowy: ['Snowy', 35], cobble: ['Cobblestone', 40], candy: ['Candy', 35], boardwalk: ['Boardwalk', 40], neon: ['Neon', 60], gold: ['Yellow brick road', 30, 'R'], racetrack: ['Racetrack', 0, 'A', 'kits']}},
   store:  {label: 'Store designs', one: 'store design', items: {standard: ['Standard', 0], brick: ['Brick', 35], warehouse: ['Warehouse', 40], market: ['Market hall', 45],
-           eco: ['Eco roof', 45], neon: ['Neon', 50], glass: ['Glass tower', 60], crystal: ['Crystal', 10, 'R']}},
-  light:  {label: 'Traffic light designs', one: 'traffic light design', items: {standard: ['Standard', 0], modern: ['LED bars', 30], retro: ['Retro', 30]}},
-  round:  {label: 'Roundabout designs', one: 'roundabout design', items: {standard: ['Standard', 0], stone: ['Paved', 30], garden: ['Garden', 35], fountain: ['Fountain', 55]}},
+           eco: ['Eco roof', 45], neon: ['Neon', 50], diner: ['Diner', 40], pagoda: ['Pagoda', 50], glass: ['Glass tower', 60], crystal: ['Crystal', 30, 'R'], helipad: ['Helipad', 0, 'A', 'e25k']}},
+  light:  {label: 'Traffic light designs', one: 'traffic light design', items: {standard: ['Standard', 0], minimal: ['Minimal', 25], modern: ['LED bars', 30], retro: ['Retro', 30], lantern: ['Lanterns', 35], gold: ['Gold', 0, 'A', 'light8']}},
+  round:  {label: 'Roundabout designs', one: 'roundabout design', items: {standard: ['Standard', 0], stone: ['Paved', 30], garden: ['Garden', 35], sundial: ['Sundial', 40], pond: ['Lily pond', 40], fountain: ['Fountain', 55], statue: ['Statue', 0, 'A', 'round5']}},
   bridge: {label: 'Bridge designs', one: 'bridge design', items: {standard: ['Stone', 0], wood: ['Wooden', 30], rope: ['Rope bridge', 35], steel: ['Steel truss', 40],
-           glass: ['Glass', 45], suspension: ['Suspension', 55], rainbow: ['Rainbow', 10, 'R']}},
-  moto:   {label: 'Motorway designs', one: 'motorway design', items: {standard: ['Blue deck', 0], concrete: ['Concrete', 30], ivy: ['Ivy', 35], lights: ['Night lights', 40], rainbow: ['Rainbow', 12, 'R']}}
+           brick: ['Brick arch', 35], glass: ['Glass', 45], suspension: ['Suspension', 55], rainbow: ['Rainbow', 30, 'R'], covered: ['Covered', 0, 'A', 'cities10']}},
+  moto:   {label: 'Motorway designs', one: 'motorway design', items: {standard: ['Blue deck', 0], concrete: ['Concrete', 30], ivy: ['Ivy', 35], lights: ['Night lights', 40], sunset: ['Sunset', 45], glass: ['Glass', 45], rainbow: ['Rainbow', 30, 'R'], skyline: ['Skyline', 0, 'A', 'moto3']}}
 };
 const COSMETICS = {
   'ui:midnight': [30, 'Midnight theme'], 'ui:graphite': [25, 'Graphite theme'], 'ui:forest': [30, 'Forest theme'], 'ui:plum': [35, 'Plum theme'],
@@ -6756,7 +6953,7 @@ const COSMETICS = {
   'decor:cactus': [30, 'Cacti'], 'decor:blossom': [35, 'Blossom trees'], 'decor:palm': [35, 'Palms'], 'decor:snowpine': [45, 'Snowy pines'],
   'decor:mushroom': [55, 'Mushrooms'], 'decor:pumpkin': [60, 'Pumpkins']
 };
-for (const cat in DESIGNS) for (const k in DESIGNS[cat].items) { const [n, pr, cur] = DESIGNS[cat].items[k]; if (pr) COSMETICS['design:' + cat + ':' + k] = [pr, n + ' ' + DESIGNS[cat].one, cur || '#']; }
+for (const cat in DESIGNS) for (const k in DESIGNS[cat].items) { const [n, pr, cur, achId] = DESIGNS[cat].items[k]; if (pr || cur) COSMETICS['design:' + cat + ':' + k] = [pr, n + ' ' + DESIGNS[cat].one, cur || '#', achId]; }
 /* every library colour is its own item: Standard #25, Classic #30, Creative #35-45, Soft #30, Rare #60-90 */
 const COLOUR_PRICE = {};
 for (const g of COLOR_LIBRARY) g.cols.forEach(([n, h, pr], i) => {
@@ -6769,10 +6966,17 @@ const design = cat => (jb.designs && DESIGNS[cat] && DESIGNS[cat].items[jb.desig
 const storeDesign = () => design('store');
 function itemInfo(id) {                                // [price, name] for anything that can be bought
   if (id.startsWith('colour:')) { const h = id.slice(7); return [colourPrice(h), colourName(h).replace(/^./, c => c.toUpperCase()) + ' colour', '#']; }
-  const c = COSMETICS[id]; return c ? [c[0], c[1], c[2] || '#'] : null;
+  const c = COSMETICS[id]; return c ? [c[0], c[1], c[2] || '#', c[3]] : null;
 }
 const ownsColour = hex => { const id = 'colour:' + String(hex).toLowerCase(); return !!jb.owned[id] || (jb.hired[id] || 0) > Date.now(); };
-const owns = id => id.startsWith('colour:') ? ownsColour(id.slice(7)) : (!COSMETICS[id] || !!jb.owned[id]);
+const achName = id => { const a = ACH.find(x => x.id === id); return a ? a.name : id; };
+/* achievement designs are yours the moment the achievement is */
+const owns = id => {
+  if (id.startsWith('colour:')) return ownsColour(id.slice(7));
+  const c = COSMETICS[id]; if (!c) return true;
+  if (c[2] === 'A') return !!(typeof ach !== 'undefined' && ach[c[3]]);
+  return !!jb.owned[id];
+};
 const hiredLeft = id => Math.max(0, (jb.hired[id] || 0) - Date.now());
 function saveShop() { try { localStorage.setItem(SHOP_KEY, JSON.stringify(jb)); } catch (e) {} }
 function loadShop() {
@@ -6827,6 +7031,7 @@ const fmtLeft = ms => { const m = Math.ceil(ms / 60000); return m >= 60 ? Math.f
 /* two taps: the first asks, the second spends. kind is 'buy' or 'hire' (colours only) */
 function purchase(id, kind, fn) {
   const info = itemInfo(id); if (!info) return;
+  if (info[2] === 'A') { const a = ACH.find(x => x.id === info[3]); hint(name + ' can\u2019t be bought \u2014 earn the \u201c' + achName(info[3]) + '\u201d achievement to unlock it' + (a ? ': ' + a.hint.toLowerCase() + '.' : '.')); return; }
   const price = kind === 'hire' ? HIRE_PRICE : info[0], name = info[1], rare = kind !== 'hire' && info[2] === 'R';
   const sym = rare ? 'R#' : '#', have = rare ? jb.rbucks : jb.bucks;
   if (have < price) {
@@ -6962,6 +7167,7 @@ const SHOP_CATS = [['ui', 'Interface themes'], ['style', 'Panel styles'], ['map'
 function priceTag(id, price, kind) {
   const conf = buyPending && buyPending.id === id && buyPending.kind === (kind || 'buy'), info = itemInfo(id), rare = !!info && info[2] === 'R' && kind !== 'hire';
   if (kind === 'hire') return '<span class="lock hire' + (conf ? ' confirm' : '') + '">' + (conf ? 'Tap to hire' : 'Hire 3h #' + HIRE_PRICE) + '</span>';
+  if (info && info[2] === 'A') return '<span class="lock ach" title="' + achName(info[3]) + '">\ud83c\udfc6 ' + achName(info[3]) + '</span>';
   return '<span class="lock' + (rare ? ' rare' : '') + (conf ? ' confirm' : '') + '">' + (conf ? 'Tap to buy' : rare ? '★ R#' + price : '#' + price) + '</span>';
 }
 /* one list for all three views: 'store' (things to buy), 'owned' (things to wear) and 'quick' (the Customise drawer) */
@@ -7057,6 +7263,7 @@ function bindUiTheme() {
   $('btn-cust').addEventListener('click', () => toggleCust());
   $('cust-close').addEventListener('click', () => toggleCust(false));
   $('cust-store').addEventListener('click', () => { toggleCust(false); openMenu('store'); });
+  $('btn-msg').addEventListener('click', () => { closeMenu(); if (window.__junctionMessages) window.__junctionMessages(); else hint('Messages need the online service, which isn\u2019t available right now.'); });
   $('btn-acct').addEventListener('click', () => { closeMenu(); if (window.__junctionAccount) window.__junctionAccount(); else hint('Accounts, save files and watching need the online service, which isn’t available right now.'); });
 }
 function bindMap() {}
@@ -7380,9 +7587,11 @@ if (typeof window !== 'undefined' && (location.hostname === 'localhost' || locat
     achList: () => ACH.map(a => ({id: a.id, g: a.g, name: a.name, hint: a.hint})),
     ach: () => Object.assign({}, ach), achAll: () => achDone() === ACH.length, awardAch, mergeAch, get tipsOn() { return tipsOn; },
     diffLabel(k) { return (DIFFS[k] && DIFFS[k].label) || k; },
+    expertSeed, citySnap, drawCitySnap,
     serialize,
     state() {
-      return {started, over, tutorialMode, spectating, running: running && !modalOpen, speed, score, week, diffKey, clock, goals: goalsDone.size, earned: stats.earned,
+      return {started, over, tutorialMode, spectating, running: running && !modalOpen, speed, score, week, diffKey, clock, goals: goalsDone.size, earned: stats.earned, expWeek,
+        trips: stats.trips, tows: stats.tows, delivered: stats.delivered, cars: cars.length, roads: road ? road.reduce((a, v) => a + v, 0) : 0,
         atMenu: !$('m-start').hidden};
     },
     saveNow() { saveGame(true);

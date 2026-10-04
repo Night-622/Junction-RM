@@ -11,6 +11,9 @@
                                  Accounts keep theirs for good; a guest name frees up after 30 days unused.
      boards/{mode}/players/{uid} one leaderboard per mode (chill, standard, frantic: parcels, weeks, goalsSec;
                                  zen: playSec, earned). The old single leaderboard/{uid} is moved over on load.
+     expert/{week}/players/{uid}  each player's best run on that ISO week's seeded Expert Survival city, with a
+                                 compact copy of their layout so others can see who placed what
+     messages/{id}               player-to-player messages: from, fromName, to, toName, text, at, read
      live/{6-digit code}         uid, name, star, playing, state, meta, watchT — the live view channel
      feedback/{bugs|ideas|other}/entries/{id}   guest feedback: uid, name, message, details, replyTo, createdAt
      (signed-in accounts' feedback is emailed by a Google Apps Script on the support Gmail — see apps-script/)
@@ -26,7 +29,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js';
 import {
   getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs, query, orderBy, limit,
-  onSnapshot, runTransaction, serverTimestamp, deleteField, addDoc
+  onSnapshot, runTransaction, serverTimestamp, deleteField, addDoc, where
 } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js';
 
 const firebaseConfig = {
@@ -313,6 +316,7 @@ $('user-signin').addEventListener('click', () => busy(null, async () => {
 
 /* ------------------------------------------------------ account widgets */
 function renderAccount() {
+  startInbox();
   const sa = $('start-account');
   sa.hidden = false;
   sa.innerHTML = '<span>Playing as <b>' + nameHTML(myName(), isPerm(), myAch3()) + '</b>' + (isPerm() ? '' : ' <small>(guest)</small>') + '</span>' +
@@ -401,6 +405,7 @@ function acctPaneOpened() {
     $('acct-saves-lead').textContent = isPerm() ? 'Three cloud save slots, kept with your account on any device.' : 'Three cloud save slots for this browser. Make a permanent account to keep them everywhere.';
     renderSlots($('acct-slots'));
   }
+  if (acctPane === 'msgs') { loadSent().then(renderMsgs); renderMsgs(); }
   if (acctPane === 'watch') { $('acct-watch-err').textContent = ''; $('acct-watch-code').value = ''; setTimeout(() => $('acct-watch-code').focus(), 50); }
 }
 $('acct-close').addEventListener('click', () => closeM('m-acct'));
@@ -625,7 +630,8 @@ $('saves-back').addEventListener('click', () => closeM('m-saves'));
 API.events.on('autosave', e => { cloudSave(e && e.urgent); maybeBoard(false); });
 API.events.on('week', () => { cloudSave(true); maybeBoard(true); });
 API.events.on('over', async e => {
-  if (e.diffKey !== 'zen') submitBest(e.diffKey, {parcels: e.score, weeks: e.week});
+  if (e.diffKey === 'expert') submitExpert(API.state());
+  else if (e.diffKey !== 'zen') submitBest(e.diffKey, {parcels: e.score, weeks: e.week});
   if (O.ready && O.slot) {
     await setDoc(slotRef(O.slot), {data: deleteField(), score: e.score, week: e.week, diffKey: e.diffKey, over: true, updatedAt: serverTimestamp()}, {merge: true}).catch(() => {});
   }
@@ -677,6 +683,7 @@ function maybeBoard(force) {
   if (!st.started || st.atMenu || st.tutorialMode || st.spectating || st.over) return;
   if (!force && Date.now() - O.lastBoardAt < 60e3) return;
   O.lastBoardAt = Date.now();
+  if (st.diffKey === 'expert') { submitExpert(st); return; }
   if (st.diffKey === 'zen') submitBest('zen', {playSec: Math.floor(st.clock || 0), earned: Math.floor(st.earned || 0)});
   else submitBest(st.diffKey, {parcels: st.score, weeks: st.week});
 }
@@ -710,11 +717,17 @@ function currentMode() {
   return MODES.includes(API.startDiff) ? API.startDiff : 'standard';
 }
 function renderBoardTabs() {
-  $('board-modes').innerHTML = MODES.map(m => '<button type="button" data-mode="' + m + '" aria-pressed="' + (m === boardMode) + '">' + esc(API.diffLabel(m)) + '</button>').join('');
+  $('board-modes').innerHTML = MODES.map(m => '<button type="button" data-mode="' + m + '" aria-pressed="' + (m === boardMode) + '">' + esc(API.diffLabel(m)) + '</button>').join('') +
+    '<button type="button" data-mode="expert" aria-pressed="' + (boardMode === 'expert') + '">Expert</button>';
+  if (boardMode === 'expert') {
+    $('board-tabs').innerHTML = [0, 1, 2, 3].map(w => '<button type="button" data-week="' + w + '" aria-pressed="' + (w === expertAgo) + '">' + ['This week', 'Last week', '2 weeks ago', '3 weeks ago'][w] + '</button>').join('');
+    return;
+  }
   $('board-tabs').innerHTML = metricsFor(boardMode).map(k => '<button type="button" data-board="' + k + '" aria-pressed="' + (k === boardTab) + '">' + BOARDS[k].label + '</button>').join('');
 }
 async function openBoard(tab, mode) {
   boardMode = mode || boardMode || currentMode();
+  if (boardMode === 'expert') { openExpert(expertAgo); return; }
   if (tab) boardTab = tab;
   if (!metricsFor(boardMode).includes(boardTab)) boardTab = metricsFor(boardMode)[0];
   $('menu').hidden = true;
@@ -744,7 +757,159 @@ async function openBoard(tab, mode) {
   }
 }
 $('board-modes').addEventListener('click', e => { const b = e.target.closest('button[data-mode]'); if (b) openBoard(null, b.dataset.mode); });
-$('board-tabs').addEventListener('click', e => { const b = e.target.closest('button[data-board]'); if (b) openBoard(b.dataset.board); });
+$('board-tabs').addEventListener('click', e => {
+  const w = e.target.closest('button[data-week]'); if (w) { openExpert(+w.dataset.week); return; }
+  const b = e.target.closest('button[data-board]'); if (b) openBoard(b.dataset.board);
+});
+
+/* ============================================================ EXPERT SURVIVAL
+   A new seeded city every ISO week. Each player's best run on a week's seed is kept on that week's board,
+   with a small copy of the city so anyone can open it and see who placed what, and message the player. */
+let expertAgo = 0;
+const expertRef = (wk, uid) => doc(db, 'expert', wk, 'players', uid);
+O.expertBest = {};
+function seedOfWeek(wk) { for (let k = 0; k < 120; k++) { const sd = API.expertSeed(k); if (sd.key === wk) return sd; } return API.expertSeed(0); }
+async function submitExpert(st) {
+  if (!O.ready || !O.profile || !O.profile.name || !st || !st.expWeek || st.tutorialMode || st.spectating) return;
+  const wk = st.expWeek;
+  if (!O.expertBest[wk]) O.expertBest[wk] = await getDoc(expertRef(wk, O.user.uid)).then(x => x.exists() ? x.data() : {}).catch(() => ({}));
+  const best = O.expertBest[wk];
+  if (!(st.score > (best.parcels || 0) || (st.score === (best.parcels || 0) && st.week > (best.weeks || 0)))) return;
+  const sd = seedOfWeek(wk);
+  const data = {name: myName(), star: isPerm(), ach3: myAch3(), parcels: Math.floor(st.score || 0), weeks: Math.floor(st.week || 0), earned: Math.floor(st.earned || 0),
+    trips: Math.floor(st.trips || 0), tows: Math.floor(st.tows || 0), cars: Math.floor(st.cars || 0), roads: Math.floor(st.roads || 0), playSec: Math.floor(st.clock || 0),
+    seedName: sd.name, seedCode: sd.code, weekLabel: sd.label, city: API.citySnap(), updatedAt: serverTimestamp()};
+  if (data.city.length > 300000) data.city = '';
+  try { await setDoc(expertRef(wk, O.user.uid), data); O.expertBest[wk] = data; }
+  catch (e) { console.warn('Expert leaderboard update failed', e); }
+}
+let expertRows = {};
+async function openExpert(ago) {
+  expertAgo = ago || 0; boardMode = 'expert';
+  $('menu').hidden = true;
+  renderBoardTabs();
+  const sd = API.expertSeed(expertAgo), wk = sd.key, want = wk;
+  $('board-note').innerHTML = '<span class="boardweek"><b>Seed \u201c' + esc(sd.name) + '\u201d \u00b7 code ' + esc(sd.code) + '</b><small>Week of ' + esc(sd.label) +
+    ' \u2014 everyone played the same seeded city. Most parcels first. Tap a player to see their city and stats.</small></span>';
+  $('board-list').innerHTML = '<li class="mini">Loading\u2026</li>';
+  $('board-me').textContent = '';
+  if ($('m-board').hidden) openM('m-board');
+  try {
+    const snap = await getDocs(query(collection(db, 'expert', wk, 'players'), orderBy('parcels', 'desc'), limit(25)));
+    if (boardMode !== 'expert' || API.expertSeed(expertAgo).key !== want) return;
+    const rows = []; expertRows = {}; let meIn = false;
+    snap.forEach(x => {
+      const d = x.data(), me = O.user && x.id === O.user.uid; if (me) meIn = true;
+      expertRows[x.id] = d;
+      rows.push('<li class="click' + (me ? ' me' : '') + '" data-run="' + x.id + '" tabindex="0"><span class="rank">' + (rows.length + 1) + '</span><span class="who">' + nameHTML(d.name || '?', d.star, d.ach3) +
+        ' <span class="dk">week ' + (d.weeks || 0) + '</span></span><b class="num">' + (d.parcels || 0).toLocaleString() + ' parcels</b></li>');
+    });
+    $('board-list').innerHTML = rows.join('') || '<li class="mini">No runs on this seed yet \u2014 be the first.</li>';
+    const mine = O.expertBest[wk];
+    $('board-me').innerHTML = mine && mine.parcels ? 'Your best on this seed: <b>' + mine.parcels.toLocaleString() + ' parcels</b>, week ' + mine.weeks + (meIn ? '' : ' (outside the top 25)')
+      : expertAgo === 0 ? 'Play this week\u2019s seed from the start screen to get on this board.' : '';
+  } catch (e) { $('board-list').innerHTML = '<li class="mini">Couldn\u2019t load the Expert leaderboard: ' + esc(e.message) + '</li>'; }
+}
+$('board-list').addEventListener('click', e => { const li = e.target.closest('[data-run]'); if (li && boardMode === 'expert') openRun(API.expertSeed(expertAgo).key, li.dataset.run); });
+$('board-list').addEventListener('keydown', e => { if (e.key === 'Enter') { const li = e.target.closest('[data-run]'); if (li && boardMode === 'expert') openRun(API.expertSeed(expertAgo).key, li.dataset.run); } });
+let runOf = null;
+function openRun(wk, uid) {
+  const d = expertRows[uid]; if (!d) return;
+  runOf = {uid, name: d.name};
+  $('run-name').innerHTML = nameHTML(d.name || '?', d.star, d.ach3);
+  $('run-seed').textContent = 'Seed \u201c' + (d.seedName || '') + '\u201d \u00b7 code ' + (d.seedCode || '') + ' \u00b7 week of ' + (d.weekLabel || wk);
+  const cv = $('run-map'), ok = d.city && API.drawCitySnap(cv, d.city);
+  if (!ok) { const g = cv.getContext('2d'); g.clearRect(0, 0, cv.width, cv.height); }
+  const stat = (v, l) => '<div><b>' + v + '</b><span>' + l + '</span></div>';
+  $('run-stats').innerHTML = stat((d.parcels || 0).toLocaleString(), 'parcels delivered') + stat('Week ' + (d.weeks || 0), 'reached') + stat(money(d.earned || 0), 'earned') +
+    stat((d.trips || 0).toLocaleString(), 'trips') + stat(d.cars || 0, 'cars') + stat(d.roads || 0, 'road tiles') + stat(d.tows || 0, 'tow-truck rescues') + stat(hm(d.playSec || 0), 'played');
+  $('run-note').textContent = ok ? 'Their city at their best moment on this seed: roads, motorways, lights (red dots), roundabouts (green dots), houses and stores.' : 'No map saved for this run.';
+  $('run-msg').hidden = !O.user || uid === O.user.uid;
+  $('run-msg').textContent = 'Message ' + (d.name || 'them');
+  openM('m-run');
+}
+$('run-close').addEventListener('click', () => closeM('m-run'));
+$('run-msg').addEventListener('click', () => { if (!runOf) return; closeM('m-run'); closeM('m-board'); openThread(runOf.uid, runOf.name); });
+
+/* ============================================================ MESSAGES
+   messages/{id}: {from, fromName, to, toName, text, at, read}. Each player listens for messages sent to them;
+   what they've sent is fetched when they open a conversation. Rules let only the two people involved read one. */
+O.inbox = []; O.sent = []; O.msgUid = null; let msgWith = null, msgUnsub = null;
+const msAt = m => (m.at && m.at.toMillis) ? m.at.toMillis() : (m.localAt || Date.now());
+function startInbox() {
+  if (!O.user || O.msgUid === O.user.uid) return;
+  O.msgUid = O.user.uid; if (msgUnsub) msgUnsub();
+  msgUnsub = onSnapshot(query(collection(db, 'messages'), where('to', '==', O.user.uid), limit(200)), snap => {
+    O.inbox = snap.docs.map(x => Object.assign({id: x.id}, x.data()));
+    updateMsgBadge();
+    if (!$('m-acct').hidden && acctPane === 'msgs') renderMsgs();
+  }, e => console.warn('Inbox unavailable', e));
+}
+async function loadSent() {
+  try { const sn = await getDocs(query(collection(db, 'messages'), where('from', '==', O.user.uid), limit(200))); O.sent = sn.docs.map(x => Object.assign({id: x.id}, x.data())); }
+  catch (e) { console.warn('Sent messages unavailable', e); }
+}
+function updateMsgBadge() {
+  const n = O.inbox.filter(m => !m.read).length;
+  for (const id of ['msg-badge', 'msg-tabbadge']) { const el = $(id); if (el) { el.textContent = n > 99 ? '99+' : String(n); el.hidden = !n; } }
+}
+function threadsList() {
+  const by = {};
+  for (const m of O.inbox) { const t = by[m.from] || (by[m.from] = {uid: m.from, name: m.fromName, last: null, unread: 0}); if (!m.read) t.unread++; if (!t.last || msAt(m) > msAt(t.last)) t.last = m; }
+  for (const m of O.sent) { const t = by[m.to] || (by[m.to] = {uid: m.to, name: m.toName, last: null, unread: 0}); if (!t.last || msAt(m) > msAt(t.last)) t.last = m; }
+  return Object.values(by).sort((a, b) => msAt(b.last) - msAt(a.last));
+}
+const ago2 = t => { const s2 = (Date.now() - t) / 1000; return s2 < 60 ? 'now' : s2 < 3600 ? Math.floor(s2 / 60) + 'm' : s2 < 86400 ? Math.floor(s2 / 3600) + 'h' : Math.floor(s2 / 86400) + 'd'; };
+function renderMsgs() {
+  const list = $('msg-list'), th = $('msg-thread');
+  if (msgWith) { list.hidden = true; th.hidden = false; renderThread(); return; }
+  list.hidden = false; th.hidden = true;
+  const ts = threadsList();
+  list.innerHTML = ts.length ? ts.map(t => '<button type="button" class="msgrow' + (t.unread ? ' unread' : '') + '" data-with="' + esc(t.uid) + '" data-name="' + esc(t.name || '') + '"><span class="av">' + esc((t.name || '?').charAt(0).toUpperCase()) +
+    '</span><span><b>' + esc(t.name || 'Player') + (t.unread ? ' <span class="tabbadge">' + t.unread + '</span>' : '') + '</b><small>' + (t.last.from === O.user.uid ? 'You: ' : '') + esc(t.last.text || '') + '</small></span><time>' + ago2(msAt(t.last)) + '</time></button>').join('')
+    : '<p class="mini">No messages yet. Open the Expert leaderboard, tap a player and message them.</p>';
+}
+function renderThread() {
+  $('msg-with').textContent = msgWith.name || 'Player';
+  const ms = O.inbox.filter(m => m.from === msgWith.uid).concat(O.sent.filter(m => m.to === msgWith.uid)).sort((a, b) => msAt(a) - msAt(b));
+  const body = $('msg-body');
+  body.innerHTML = ms.length ? ms.map(m => '<div class="bubble' + (m.from === O.user.uid ? ' me' : '') + '">' + esc(m.text || '') + '<time>' + new Date(msAt(m)).toLocaleString(undefined, {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'}) + '</time></div>').join('')
+    : '<p class="mini">Say hello to ' + esc(msgWith.name || 'them') + '.</p>';
+  body.scrollTop = body.scrollHeight;
+  // mark what they sent as read
+  for (const m of ms) if (m.to === O.user.uid && !m.read) { m.read = true; updateDoc(doc(db, 'messages', m.id), {read: true}).catch(() => {}); }
+  updateMsgBadge();
+}
+async function openThread(uid, name) {
+  if (!O.ready || !O.user) return;
+  msgWith = {uid, name};
+  openAcct('msgs');
+}
+$('msg-list').addEventListener('click', e => { const b = e.target.closest('[data-with]'); if (b) { msgWith = {uid: b.dataset.with, name: b.dataset.name}; renderMsgs(); } });
+$('msg-back').addEventListener('click', () => { msgWith = null; renderMsgs(); });
+let lastSend = 0;
+async function sendMsg() {
+  const t = $('msg-text').value.trim(); $('msg-err').textContent = '';
+  if (!t || !msgWith) return;
+  if (!O.profile || !O.profile.name) { $('msg-err').textContent = 'Pick a username first (Profile tab).'; return; }
+  if (t.length > 500) { $('msg-err').textContent = 'Messages can be up to 500 characters.'; return; }
+  if (Date.now() - lastSend < 1500) { $('msg-err').textContent = 'Slow down a little.'; return; }
+  lastSend = Date.now(); $('msg-send').disabled = true;
+  const m = {from: O.user.uid, fromName: myName(), to: msgWith.uid, toName: msgWith.name || 'Player', text: t, at: serverTimestamp(), read: false};
+  try {
+    const ref = await addDoc(collection(db, 'messages'), m);
+    O.sent.push(Object.assign({id: ref.id, localAt: Date.now()}, m, {at: null}));
+    $('msg-text').value = ''; renderThread();
+  } catch (e) { $('msg-err').textContent = 'Couldn\u2019t send that: ' + e.message; }
+  finally { $('msg-send').disabled = false; }
+}
+$('msg-send').addEventListener('click', sendMsg);
+$('msg-text').addEventListener('keydown', e => { if (e.key === 'Enter') sendMsg(); });
+window.__junctionMessages = () => {
+  if (!O.ready || !O.user) { API.toast('Online features are still connecting \u2014 try again in a moment.', 'warn'); return; }
+  if (!O.profile || !O.profile.name) { openUserModal(); return; }
+  msgWith = null; openAcct('msgs');
+};
 $('btn-board').addEventListener('click', () => openBoard(null, currentMode()));
 $('btn-board-s').addEventListener('click', () => openBoard(null, currentMode()));
 $('board-close').addEventListener('click', () => closeM('m-board'));
@@ -941,5 +1106,6 @@ async function sendFeedback({kind, message, details, replyTo}) {
 window.JunctionOnline = {
   get ready() { return O.ready && !!(O.profile && O.profile.name); },
   get feedbackReady() { return !!O.user; },
-  openSaves, openBoard, openWatch, sendFeedback, feedbackIdentity
+  openSaves, openBoard, openWatch, sendFeedback, feedbackIdentity,
+  openExpert(ago) { if (!O.ready) { API.toast('Online features are still connecting \u2014 try again in a moment.', 'warn'); return; } openExpert(ago); }
 };

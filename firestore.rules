@@ -5,6 +5,9 @@ rules_version = '2';
 //   users/{uid}/saves/{slot}  three cloud save slots                           owner only
 //   usernames/{nameLower}     names reserved by permanent accounts             readable by players, create-once
 //   leaderboard/{uid}         personal bests                                   everyone reads, owner writes
+//   boards/{mode}/players/{uid}   per-mode leaderboards                        everyone reads, owner writes
+//   expert/{week}/players/{uid}   weekly Expert Survival runs (+ city layout)  everyone reads, owner writes
+//   messages/{id}             player-to-player messages                        only sender and recipient read
 //   live/{code}               live-view channel                                read by code only (no listing)
 //   feedback/{cat}/entries    guest feedback (bugs / ideas / other)            create only; read in the console
 service cloud.firestore {
@@ -87,6 +90,47 @@ service cloud.firestore {
         || (resource.data.uid != request.auth.uid
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['watchT'])));
       allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    // Per-mode leaderboards: one document per player per mode.
+    match /boards/{mode}/players/{uid} {
+      allow read: if signedIn();
+      allow create, update: if isMe(uid) && mode in ['chill', 'standard', 'frantic', 'zen']
+        && request.resource.data.keys().hasOnly(['name', 'star', 'ach3', 'parcels', 'weeks', 'goalsSec', 'playSec', 'earned', 'updatedAt'])
+        && validName(request.resource.data.name);
+      allow delete: if isMe(uid);
+    }
+
+    // Weekly Expert Survival: each player's best run on that ISO week's seed, with a compact copy of the city.
+    match /expert/{week}/players/{uid} {
+      allow read: if signedIn();
+      allow create, update: if isMe(uid) && week.matches('^[0-9]{4}-W[0-9]{2}$')
+        && request.resource.data.keys().hasOnly(['name', 'star', 'ach3', 'parcels', 'weeks', 'earned', 'trips', 'tows', 'cars', 'roads', 'playSec',
+                                                'seedName', 'seedCode', 'weekLabel', 'city', 'updatedAt'])
+        && validName(request.resource.data.name)
+        && request.resource.data.parcels is int && request.resource.data.parcels >= 0 && request.resource.data.parcels < 10000000
+        && request.resource.data.weeks is int && request.resource.data.weeks >= 0 && request.resource.data.weeks < 100000
+        && request.resource.data.city is string && request.resource.data.city.size() < 400000;
+      allow delete: if isMe(uid);
+    }
+
+    // Messages between players. Only the sender and the recipient can read one; only the recipient can
+    // mark it read; either of them can delete it.
+    match /messages/{id} {
+      allow read: if signedIn() && (resource.data.to == request.auth.uid || resource.data.from == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['from', 'fromName', 'to', 'toName', 'text', 'at', 'read'])
+        && request.resource.data.from == request.auth.uid
+        && request.resource.data.to is string && request.resource.data.to.size() > 0 && request.resource.data.to.size() < 128
+        && request.resource.data.to != request.auth.uid
+        && validName(request.resource.data.fromName)
+        && request.resource.data.toName is string && request.resource.data.toName.size() <= 16
+        && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 500
+        && request.resource.data.at == request.time
+        && request.resource.data.read == false;
+      allow update: if signedIn() && resource.data.to == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow delete: if signedIn() && (resource.data.to == request.auth.uid || resource.data.from == request.auth.uid);
     }
 
     // Guests' feedback. Players can add a note but nobody can read, edit or delete

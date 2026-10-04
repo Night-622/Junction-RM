@@ -60,6 +60,7 @@
         <span class="csep" aria-hidden="true"></span>
         <button class="cbtn" id="btn-sound" type="button" aria-pressed="false" title="Sound (N)" aria-label="Sound"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9z"/><path class="wave" d="M16.5 8.5a5 5 0 010 7M19 6a8.5 8.5 0 010 12"/><path class="mute" d="M17 9l5 6M22 9l-5 6"/></svg></button>
         <button class="cbtn" id="btn-theme" type="button" title="Light or dark mode (T)" aria-label="Switch between your light and dark modes"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 010 16z" fill="currentColor"/></svg></button>
+        <button class="cbtn" id="btn-msg" type="button" title="Messages" aria-label="Messages" data-tip="Messages" data-sub="Messages from other players"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"/></svg><span class="msgbadge" id="msg-badge" hidden>0</span></button>
         <button class="cbtn" id="btn-cust" type="button" title="Customise" aria-label="Customise" aria-expanded="false" aria-controls="cust-panel" data-tip="Customise" data-sub="Quickly switch between looks and designs you own"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 100 18c1.1 0 1.6-.9 1.3-1.8-.4-1 .2-2.2 1.4-2.2H17a4 4 0 004-4c0-5.5-4-10-9-10z"/><circle cx="7.5" cy="11" r="1.2" fill="currentColor"/><circle cx="10.5" cy="7.2" r="1.2" fill="currentColor"/><circle cx="15" cy="7.6" r="1.2" fill="currentColor"/></svg></button>
         <button class="cbtn" id="btn-menu" type="button" title="Settings" aria-label="Settings" aria-expanded="false" aria-controls="menu"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg></button>
         <button class="cbtn" id="btn-acct" type="button" title="Account" aria-label="Account" data-tip="Account" data-sub="Profile, stats, achievements, save files and watching a player"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg></button>
@@ -301,6 +302,18 @@
         </ul>
         <h3>Difficulty</h3>
         <div class="diffs" id="diff-picks"></div>
+        <div class="expertcard" id="expert-card">
+          <div class="exp-l">
+            <small>Expert Survival · this week's seed</small>
+            <b id="exp-name">—</b>
+            <span><span id="exp-week"></span> · code <code id="exp-code" class="num">——</code></span>
+            <em>Everyone plays the same seeded city. Tougher than Frantic. Your best run goes on the weekly Expert leaderboard.</em>
+          </div>
+          <div class="exp-r">
+            <button class="bigbtn" id="btn-expert" type="button">Play this week's seed</button>
+            <button class="act" id="btn-expert-board" type="button">Expert leaderboard</button>
+          </div>
+        </div>
         <div class="btnrow">
           <button class="bigbtn" id="btn-start" type="button">Start a new city</button>
           <button class="bigbtn ghost" id="btn-saves" type="button" hidden>Save files</button>
@@ -360,11 +373,22 @@
           <button type="button" data-pane="ach" aria-pressed="false">Achievements</button>
           <button type="button" data-pane="saves" aria-pressed="false">Save files</button>
           <button type="button" data-pane="watch" aria-pressed="false">Watch</button>
+          <button type="button" data-pane="msgs" aria-pressed="false">Messages <span class="tabbadge" id="msg-tabbadge" hidden></span></button>
           <button type="button" data-pane="security" aria-pressed="false" id="acct-tab-sec">Security</button>
         </div>
         <div class="acct-pane" data-pane="saves" hidden>
           <p class="mini" id="acct-saves-lead">Three cloud save slots.</p>
           <div class="slots" id="acct-slots"><p class="mini">Loading…</p></div>
+        </div>
+        <div class="acct-pane" data-pane="msgs" hidden>
+          <div id="msg-list" class="msglist"><p class="mini">Loading…</p></div>
+          <div id="msg-thread" class="msgthread" hidden>
+            <div class="mt-head"><button class="linkbtn" id="msg-back" type="button">← All messages</button><b id="msg-with"></b></div>
+            <div class="mt-body" id="msg-body"></div>
+            <div class="mt-reply"><input id="msg-text" type="text" maxlength="500" placeholder="Write a message…" autocomplete="off"><button class="bigbtn" id="msg-send" type="button">Send</button></div>
+            <p class="formerr" id="msg-err" role="alert"></p>
+          </div>
+          <p class="mini">Be kind — messages are between players only. Find someone to message from the Expert leaderboard.</p>
         </div>
         <div class="acct-pane" data-pane="watch" hidden>
           <p class="mini">Type the 6-digit live code another player shared with you (it's in their Settings) to watch their city as they play.</p>
@@ -490,6 +514,18 @@
       </div>
     </div>
 
+    <div class="modal" id="m-run" hidden>
+      <div class="card plate wide runcard">
+        <h2 id="run-name">Run</h2>
+        <p class="mini" id="run-seed"></p>
+        <div class="runbody">
+          <canvas id="run-map" width="420" height="420" aria-label="Their city"></canvas>
+          <div><div class="statgrid" id="run-stats"></div><p class="mini" id="run-note"></p></div>
+        </div>
+        <div class="btnrow"><button class="bigbtn" id="run-msg" type="button">Message</button><button class="bigbtn ghost" id="run-close" type="button">Close</button></div>
+      </div>
+    </div>
+
     <div class="modal" id="m-upgrade" hidden>
       <div class="card plate wide">
         <h2 id="up-title">Week 2</h2>
@@ -569,6 +605,7 @@
           <details><summary>What happens when a store "tiers up"?</summary><p>It randomly grows busier over time, in up to three steps — a thicker outline means it now sends out parcels faster and pays a little more per parcel, and two new houses of its colour move in nearby to match the extra demand.</p></details>
           <details><summary>Can I undo a mistake?</summary><p>Yes — Ctrl+Z undoes, Ctrl+Y redoes. Both work back through everything from your last press-and-drag.</p></details>
           <details><summary>Can I change the colours?</summary><p>Yes. Open Settings. Under Appearance, pick an interface theme, or choose your own colours for menus, buttons and highlights, and switch the panels between Clean, Glass and Road sign styles. Under Colour mode, pick red–green safe, blue–yellow safe, high contrast, or custom city colours you choose one by one. You can also switch on a shape for each colour on houses and stores.</p></details>
+          <details><summary>What is Expert Survival?</summary><p>A new seeded city every week (Monday to Sunday, UTC). Everyone gets the same map, the same first store and house and the same early events, so runs are directly comparable. It's tougher than Frantic. Your best run on the week's seed goes on the Expert leaderboard, labelled with the week's dates, the seed's name and its code. Tap any player there to see their city — who placed what — and their stats, and to send them a message. Messages live under Account → Messages, and the speech-bubble button on the top bar shows when you have new ones.</p></details>
           <details><summary>What are Junc Bucks (#)?</summary><p>A currency for looks. You earn one for every 10 parcels delivered, in any city and any difficulty, and keep them between cities. Open Settings → Store to buy interface themes, panel styles, map themes, decorations, designs for cars, houses, roads, stores, traffic lights, roundabouts and bridges, and colours — each colour is bought on its own, or hired for 3 hours for #20. Tap once to see the price, again to buy. Everything you own is under Owned, and the palette button next to Settings opens a quick Customise panel. A few super-rare items, marked with a star, cost R# (rare bucks) instead, and R# only come from Frantic cities: one for every 20 parcels delivered. The standard light and dark looks and the colour-blind colour modes are always free.</p></details>
           <details><summary>What's a tow truck actually for?</summary><p>Hired at a store, it drives out to stuck or broken-down cars nearby, hooks them, hauls them clear and saves their parcels — handy once a city is busy enough that a single stuck car can back up a whole street.</p></details>
           <details><summary>Is a bigger city always a better city?</summary><p>No — score comes from steady throughput, not size. A small, tightly controlled loop consistently out-earns a sprawling network that's constantly jammed.</p></details>
