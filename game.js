@@ -235,6 +235,8 @@ const DIFFS = {
   frantic:  {label:'Frantic',  note:'Parcels arrive fast and stores lose patience sooner.',  pin:0.78, over:0.8, spawn:0.85, roads:-4, cash:-10, grant:0.75},
   expert:   {label:'Expert Survival', note:'This week\u2019s seeded city: the same map for everyone. Tighter than Frantic \u2014 survive as long as you can.',
              pin:0.7,  over:0.72, spawn:0.8, roads:-6, cash:-15, grant:0.65, expert:true},
+  iso:      {label:'ISO 1v1', note:'Head to head with another player on the same map. Live or daily.',
+             pin:0.85, over:0.85, spawn:0.9, roads:-2, cash:-5, grant:0.85, iso:true},
   zen:      {label:'Zen',      note:'Nothing you build can lose the game. Rare weather, gentle traffic, slower camera.',
              pin:1.4, over:999, spawn:1.3, roads:12, cash:30, grant:1.3, noFail:true, calm:true}
 };
@@ -269,6 +271,7 @@ function expertSeed(weeksAgo) {
   return {key: w.key, num: h, name: SEED_NAMES[h % SEED_NAMES.length], code, label: fmt(w.mon) + ' \u2013 ' + fmt(w.sun) + ', ' + w.sun.getUTCFullYear()};
 }
 let demoMode = false, demoT = 0;                      // the main menu's background city
+let iso = null;                                        // the ISO 1v1 match being played: {id, kind, seed, opp, ctl, prop, oppSt}
 let expWeek = '', prevDiff = 'standard';             // prevDiff: the ordinary difficulty to go back to after an Expert start                                      // the seed week of the Expert city being played ('' otherwise)
 const CELL = 32, MAXD = CFG.maxSpan, COLS = MAXD, ROWS = MAXD, N = COLS * ROWS;
 const DX = [0, 1, 1, 1, 0, -1, -1, -1], DY = [-1, -1, 0, 1, 1, 1, 0, -1];
@@ -1638,7 +1641,9 @@ function resetGame(dk) {
   setTutorialUI(false);
   if (dk) diffKey = dk;
   DIFF = DIFFS[diffKey] || DIFFS.standard; best = bestFor(diffKey);
+  if (diffKey !== 'iso') iso = null;
   if (DIFF.expert) { const sd = expertSeed(); expWeek = sd.key; rand = seededRand(sd.num); if (startDiff === 'expert') startDiff = prevDiff; }
+  else if (DIFF.iso && iso) { expWeek = ''; rand = seededRand(iso.seed); }      // both players get the same map from the match's seed
   else { expWeek = ''; rand = Math.random; }
   water = new Uint8Array(N); road = new Uint8Array(N); lnk = new Uint8Array(N);
   sign = new Array(N).fill(null); special = new Array(N).fill(null);
@@ -3843,7 +3848,7 @@ function renderSlotsFor(box, mode, tabs) {
   renderLocalSlots(box, mode);
 }
 function saveGame(urgent) {
-  if (over || !started || tutorialMode || spectating || demoMode) return;
+  if (over || !started || tutorialMode || spectating || demoMode || diffKey === 'iso') return;
   JEvents.emit('autosave', {urgent: !!urgent});
   try {
     const prev = localStorage.getItem(SAVE_KEY);
@@ -4011,7 +4016,14 @@ const GEN = {
     ['zebra', 'Zebra', 40, '', {k: 'zebra', c: ['#1f262b']}], ['minttop', 'Mint top', 30, '', {k: 'band', c: ['#7ff0c8'], roof: '#7ff0c8'}],
     ['creamsides', 'Cream sides', 25, '', {k: 'band', c: ['#f4efe1']}], ['darknose', 'Dark nose', 30, '', {k: 'nose', c: ['#1f262b']}],
     ['pinkglow', 'Pink glow', 55, '', {glow: '#ff3df2'}], ['candycane', 'Candy cane', 60, '', {k: 'zebra', c: ['#ffffff']}],
-    ['tidal', 'Tidal', 0, 'U', {k: 'wave', c: ['#7fe3ff'], glow: '#00e1ff'}], ['rainbowstripe', 'Rainbow stripe', 0, 'U', {k: 'stripe', c: ['#ff4d4d', '#ff9f1a', '#ffd23a', '#3fd16a', '#2f9bff', '#8a5bff']}]
+    ['tidal', 'Tidal', 0, 'U', {k: 'wave', c: ['#7fe3ff'], glow: '#00e1ff'}], ['rainbowstripe', 'Rainbow stripe', 0, 'U', {k: 'stripe', c: ['#ff4d4d', '#ff9f1a', '#ffd23a', '#3fd16a', '#2f9bff', '#8a5bff']}],
+    /* p30 designs */
+    ['leopard', 'Leopard', 35, '', {k: 'spots', c: ['#3a2a1a', '#d9a35a']}], ['roundel', 'Racing roundel', 30, '', {k: 'roundel', c: ['#ffffff', '#1f262b']}],
+    ['halfhalf', 'Half and half', 25, '', {k: 'split', c: ['#f4f2ec']}], ['confetti', 'Confetti', 35, '', {k: 'confetti', c: ['#ff6b8b', '#ffd23a', '#7fe3ff', '#3fd16a', '#ffffff']}],
+    ['tartan', 'Tartan', 40, '', {k: 'plaid', c: ['#1f3a5f', '#c8102e']}], ['cloudnine', 'Cloud nine', 30, '', {k: 'clouds', c: ['#ffffff']}],
+    ['mermaid', 'Mermaid scales', 55, '', {k: 'scales', c: ['#e9fbff'], glow: '#5ccbd4'}], ['flowerpower', 'Flower power', 45, '', {k: 'flowers', c: ['#ffffff', '#ffd23a']}],
+    ['hoops', 'Hoops', 25, '', {k: 'rings', c: ['#ffffff']}], ['lagoonfade', 'Lagoon fade', 50, '', {k: 'fade', c: ['#7fe3ff', '#2f9bff']}],
+    ['bumblebee', 'Bumblebee', 40, '', {k: 'zebra', c: ['#1f262b'], roof: '#ffd23a'}], ['firefly', 'Firefly', 0, 'U', {k: 'dots', c: ['#fff1a8'], glow: '#ffd23a'}]
   ],
   house: [
     ['cabin', 'Log cabin', 35, '', {shape: 'box', roof: '#8a5a35', pat: 'logs', x: ['chimney']}], ['chalet', 'Alpine chalet', 40, '', {shape: 'box', roof: '#6b4a30', pat: 'ridge', x: ['chimney', 'flowers']}],
@@ -4020,7 +4032,13 @@ const GEN = {
     ['teahouse', 'Teahouse', 55, '', {shape: 'pill', roof: '#3a4a3f', pat: 'shingle', x: ['lantern']}], ['ecodome', 'Eco dome', 50, '', {shape: 'dome', roof: '#e8f1f6', pat: 'rings'}],
     ['gardencottage', 'Garden cottage', 30, '', {shape: 'box', roof: 'col', pat: 'tiles', x: ['tree']}], ['solarhome', 'Solar home', 50, '', {shape: 'box', roof: '#ebebe6', pat: 'solar'}],
     ['seaside', 'Seaside villa', 60, '', {shape: 'box', roof: '#fbf8f1', pat: 'stripes', x: ['pool']}], ['farmhouse', 'Farmhouse', 30, '', {shape: 'box', roof: 'col', pat: 'ridge', x: ['chimney', 'tree']}],
-    ['gingerbread', 'Gingerbread house', 0, 'U', {shape: 'box', roof: '#a0612e', pat: 'dots', acc: '#ffffff', x: ['flowers']}], ['observatory', 'Observatory', 0, 'U', {shape: 'dome', roof: '#cfd6dc', pat: 'slit', x: ['antenna']}]
+    ['gingerbread', 'Gingerbread house', 0, 'U', {shape: 'box', roof: '#a0612e', pat: 'dots', acc: '#ffffff', x: ['flowers']}], ['observatory', 'Observatory', 0, 'U', {shape: 'dome', roof: '#cfd6dc', pat: 'slit', x: ['antenna']}],
+    ['shellcottage', 'Shell cottage', 35, '', {shape: 'round', roof: '#f6e3d3', pat: 'scallop', acc: 'col'}], ['boathouse', 'Boathouse', 45, '', {shape: 'box', roof: '#5b7f95', pat: 'waves', acc: '#bfe7f5', x: ['umbrella']}],
+    ['beehive', 'Beehive', 45, '', {shape: 'dome', roof: '#f2c14e', pat: 'honey'}], ['pavilion', 'Garden pavilion', 40, '', {shape: 'pill', roof: '#fbf8f1', pat: 'petals', acc: 'col', x: ['flowers']}],
+    ['leafpod', 'Leafy pod', 35, '', {shape: 'round', roof: '#6fae55', pat: 'leaves', door: 'col'}], ['chequered', 'Chequered cottage', 30, '', {shape: 'box', roof: '#f4efe1', pat: 'checker', acc: 'col', x: ['chimney']}],
+    ['snowcabin', 'Snowy cabin', 40, '', {shape: 'box', roof: '#7a5236', pat: 'logs', x: ['snow', 'chimney']}], ['bubblehouse', 'Bubble house', 55, '', {shape: 'dome', roof: '#cfeef7', pat: 'bubbles'}],
+    ['terrace', 'Terrace garden', 50, '', {shape: 'box', roof: '#e9e4da', pat: 'terrace', acc: '#86c46a', x: ['umbrella']}], ['mintchip', 'Mint chip', 30, '', {shape: 'pill', roof: '#bff0dc', pat: 'chips', acc: '#6b4220', x: ['hedge']}],
+    ['arched', 'Arched cottage', 50, '', {shape: 'box', roof: '#ffffff', pat: 'arcs'}], ['moonhouse', 'Moon house', 0, 'U', {shape: 'dome', roof: '#e8e6df', pat: 'craters', x: ['antenna']}]
   ],
   road: [
     ['midnight', 'Midnight', 35, '', {road: '#1d2a3a', edge: '#0d1520', lane: '#ffd23a'}], ['mint', 'Mint', 30, '', {road: '#bfe8d6', edge: '#4fa688', lane: '#ffffff'}],
@@ -4029,7 +4047,13 @@ const GEN = {
     ['ocean', 'Ocean', 40, '', {road: '#2a6f8f', edge: '#13405a', lane: '#bff3ff'}], ['forest', 'Forest track', 30, '', {road: '#6b7a4a', edge: '#3e4a26', lane: 'rgba(0,0,0,0)'}],
     ['chalk', 'Chalk', 25, '', {road: '#f4f1ea', edge: '#c9c3b5', lane: '#7d8790'}], ['rose', 'Rose', 50, '', {road: '#e8a5b0', edge: '#a0184f', lane: '#ffffff'}],
     ['ice', 'Ice', 55, '', {road: '#dff3fb', edge: '#7fc4e0', lane: '#ffffff'}], ['chocolate', 'Chocolate', 60, '', {road: '#54301c', edge: '#2a160c', lane: '#f0b26a'}],
-    ['galaxy', 'Galaxy', 0, 'U', {road: '#1a0f3d', edge: '#c59bff', lane: '#fff1a8'}]
+    ['galaxy', 'Galaxy', 0, 'U', {road: '#1a0f3d', edge: '#c59bff', lane: '#fff1a8'}],
+    ['peach', 'Peach', 30, '', {road: '#f6cdb4', edge: '#c97c5d', lane: '#ffffff'}], ['olive', 'Olive', 25, '', {road: '#8c8f5a', edge: '#565833', lane: '#f1ecc8'}],
+    ['plum', 'Plum', 35, '', {road: '#5a3a6b', edge: '#2e1a3a', lane: '#ffd1f0'}], ['sky', 'Sky', 30, '', {road: '#bfe0f5', edge: '#5b9cc8', lane: '#ffffff'}],
+    ['butter', 'Butter', 30, '', {road: '#f2e3a6', edge: '#b89a3a', lane: '#ffffff'}], ['teal', 'Teal', 35, '', {road: '#2f7a78', edge: '#174746', lane: '#c7fff5'}],
+    ['blush', 'Blush', 30, '', {road: '#f3c9cf', edge: '#c06b7a', lane: '#ffffff'}], ['sage', 'Sage', 25, '', {road: '#b8c6a8', edge: '#6f8261', lane: '#ffffff'}],
+    ['coral', 'Coral', 45, '', {road: '#ff9b85', edge: '#c4523c', lane: '#fff3e0'}], ['denim', 'Denim', 50, '', {road: '#3d5a80', edge: '#22324a', lane: '#e0fbfc'}],
+    ['aurora', 'Aurora', 0, 'U', {road: '#10233a', edge: '#4dffc3', lane: '#c59bff'}]
   ],
   store: [
     ['awning', 'Striped awning', 30, '', {base: '#fbf8f1', pat: 'stripes', acc: 'col'}], ['skylights', 'Skylights', 30, '', {base: '#c9ced2', pat: 'grid', acc: '#aee0f5'}],
@@ -4038,7 +4062,13 @@ const GEN = {
     ['target', 'Target', 35, '', {base: '#f4efe1', pat: 'rings', acc: 'col'}], ['chequer', 'Chequer', 50, '', {base: '#2b3036', pat: 'checker', acc: 'col'}],
     ['terracotta', 'Terracotta', 30, '', {base: '#c1592c', pat: 'stripes', acc: '#d9774a'}], ['waves', 'Ocean waves', 40, '', {base: '#1a7ca6', pat: 'waves', acc: '#7fe3ff'}],
     ['mint', 'Mint', 25, '', {base: '#bff0dc', pat: 'dots', acc: '#4fd1a5'}], ['candy', 'Candy', 55, '', {base: '#ffd1e3', pat: 'stripes', acc: '#ff6fb5'}],
-    ['golden', 'Golden roof', 0, 'U', {base: '#d4af37', pat: 'rings', acc: '#fff1a8'}]
+    ['golden', 'Golden roof', 0, 'U', {base: '#d4af37', pat: 'rings', acc: '#fff1a8'}],
+    ['scales', 'Fish scales', 35, '', {base: '#e8f1f6', pat: 'scallop', acc: 'col'}], ['bubbles', 'Bubble roof', 30, '', {base: '#f4efe1', pat: 'bubbles', acc: 'col'}],
+    ['confetti', 'Confetti', 35, '', {base: '#fbf8f1', pat: 'confetti', acc: 'col'}], ['courtyard', 'Courtyard', 50, '', {base: 'col', pat: 'courtyard', acc: '#f4efe1'}],
+    ['daisies', 'Daisy roof', 40, '', {base: '#7cbf5e', pat: 'flowers', acc: 'col'}], ['lanes', 'Racing lanes', 35, '', {base: '#3e4448', pat: 'lanes', acc: 'col'}],
+    ['cloudy', 'Cloudy sky', 30, '', {base: 'col', pat: 'clouds', acc: '#ffffff'}], ['tiles', 'Soft tiles', 25, '', {base: '#e9e4da', pat: 'tiles', acc: 'col'}],
+    ['sundeck', 'Sun deck', 55, '', {base: '#c9a876', pat: 'sundeck', acc: 'col'}], ['jungle', 'Jungle roof', 45, '', {base: '#4f8d3f', pat: 'leaves', acc: 'col'}],
+    ['nightdots', 'Midnight dots', 30, '', {base: '#1d2a3a', pat: 'dots', acc: 'col'}], ['bigtop', 'Big top', 0, 'U', {base: '#f4efe1', pat: 'bigtop', acc: 'col'}]
   ],
   light: [
     ['mint', 'Mint', 25, '', {h: '#bff0dc', ring: '#4fa688'}], ['coral', 'Coral', 25, '', {h: '#ff8a75'}], ['sky', 'Sky', 25, '', {h: '#9fd5f2'}],
@@ -4047,7 +4077,12 @@ const GEN = {
     ['chrome', 'Chrome', 40, '', {h: '#c9d3dc', ring: '#ffffff', shape: 'square'}], ['neonring', 'Neon ring', 50, '', {h: '#151a28', ring: '#00e1ff', glow: '#00e1ff'}],
     ['sunflower', 'Sunflower', 35, '', {h: '#ffd23a', ring: '#7a5a10'}], ['pebble', 'Pebble', 25, '', {h: '#9aa3a8', shape: 'pill'}], ['bubble', 'Bubble', 35, '', {h: '#9fd5f2', ring: '#ffffff', shape: 'pill'}],
     ['ember', 'Ember', 55, '', {h: '#3a1f18', ring: '#ff6a2b', glow: '#ff6a2b'}], ['candy', 'Candy', 50, '', {h: '#ff9ecb', ring: '#ffffff'}],
-    ['halo', 'Halo', 0, 'U', {h: '#f4f2ec', ring: '#fff1a8', glow: '#ffffff'}], ['nightowl', 'Night owl', 0, 'U', {h: '#151a28', ring: '#ffd23a', glow: '#ffd23a', shape: 'pill'}]
+    ['halo', 'Halo', 0, 'U', {h: '#f4f2ec', ring: '#fff1a8', glow: '#ffffff'}], ['nightowl', 'Night owl', 0, 'U', {h: '#151a28', ring: '#ffd23a', glow: '#ffd23a', shape: 'pill'}],
+    ['peach', 'Peach', 25, '', {h: '#ffc9a8'}], ['teal', 'Teal', 30, '', {h: '#2f7a78', ring: '#9fe3d9', shape: 'square'}], ['plum', 'Plum', 30, '', {h: '#5a3a6b', ring: '#d9b8e8', shape: 'pill'}],
+    ['butter', 'Butter', 25, '', {h: '#f2e3a6', ring: '#b89a3a'}], ['daisy', 'Daisy', 40, '', {h: '#ffffff', ring: '#ffd23a', shape: 'flower'}], ['blossom', 'Blossom', 45, '', {h: '#ff9ecb', ring: '#ffffff', shape: 'flower'}],
+    ['cloud', 'Cloud', 40, '', {h: '#f4f8fb', ring: '#9fd5f2', shape: 'cloud'}], ['storm', 'Storm cloud', 35, '', {h: '#5b6f86', ring: '#c9d3dc', shape: 'cloud'}], ['olive', 'Olive', 25, '', {h: '#8c8f5a', shape: 'pill'}],
+    ['marine', 'Marine', 30, '', {h: '#1a7ca6', ring: '#7fe3ff', shape: 'square'}], ['studded', 'Studded', 50, '', {h: '#2b3036', ring: '#ffd23a', studs: '#ffd23a'}],
+    ['sunburst', 'Sunburst', 0, 'U', {h: '#ffd23a', ring: '#ff9f1a', glow: '#ffb02e', shape: 'flower'}]
   ],
   round: [
     ['rosegarden', 'Rose garden', 35, '', {fill: '#6fb35e', pat: 'petals', acc: '#ff6b8b', c2: '#ffd23a'}], ['sunflower', 'Sunflower', 35, '', {fill: '#86c46a', pat: 'petals', acc: '#ffd23a', c2: '#7a4a20'}],
@@ -4057,21 +4092,40 @@ const GEN = {
     ['lavender', 'Lavender', 30, '', {fill: '#6fb35e', pat: 'dots', acc: ['#a58bdb', '#c9a3e0']}], ['beachball', 'Beach ball', 50, '', {fill: '#ffffff', pat: 'wedges', acc: ['#e0483e', '#2f7de1', '#ffd23a', '#2fa66a']}],
     ['pizza', 'Pizza', 55, '', {fill: '#f0b26a', pat: 'wedges', acc: ['#e8c06a'], dots: '#c8102e'}], ['compass', 'Compass', 40, '', {fill: '#f4efe1', pat: 'wedges', acc: ['#25408f']}],
     ['snowglobe', 'Snow globe', 50, '', {fill: '#e8f1f6', pat: 'rings', acc: '#9fd5f2', dots: '#ffffff'}], ['lilypads', 'Lily pads', 35, '', {fill: '#7cc9a6', pat: 'water', acc: '#4f9b4f'}],
-    ['mosaic', 'Mosaic', 0, 'U', {fill: '#f4efe1', pat: 'dots', acc: ['#e0483e', '#2f7de1', '#ffd23a', '#2fa66a', '#8a5bd6', '#16a2b8']}], ['galaxy', 'Galaxy', 0, 'U', {fill: '#1a0f3d', pat: 'spiral', acc: '#c59bff', dots: '#ffffff'}]
+    ['mosaic', 'Mosaic', 0, 'U', {fill: '#f4efe1', pat: 'dots', acc: ['#e0483e', '#2f7de1', '#ffd23a', '#2fa66a', '#8a5bd6', '#16a2b8']}], ['galaxy', 'Galaxy', 0, 'U', {fill: '#1a0f3d', pat: 'spiral', acc: '#c59bff', dots: '#ffffff'}],
+    ['zengarden', 'Zen garden', 35, '', {fill: '#e9e1cf', pat: 'zen', acc: '#b4ab9b'}], ['donut', 'Donut', 45, '', {fill: '#f2b8cf', pat: 'donut', acc: ['#ffffff', '#ffd23a', '#7fe3ff', '#3fd16a'], c2: '#c98a4a'}],
+    ['citrus', 'Citrus', 35, '', {fill: '#ffb347', pat: 'citrus', acc: '#fff1d6', c2: '#ffcf5c'}], ['watermelon', 'Watermelon', 50, '', {fill: '#ff6b7a', pat: 'melon', acc: '#2f7d32', c2: '#1f262b'}],
+    ['hedgering', 'Hedge ring', 30, '', {fill: '#86c46a', pat: 'hedge', acc: '#4f8d3f', c2: '#6fb35e'}], ['bullseye', 'Bullseye', 25, '', {fill: '#ffd23a', pat: 'bands', acc: ['#e0483e', '#ffffff']}],
+    ['stepping', 'Stepping stones', 30, '', {fill: '#6fb35e', pat: 'stones', acc: ['#cfc8bb', '#b4ada1']}], ['fullmoon', 'Full moon', 45, '', {fill: '#e8e6df', pat: 'craters', acc: '#c9c5ba', c2: '#d8d5cc'}],
+    ['balance', 'Balance', 40, '', {fill: '#f4efe1', pat: 'yinyang', acc: '#2b3036'}], ['cookie', 'Cookie', 30, '', {fill: '#d9a066', pat: 'dots', acc: ['#5a3418', '#6b4220']}],
+    ['clock', 'Clock', 55, '', {fill: '#ffffff', pat: 'clock', acc: '#2b3036', c2: '#e0483e'}], ['flowerbed', 'Flower bed', 35, '', {fill: '#6fb35e', pat: 'flowerbed', acc: ['#ff6b8b', '#ffffff', '#b07bff'], c2: '#ffd23a'}],
+    ['planet', 'Ringed planet', 0, 'U', {fill: '#1a0f3d', pat: 'planet', acc: '#f0b26a', c2: '#ffd9a8', dots: '#ffffff'}]
   ],
   bridge: [
     ['mint', 'Mint rails', 30, '', ['#4fd1a5', '#bff0dc', '#2a9670']], ['cherry', 'Cherry', 35, '', ['#c8102e', '#ff8a75', '#7a1830']], ['ocean', 'Ocean', 35, '', ['#1a7ca6', '#7fe3ff', '#0d5f82']],
     ['sandstone', 'Sandstone', 30, '', ['#c9a876', '#efe3c8', '#8d6d48']], ['slate', 'Slate', 25, '', ['#5b6f86', '#9fb3c2', '#3a4a5a']], ['bamboo', 'Bamboo', 40, '', ['#93c47d', '#5f7a35', '#4e7a4a']],
     ['copper', 'Copper', 40, '', ['#b57a4a', '#e0a878', '#6a2c20']], ['lilac', 'Lilac', 30, '', ['#a58bdb', '#e9e1f5', '#5c2f8e']], ['candycane', 'Candy cane', 55, '', ['#ffffff', '#e0483e', '#c8102e']],
     ['night', 'Night', 50, '', ['#151a28', '#ffd23a', '#0b0f1f']], ['marble', 'Marble', 35, '', ['#e9e6e1', '#a59f96', '#c9c3ba']], ['jungle', 'Jungle vines', 40, '', ['#2e7d32', '#8cc63f', '#215030']],
-    ['gold', 'Gold', 0, 'U', ['#d4af37', '#fff1a8', '#8f6d10']], ['lava', 'Lava', 0, 'U', ['#2a1714', '#ff5a1a', '#ff8a3a']]
+    ['gold', 'Gold', 0, 'U', ['#d4af37', '#fff1a8', '#8f6d10']], ['lava', 'Lava', 0, 'U', ['#2a1714', '#ff5a1a', '#ff8a3a']],
+    ['peach', 'Peach', 30, '', ['#f6b89a', '#ffe6d6', '#c97c5d']], ['teal', 'Teal', 35, '', ['#2f7a78', '#9fe3d9', '#174746']], ['plum', 'Plum', 35, '', ['#5a3a6b', '#d9b8e8', '#2e1a3a']],
+    ['lemon', 'Lemon', 30, '', ['#ffe066', '#fff7c2', '#c9a227']], ['denim', 'Denim', 25, '', ['#3d5a80', '#98c1d9', '#22324a']],
+    ['pebble', 'Pebble rails', 30, '', Object.assign(['#9aa3a8', '#e3e9ee', '#6b7378'], {k: 'beads', gap: 9})], ['mintchip', 'Mint chip', 35, '', Object.assign(['#bff0dc', '#6b4220', '#7fd1b0'], {k: 'beads', gap: 7})],
+    ['pearl', 'Pearl', 50, '', Object.assign(['#f4f2ec', '#ffffff', '#c9c3ba'], {k: 'beads', gap: 7})], ['garland', 'Flower garland', 55, '', Object.assign(['#4f8d3f', '#86c46a', '#3f7a35'], {k: 'flowers', c: ['#ff6b8b', '#ffd23a', '#ffffff']})],
+    ['lanterns', 'Lantern rails', 50, '', Object.assign(['#3a2a22', '#ffb347', '#2a1d17'], {k: 'beads', gap: 16, glow: '#ffb347'})], ['cotton', 'Cotton candy', 40, '', Object.assign(['#ffd1e3', '#ffffff', '#f5b8d0'], {k: 'flowers', c: ['#ffffff', '#9fd5f2']})],
+    ['seaside', 'Seaside stripes', 35, '', Object.assign(['#ffffff', '#2f7de1', '#dfe8f2'], {k: 'bands'})], ['starlight', 'Starlight', 0, 'U', Object.assign(['#151a28', '#fff1a8', '#0b0f1f'], {k: 'beads', gap: 10, glow: '#fff1a8'})]
   ],
   moto: [
     ['mint', 'Mint', 30, '', ['#bff0dc', '#4fd1a5']], ['peach', 'Peach', 30, '', ['#ffd9c2', '#f0b26a']], ['ocean', 'Ocean', 35, '', ['#7fe3ff', '#1a7ca6', '#0d5f82']],
     ['forest', 'Forest', 30, '', ['#86c46a', '#2e7d32']], ['berry', 'Berry', 35, '', ['#ff8fb1', '#a0184f']], ['lilac', 'Lilac', 30, '', ['#e9e1f5', '#a58bdb']],
     ['sand', 'Sand', 25, '', ['#efe3c8', '#c9a876']], ['slate', 'Slate', 25, '', ['#9fb3c2', '#5b6f86']], ['candy', 'Candy', 50, '', ['#ffffff', '#ff9ecb', '#ffffff']],
     ['tropical', 'Tropical', 55, '', ['#ffd23a', '#3fbfad', '#1a7ca6']], ['ember', 'Ember', 55, '', ['#ffcf5c', '#ff6a2b', '#8a1a10']], ['neonnight', 'Neon night', 45, '', ['#ff3df2', '#151a28', '#00e1ff']],
-    ['chalk', 'Chalk', 25, '', ['#f4efe1', '#e3e9ee']], ['gold', 'Gold', 0, 'U', ['#fff1a8', '#d4af37', '#8f6d10']], ['galaxy', 'Galaxy', 0, 'U', ['#c59bff', '#5b2bff', '#1a0f3d']]
+    ['chalk', 'Chalk', 25, '', ['#f4efe1', '#e3e9ee']], ['gold', 'Gold', 0, 'U', ['#fff1a8', '#d4af37', '#8f6d10']], ['galaxy', 'Galaxy', 0, 'U', ['#c59bff', '#5b2bff', '#1a0f3d']],
+    ['coral', 'Coral', 30, '', ['#ffb4a2', '#e5737a']], ['teal', 'Teal', 30, '', ['#9fe3d9', '#2f7a78']], ['butter', 'Butter', 25, '', ['#fff3c4', '#e8c55a']],
+    ['plum', 'Plum', 35, '', ['#d9b8e8', '#5a3a6b']], ['denim', 'Denim', 30, '', ['#a9c4e0', '#3d5a80', '#22324a']], ['pastel', 'Pastel ribbon', 35, '', ['#ffd1e3', '#c9eedc', '#bfe0f5']],
+    ['lagoon', 'Lagoon', 40, '', ['#bff3ff', '#5ccbd4', '#1a7ca6']], ['citrus', 'Citrus', 45, '', ['#fff1a8', '#ffb347', '#ff6f61']],
+    ['catseye', 'Cat\u2019s eyes', 35, '', Object.assign(['#5a656e', '#3a4249'], {k: 'dots', x: '#ffd23a'})], ['pebbledash', 'Pebble dash', 30, '', Object.assign(['#cfc8bb', '#9a9389'], {k: 'dots', x: '#f4efe1'})],
+    ['runway', 'Runway lights', 50, '', Object.assign(['#2b3240', '#1c2230'], {k: 'edge', x: '#7fe3ff'})], ['verge', 'Wildflower verge', 55, '', Object.assign(['#a8d88e', '#6fb35e'], {k: 'flowers', x: ['#ff6b8b', '#ffd23a', '#ffffff']})],
+    ['starlit', 'Starlit', 0, 'U', Object.assign(['#1a0f3d', '#0b0f1f'], {k: 'edge', x: '#fff1a8', glow: 1})]
   ]
 };
 const GEN_P = {}; for (const c in GEN) { GEN_P[c] = {}; for (const e of GEN[c]) GEN_P[c][e[0]] = e[4]; }
@@ -4097,6 +4151,17 @@ function houseGen(p, b, col, model) {
   else if (pt === 'shingle') { ctx.fillStyle = shade(roof, 0.12); for (let y = -11, j = 0; y < 1; y += 2.6, j++) for (let x = -11 + (j % 2) * 1.6; x < 11; x += 3.2) sfr(x, y, 2.6, 1.8); }
   else if (pt === 'ridge') { ctx.fillStyle = shade(roof, 0.14); ctx.fillRect(-12, -14, 24, 9); ctx.fillStyle = 'rgba(255,255,255,.5)'; sfr(-10.5, -5.6, 21, 0.8); }
   else if (pt === 'slit') { ctx.fillStyle = '#2b3036'; sfr(-1.4, -14, 2.8, 9); dot(0, -5, 1.6, '#2b3036'); }
+  else if (pt === 'scallop') { ctx.strokeStyle = acc; ctx.lineWidth = 0.5; for (let y = 5, j = 0; y > -16; y -= 1.7, j++) { ctx.fillStyle = j % 2 ? shade(roof, -0.07) : roof; ctx.beginPath(); for (let x = -13 + (j % 2) * 1.6; x < 13; x += 3.2) { ctx.moveTo(x + 1.75, y); ctx.arc(x, y, 1.75, 0, 6.3); } ctx.fill(); ctx.stroke(); } }
+  else if (pt === 'waves') { ctx.strokeStyle = acc; ctx.lineWidth = 0.9; ctx.lineCap = 'round'; ctx.beginPath(); for (let y = -12; y < 4; y += 3) for (let x = -12; x <= 12.01; x += 0.8) { const yy = y + Math.sin(x * 0.9) * 0.7; x === -12 ? ctx.moveTo(x, yy) : ctx.lineTo(x, yy); } ctx.stroke(); }
+  else if (pt === 'honey') { const hx = (fn) => { for (let y = -14, j = 0; y < 4; y += 2.3, j++) for (let x = -12 + (j % 2) * 1.35; x < 12; x += 2.7) fn(x, y); }; ctx.fillStyle = shade(roof, -0.16); ctx.beginPath(); hx((x, y) => { ctx.moveTo(x + 1.05, y); ctx.arc(x, y, 1.05, 0, 6.3); }); ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.beginPath(); hx((x, y) => { ctx.moveTo(x - 0.1, y - 0.4); ctx.arc(x - 0.4, y - 0.4, 0.3, 0, 6.3); }); ctx.fill(); }
+  else if (pt === 'petals') { ctx.fillStyle = acc; for (let i = 0; i < 8; i++) { const a = i * 0.785; ctx.beginPath(); ctx.ellipse(Math.cos(a) * 4.4, -5 + Math.sin(a) * 4.4, 3.2, 1.8, a, 0, 6.3); ctx.fill(); } dot(0, -5, 2.1, '#ffd23a'); dot(-0.5, -5.5, 0.8, 'rgba(255,255,255,.5)'); }
+  else if (pt === 'leaves') { for (let i = 0; i < 22; i++) { ctx.fillStyle = [shade(roof, -0.15), shade(roof, 0.14), roof][i % 3]; ctx.beginPath(); ctx.ellipse(-10 + hash01(i, 142) * 20, -14 + hash01(i, 143) * 17, 2.3, 1.1, hash01(i, 141) * 6.3, 0, 6.3); ctx.fill(); } }
+  else if (pt === 'checker') { ctx.fillStyle = acc; for (let y = -13, j = 0; y < 4; y += 3, j++) for (let x = -12 + (j % 2) * 3; x < 12; x += 6) sfr(x + 0.25, y + 0.25, 2.5, 2.5); }
+  else if (pt === 'bubbles') { ctx.lineWidth = 0.55; ctx.strokeStyle = 'rgba(255,255,255,.9)'; for (let i = 0; i < 9; i++) { const bx = -7.5 + hash01(i, 151) * 15, by = -12.5 + hash01(i, 152) * 13, br = 1 + hash01(i, 153) * 1.8; ctx.fillStyle = rgba(acc, 0.35); ctx.beginPath(); ctx.arc(bx, by, br, 0, 6.3); ctx.fill(); ctx.stroke(); dot(bx - br * 0.35, by - br * 0.35, br * 0.25, 'rgba(255,255,255,.85)'); } }
+  else if (pt === 'terrace') { for (let y = -13, i = 0; y < 4; y += 3.2, i++) { ctx.fillStyle = i % 2 ? shade(roof, -0.08) : roof; sfr(-12, y, 24, 3.2); ctx.fillStyle = acc; ctx.beginPath(); for (let x = -9 + (i % 2) * 2; x < 10; x += 4) { ctx.moveTo(x + 0.9, y + 1.6); ctx.arc(x, y + 1.6, 0.9, 0, 6.3); } ctx.fill(); } }
+  else if (pt === 'chips') { ctx.fillStyle = acc; ctx.beginPath(); for (let i = 0; i < 16; i++) { const cx = -10 + hash01(i, 161) * 20, cy = -13 + hash01(i, 162) * 15, a = hash01(i, 163) * 3; ctx.moveTo(cx + Math.cos(a) * 0.75, cy + Math.sin(a) * 0.75); ctx.ellipse(cx, cy, 0.75, 0.45, a, 0, 6.3); } ctx.fill(); }
+  else if (pt === 'arcs') { const cs_ = [shade(col, 0.55), shade(col, 0.3), col, shade(col, -0.2)]; ctx.lineWidth = 2.3; ctx.lineCap = 'round'; for (let i = 0; i < 4; i++) { ctx.strokeStyle = cs_[i]; ctx.beginPath(); ctx.arc(0, 4.5, 13.5 - i * 2.4, Math.PI, 0); ctx.stroke(); } }
+  else if (pt === 'craters') { for (let i = 0; i < 6; i++) { const cx = -6.5 + hash01(i, 171) * 13, cy = -11.5 + hash01(i, 172) * 12, cr = 0.9 + hash01(i, 173) * 1.5; dot(cx, cy, cr, shade(roof, -0.15)); dot(cx + cr * 0.22, cy + cr * 0.22, cr * 0.68, shade(roof, -0.05)); } }
   ctx.restore();
   if (p.roof !== 'col' && !p.noTrim) { body(); ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.stroke(); }
   const dy = round ? 1.4 : p.shape === 'pill' ? -1.6 : 0.2;
@@ -4108,6 +4173,9 @@ function houseGen(p, b, col, model) {
     else if (xk === 'flowers' && model >= 1) for (let i = 0; i < 5; i++) dot(-8 + i * 4, 3.9, 0.7, ['#ff6b8b', '#ffd23a', '#ffffff', '#b07bff', '#ff6b8b'][i]);
     else if (xk === 'lantern') { ctx.save(); ctx.globalCompositeOperation = 'lighter'; dot(8.5, 2, 2.4, 'rgba(255,200,120,.3)'); ctx.restore(); dot(8.5, 2, 1, '#ff6a3a'); }
     else if (xk === 'antenna') { dot(6.5, -11, 2, '#e3e9ee'); dot(6.5, -11, 0.8, '#7d8790'); }
+    else if (xk === 'snow') { ctx.fillStyle = '#fbfdff'; ctx.beginPath(); for (let x = -9; x <= 9; x += 3) { const r_ = 1.5 + hash01(x + 20, 181) * 0.6, yy = round ? -5 - Math.sqrt(Math.max(0, 90 - x * x)) + 0.6 : p.shape === 'pill' ? -11.3 : -12.8; ctx.moveTo(x + r_, yy); ctx.arc(x, yy, r_, 0, 6.3); } ctx.fill(); }
+    else if (xk === 'umbrella') { const ux = -7.4, uy = -8.4; dotShadow(ux, uy, 3, 3); for (let i = 0; i < 6; i++) { ctx.fillStyle = i % 2 ? '#ffffff' : col; ctx.beginPath(); ctx.moveTo(ux, uy); ctx.arc(ux, uy, 3, i * 1.047, (i + 1) * 1.047); ctx.closePath(); ctx.fill(); } dot(ux, uy, 0.6, shade(col, -0.3)); }
+    else if (xk === 'hedge') for (let x = -9.5; x <= 9.6; x += 2.4) { dot(x, 4.6, 1.35, PAL.tree2); dot(x - 0.4, 4.2, 0.75, PAL.tree1); }
   }
   if (showSymbols) glyph(COLORS[b.color].glyph, 0, round ? -5 : -6, 2.3, roof.startsWith('#') && lum(roof) > 0.5 ? col : 'rgba(255,255,255,.92)');
 }
@@ -4125,6 +4193,17 @@ function storeGen(p, Bx, By, Bw, Bh, col) {
   else if (pt === 'solar') { ctx.fillStyle = acc; for (let y = By + 5; y < By + Bh - 8; y += 9) for (let x = Bx + 5; x < Bx + Bw - 10; x += 13) sfr(x, y, 11, 6); }
   else if (pt === 'pool') { ctx.fillStyle = acc; sfr(Bx + 5, By + 6, Bw * 0.55, Bh * 0.42); ctx.fillStyle = 'rgba(255,255,255,.55)'; sfr(Bx + 8, By + 9, Bw * 0.3, 1.6); dot(Bx + Bw - 10, By + Bh * 0.7, 3, '#ff6f61'); }
   else if (pt === 'checker') { ctx.fillStyle = acc; for (let y = By + 3, j = 0; y < By + Bh - 3; y += 6, j++) for (let x = Bx + 3 + (j % 2) * 6; x < Bx + Bw - 3; x += 12) sfr(x, y, 5.2, 5.2); }
+  else if (pt === 'scallop') { const b0 = C(p.base); ctx.strokeStyle = acc; ctx.lineWidth = 1.1; for (let y = By + Bh + 3, j = 0; y > By - 5; y -= 4, j++) { ctx.fillStyle = j % 2 && b0[0] === '#' ? shade(b0, -0.06) : b0; ctx.beginPath(); for (let x = Bx - 2 + (j % 2) * 4; x < Bx + Bw + 4; x += 8) { ctx.moveTo(x + 4.3, y); ctx.arc(x, y, 4.3, 0, 6.3); } ctx.fill(); ctx.stroke(); } }
+  else if (pt === 'bubbles') { ctx.lineWidth = 1.1; ctx.strokeStyle = acc; for (let i = 0; i < 16; i++) { const x = Bx + 4 + hash01(i, 191) * (Bw - 8), y = By + 4 + hash01(i, 192) * (Bh - 8), r = 2 + hash01(i, 193) * 4.5; ctx.fillStyle = rgba(acc, 0.28); ctx.beginPath(); ctx.arc(x, y, r, 0, 6.3); ctx.fill(); ctx.stroke(); dot(x - r * 0.35, y - r * 0.35, r * 0.22, 'rgba(255,255,255,.85)'); } }
+  else if (pt === 'confetti') { const cs = [acc, shade(acc, -0.25), shade(acc, 0.25)]; for (let i = 0; i < 52; i++) { ctx.fillStyle = cs[i % 3]; ctx.beginPath(); ctx.ellipse(Bx + hash01(i, 201) * Bw, By + hash01(i, 202) * Bh, 2.6, 1.2, hash01(i, 203) * 3.1, 0, 6.3); ctx.fill(); } }
+  else if (pt === 'courtyard') { const cx = Bx + Bw / 2, cy = By + Bh / 2, R = Math.min(Bw, Bh) * 0.3; dot(cx, cy, R + 2.4, acc); dot(cx, cy, R, '#86c46a'); for (let i = 0; i < 8; i++) { const a = i * 0.785; dot(cx + Math.cos(a) * R * 0.74, cy + Math.sin(a) * R * 0.74, 1.1, ['#ff6b8b', '#ffd23a', '#ffffff'][i % 3]); } dot(cx + 1.2, cy + 1.6, R * 0.42, 'rgba(0,0,0,.16)'); dot(cx, cy, R * 0.42, '#3f8a4a'); dot(cx - R * 0.12, cy - R * 0.12, R * 0.24, '#5cab5f'); for (const [ex, ey] of [[Bx + 7, By + 7], [Bx + Bw - 7, By + 7], [Bx + 7, By + Bh - 7], [Bx + Bw - 7, By + Bh - 7]]) dot(ex, ey, 2.4, acc); }
+  else if (pt === 'flowers') { for (let y = By + 7, j = 0; y < By + Bh - 3; y += 11, j++) for (let x = Bx + 7 + (j % 2) * 5.5; x < Bx + Bw - 3; x += 11) { ctx.fillStyle = acc; ctx.beginPath(); for (let q = 0; q < 5; q++) { const a = q * 1.2566 + j, px = x + Math.cos(a) * 2.2, py = y + Math.sin(a) * 2.2; ctx.moveTo(px + 1.7, py); ctx.arc(px, py, 1.7, 0, 6.3); } ctx.fill(); dot(x, y, 1.4, '#ffd23a'); } }
+  else if (pt === 'lanes') { ctx.fillStyle = acc; for (let y = By + 5; y < By + Bh - 4; y += 9) sfr(Bx + 3, y, Bw - 6, 3); ctx.fillStyle = 'rgba(255,255,255,.75)'; for (let y = By + 11; y < By + Bh - 4; y += 9) for (let x = Bx + 5; x < Bx + Bw - 5; x += 6) sfr(x, y - 0.5, 3, 1); }
+  else if (pt === 'clouds') { const puff = (x, y, s) => { for (const [dx, dy, r_] of [[-1.6, 0.4, 1], [0, -0.5, 1.3], [1.6, 0.4, 1], [0, 0.7, 1]]) { ctx.moveTo(x + dx * s + r_ * s, y + dy * s); ctx.arc(x + dx * s, y + dy * s, r_ * s, 0, 6.3); } }; const P = []; for (let i = 0; i < 5; i++) P.push([Bx + 8 + hash01(i, 211) * (Bw - 16), By + 7 + hash01(i, 212) * (Bh - 14), 2.2 + hash01(i, 213) * 1.6]); ctx.fillStyle = 'rgba(0,0,0,.12)'; ctx.beginPath(); for (const [x, y, s_] of P) puff(x + 1.4, y + 1.8, s_); ctx.fill(); ctx.fillStyle = acc; ctx.beginPath(); for (const [x, y, s_] of P) puff(x, y, s_); ctx.fill(); }
+  else if (pt === 'tiles') { for (let y = By + 3, j = 0; y < By + Bh - 3; y += 8, j++) for (let x = Bx + 3, i = 0; x < Bx + Bw - 3; x += 8, i++) { ctx.fillStyle = (i + j) % 3 === 0 ? acc : (i + j) % 3 === 1 ? shade(acc, 0.3) : shade(acc, 0.55); sfr(x, y, 6.6, 6.6); } }
+  else if (pt === 'sundeck') { for (let y = By, i = 0; y < By + Bh; y += 3, i++) { ctx.fillStyle = i % 2 ? '#b8946a' : '#c9a876'; sfr(Bx, y + 0.3, Bw, 2.6); } ctx.fillStyle = '#5fc4e6'; sfr(Bx + Bw * 0.5, By + 6, Bw * 0.4, Bh * 0.38); ctx.fillStyle = 'rgba(255,255,255,.55)'; sfr(Bx + Bw * 0.53, By + 9, Bw * 0.22, 1.4); ctx.fillStyle = '#fbf8f1'; sfr(Bx + 6, By + Bh - 12, 9, 4); sfr(Bx + 18, By + Bh - 12, 9, 4); for (const [ux, uy] of [[Bx + 12, By + 12], [Bx + Bw * 0.7, By + Bh - 9]]) { dot(ux + 1.5, uy + 2, 5, 'rgba(0,0,0,.15)'); for (let q = 0; q < 8; q++) { ctx.fillStyle = q % 2 ? '#ffffff' : acc; ctx.beginPath(); ctx.moveTo(ux, uy); ctx.arc(ux, uy, 5, q * 0.785, (q + 1) * 0.785); ctx.closePath(); ctx.fill(); } dot(ux, uy, 0.9, '#6b4a2e'); } }
+  else if (pt === 'leaves') { for (let i = 0; i < 26; i++) { ctx.fillStyle = ['#2f6a3a', '#4f8d3f', '#6fae55'][i % 3]; ctx.beginPath(); ctx.ellipse(Bx + hash01(i, 222) * Bw, By + hash01(i, 223) * Bh, 4.6, 2.2, hash01(i, 221) * 6.3, 0, 6.3); ctx.fill(); } for (let i = 0; i < 7; i++) { const x = Bx + 5 + hash01(i, 224) * (Bw - 10), y = By + 5 + hash01(i, 225) * (Bh - 10); dot(x, y, 2.3, acc); dot(x, y, 0.8, '#ffd23a'); } }
+  else if (pt === 'bigtop') { const cx = Bx + Bw / 2, cy = By + Bh / 2, R = Math.min(Bw, Bh) * 0.44; dot(cx + 1.6, cy + 2, R + 1.5, 'rgba(0,0,0,.15)'); for (let q = 0; q < 12; q++) { ctx.fillStyle = q % 2 ? '#ffffff' : acc; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, R, q * 0.5236, (q + 1) * 0.5236); ctx.closePath(); ctx.fill(); } for (let q = 0; q < 12; q++) { const a = (q + 0.5) * 0.5236; dot(cx + Math.cos(a) * R, cy + Math.sin(a) * R, R * 0.14, q % 2 ? acc : '#ffffff'); } dot(cx, cy, 2.6, '#ffd23a'); dot(cx - 0.7, cy - 0.7, 0.9, '#fff6c8'); }
   else if (pt === 'waves') { ctx.strokeStyle = acc; ctx.lineWidth = 1.6; ctx.lineCap = 'round'; ctx.beginPath(); for (let y = By + 6; y < By + Bh; y += 7) for (let x = Bx; x <= Bx + Bw; x += 1) { const yy = y + Math.sin(x * 0.35) * 1.6; x === Bx ? ctx.moveTo(x, yy) : ctx.lineTo(x, yy); } ctx.stroke(); }
 }
 /* a generated roundabout middle: a fill and a pattern */
@@ -4140,6 +4219,18 @@ function roundGen(p, x, y, IR) {
   else if (pt === 'spiral') { ctx.strokeStyle = cs[0]; ctx.lineWidth = 0.9; ctx.lineCap = 'round'; ctx.beginPath(); const a0 = REDUCED_MOTION ? 0 : animT * 0.5; for (let t = 0; t <= 12.6; t += 0.2) { const r = t / 12.6 * R0 * 0.88, a = t + a0; t ? ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r) : ctx.moveTo(x, y); } ctx.stroke(); }
   else if (pt === 'tree') { dot(x + SUN.x * 1.5, y + SUN.y * 1.5, R0 * 0.62, 'rgba(0,0,0,.18)'); dot(x, y, R0 * 0.62, '#3f8a4a'); dot(x - R0 * 0.18, y - R0 * 0.18, R0 * 0.36, '#5cab5f'); }
   else if (pt === 'water') { dot(x, y, R0 - 1, '#5fb4d6'); for (const [dx, dy] of [[-2, -1.4], [2, 1], [0.2, 2.4]]) { ctx.fillStyle = cs[0]; ctx.beginPath(); ctx.ellipse(x + dx, y + dy, 1.1, 0.6, dx, 0, 6.3); ctx.fill(); } }
+  else if (pt === 'zen') { ctx.strokeStyle = cs[0]; ctx.lineWidth = 0.35; ctx.beginPath(); for (let r = 1.7; r < R0 + 2; r += 1.05) { ctx.moveTo(x + 1.3 + r, y - 1); ctx.arc(x + 1.3, y - 1, r, 0, 6.3); } ctx.stroke(); dot(x + 1.3, y - 1, 1.25, '#7d766b'); dot(x + 1, y - 1.35, 0.45, 'rgba(255,255,255,.4)'); dot(x - 2.5, y + 2.3, 0.9, '#8a8378'); }
+  else if (pt === 'donut') { dot(x, y, R0, p.c2 || '#c98a4a'); dot(x, y, R0 - 1.1, p.fill); ctx.lineCap = 'round'; ctx.lineWidth = 0.45; for (let i = 0; i < 14; i++) { const a = i * 2.4, d = R0 * (0.48 + hash01(i, 231) * 0.3), b_ = hash01(i, 232) * 3; ctx.strokeStyle = cs[i % cs.length]; ctx.beginPath(); ctx.moveTo(x + Math.cos(a) * d - Math.cos(b_) * 0.5, y + Math.sin(a) * d - Math.sin(b_) * 0.5); ctx.lineTo(x + Math.cos(a) * d + Math.cos(b_) * 0.5, y + Math.sin(a) * d + Math.sin(b_) * 0.5); ctx.stroke(); } dot(x, y, R0 * 0.3, PAL.road); }
+  else if (pt === 'citrus') { dot(x, y, R0 - 0.9, cs[0]); dot(x, y, R0 - 1.4, p.c2 || '#ffcf5c'); ctx.strokeStyle = cs[0]; ctx.lineWidth = 0.5; ctx.lineCap = 'round'; ctx.beginPath(); for (let i = 0; i < 8; i++) { const a = i * 0.785 + 0.2; ctx.moveTo(x + Math.cos(a) * 0.8, y + Math.sin(a) * 0.8); ctx.lineTo(x + Math.cos(a) * (R0 - 1.7), y + Math.sin(a) * (R0 - 1.7)); } ctx.stroke(); dot(x, y, 0.9, cs[0]); }
+  else if (pt === 'melon') { dot(x, y, R0, cs[0]); dot(x, y, R0 - 0.7, '#eef6d8'); dot(x, y, R0 - 1.2, p.fill); ctx.fillStyle = p.c2 || '#1f262b'; for (let i = 0; i < 9; i++) { const a = i * 0.698, d = i % 2 ? R0 * 0.55 : R0 * 0.32; ctx.beginPath(); ctx.ellipse(x + Math.cos(a) * d, y + Math.sin(a) * d, 0.5, 0.3, a, 0, 6.3); ctx.fill(); } }
+  else if (pt === 'hedge') { const ring = (rad, ox, oy) => { ctx.beginPath(); for (let i = 0; i < 10; i++) { const a = i * 0.628, px = x + Math.cos(a) * R0 * 0.72 + ox, py = y + Math.sin(a) * R0 * 0.72 + oy; ctx.moveTo(px + rad, py); ctx.arc(px, py, rad, 0, 6.3); } ctx.fill(); }; ctx.fillStyle = cs[0]; ring(1.35, 0, 0); ctx.fillStyle = p.c2 || '#6fb35e'; ring(0.7, -0.35, -0.35); dot(x, y, 1.5, '#e9e1cf'); dot(x, y, 0.8, '#5fb4d6'); }
+  else if (pt === 'bands') { for (let i = 0, r = R0; r > 0.6; r -= 1.25, i++) dot(x, y, r, cs[i % cs.length]); }
+  else if (pt === 'stones') { for (let i = 0; i < 7; i++) { const a = i * 0.898, px = x + Math.cos(a) * R0 * 0.62, py = y + Math.sin(a) * R0 * 0.62; ctx.fillStyle = cs[i % cs.length]; ctx.beginPath(); ctx.ellipse(px, py, 1.25, 0.95, a, 0, 6.3); ctx.fill(); } dot(x, y, 1.5, cs[0]); }
+  else if (pt === 'craters') { dot(x + 1.6, y + 1.6, R0, 'rgba(0,0,0,.08)'); for (const [dx, dy, r] of [[-2.2, -1.6, 1.5], [2, 0.8, 1.9], [-0.6, 2.8, 1], [1.6, -2.8, 0.8], [-3.5, 1.4, 0.7]]) { dot(x + dx, y + dy, r, cs[0]); dot(x + dx + r * 0.22, y + dy + r * 0.22, r * 0.68, p.c2 || cs[0]); } }
+  else if (pt === 'yinyang') { const r2 = R0 / 2; ctx.fillStyle = cs[0]; ctx.beginPath(); ctx.arc(x, y, R0, -Math.PI / 2, Math.PI / 2); ctx.arc(x, y + r2, r2, Math.PI / 2, -Math.PI / 2, true); ctx.arc(x, y - r2, r2, Math.PI / 2, -Math.PI / 2, false); ctx.fill(); dot(x, y - r2, R0 * 0.14, p.fill); dot(x, y + r2, R0 * 0.14, cs[0]); }
+  else if (pt === 'clock') { ctx.fillStyle = cs[0]; ctx.beginPath(); for (let i = 0; i < 12; i++) { const a = i * 0.5236, d = R0 - 1.2, rd = i % 3 ? 0.28 : 0.5; ctx.moveTo(x + Math.cos(a) * d + rd, y + Math.sin(a) * d); ctx.arc(x + Math.cos(a) * d, y + Math.sin(a) * d, rd, 0, 6.3); } ctx.fill(); const ph = dayPhase(), ha = ph * 12.566 - 1.5708, ma = ph * 150.8 - 1.5708; ctx.lineCap = 'round'; ctx.strokeStyle = cs[0]; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(ha) * R0 * 0.4, y + Math.sin(ha) * R0 * 0.4); ctx.stroke(); ctx.strokeStyle = p.c2 || cs[0]; ctx.lineWidth = 0.5; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(ma) * R0 * 0.64, y + Math.sin(ma) * R0 * 0.64); ctx.stroke(); dot(x, y, 0.6, cs[0]); }
+  else if (pt === 'flowerbed') { for (let ring = 0; ring < 3; ring++) { const d = R0 * (0.76 - ring * 0.26), n = 12 - ring * 4; ctx.fillStyle = cs[ring % cs.length]; ctx.beginPath(); for (let i = 0; i < n; i++) { const a = i * 6.283 / n + ring * 0.3; ctx.moveTo(x + Math.cos(a) * d + 0.75, y + Math.sin(a) * d); ctx.arc(x + Math.cos(a) * d, y + Math.sin(a) * d, 0.75, 0, 6.3); } ctx.fill(); } dot(x, y, 0.9, p.c2 || '#ffd23a'); }
+  else if (pt === 'planet') { const ringH = (a0, a1) => { ctx.save(); ctx.translate(x, y); ctx.rotate(-0.45); ctx.strokeStyle = cs[0]; ctx.lineWidth = 0.7; ctx.beginPath(); ctx.ellipse(0, 0, R0 * 0.8, R0 * 0.26, 0, a0, a1); ctx.stroke(); ctx.restore(); }; ringH(Math.PI, 2 * Math.PI); dot(x, y, R0 * 0.4, p.c2 || '#f0b26a'); dot(x - R0 * 0.12, y - R0 * 0.12, R0 * 0.2, 'rgba(255,255,255,.35)'); ringH(0, Math.PI); }
   if (p.dots) for (let i = 0; i < 7; i++) { const a = i * 2.4 + 0.5, d = Math.sqrt((i + 0.5) / 7) * R0 * 0.75; dot(x + Math.cos(a) * d, y + Math.sin(a) * d, 0.6, p.dots); }
   ctx.restore();
 }
@@ -4162,7 +4253,34 @@ const MAP_THEMES = {
   lunar:    {label: 'Lunar',    tone: 'dark',  decor: 'crystal', land: '#3a3c48', land2: '#353743', patch: '#4a4c5c', water: '#1e2f4f', foam: '#4a6a9a',
              tree1: '#8ad8ff', tree2: '#5aa8e0', grass: '#45475a'},
   volcano:  {label: 'Volcano',  tone: 'dark',  decor: 'rock',    land: '#3b2a26', land2: '#352521', patch: '#5a3328', water: '#e8501e', foam: '#ffc23a',
-             tree1: '#6b4a3a', tree2: '#4a3228', grass: '#4a3530'}
+             tree1: '#6b4a3a', tree2: '#4a3228', grass: '#4a3530'},
+  /* p30 map themes */
+  orchard: {label: 'Orchard', tone: 'light', decor: 'orchard', land: '#e1e6c8', land2: '#d8dfbc', patch: '#c7d99a', water: '#9ccbe0', tree1: '#86bb5f', tree2: '#5f9a4b', grass: '#b9d68f'},
+  provence: {label: 'Provence', tone: 'light', decor: 'lavender', land: '#e6e2cf', land2: '#ddd8c2', patch: '#cbbbe2', water: '#8fc3d8', grass: '#c8d6a8'},
+  sunfields: {label: 'Sunflower fields', tone: 'light', decor: 'sunflower', land: '#e8e2b8', land2: '#e0d9aa', patch: '#efd36e', water: '#8cc7d8', grass: '#cfd98f'},
+  harvest: {label: 'Harvest', tone: 'light', decor: 'haybale', land: '#ece0b8', land2: '#e4d6aa', patch: '#d9be7a', water: '#93c0cf', tree1: '#c9a24a', tree2: '#a8832e', grass: '#e0cd94'},
+  tulips: {label: 'Tulip fields', tone: 'light', decor: 'tulip', land: '#dfe8cf', land2: '#d6e1c3', patch: '#f5c9cf', water: '#9fcbe3', grass: '#c4dca6'},
+  birchwood: {label: 'Birch wood', tone: 'light', decor: 'birch', land: '#e4e6d6', land2: '#dbdeca', patch: '#d6dca8', water: '#a3c9d9', tree1: '#c8de8a', tree2: '#a8c96a'},
+  marsh: {label: 'Marshland', tone: 'light', decor: 'willow', land: '#d8e2c8', land2: '#cfdabc', patch: '#b6cfa0', water: '#8bbfb8', foam: '#cfe8e2', tree1: '#9cc47a', tree2: '#7fae5e'},
+  bamboo: {label: 'Bamboo grove', tone: 'light', decor: 'bamboo', land: '#dbe8cc', land2: '#d1e0bf', patch: '#b8d69a', water: '#92cbd0', tree1: '#8cc063', tree2: '#5f8f45'},
+  reef: {label: 'Coral reef', tone: 'light', decor: 'coral', land: '#f0e3c4', land2: '#e9dab5', patch: '#f6cdbd', water: '#4fc6d6', foam: '#c9f2f5', grass: '#e8d6a8'},
+  seaside: {label: 'Seaside', tone: 'light', decor: 'shell', land: '#f1e6cc', land2: '#eadcbd', patch: '#e3eef0', water: '#6bbfd8', foam: '#e0f5fb', grass: '#dfd3a8'},
+  riviera: {label: 'Riviera', tone: 'light', decor: 'parasol', land: '#f3e7d0', land2: '#ecdfc4', patch: '#f4c9a8', water: '#4aa6d6', foam: '#d7f0fb'},
+  fairground: {label: 'Fairground', tone: 'light', decor: 'balloon', land: '#e0ead2', land2: '#d6e2c6', patch: '#f7d58a', water: '#9fd5f2', grass: '#c9e2b0'},
+  bakery: {label: 'Bakery', tone: 'light', decor: 'cupcake', land: '#f6e9dc', land2: '#efdfcf', patch: '#f3cdd8', water: '#b5dcf0', foam: '#eaf6fc', tree1: '#f2a7c3', tree2: '#d98aa8', check: 'rgba(255,255,255,.4)'},
+  lollipop: {label: 'Lollipop lane', tone: 'light', decor: 'lollipop', land: '#f7e7f0', land2: '#f1dce8', patch: '#fff0b5', water: '#a8dcf2'},
+  gumdrop: {label: 'Gumdrop hills', tone: 'light', decor: 'gumdrop', land: '#dff3ea', land2: '#d3eee1', patch: '#f9d6e8', water: '#a6d8f0'},
+  cloudland: {label: 'Cloudland', tone: 'light', decor: 'cloud', land: '#dbe9f5', land2: '#d0e2f1', patch: '#c4d9ee', water: '#8fbfe6', foam: '#ffffff', grass: '#e7eff7', tree1: '#ffffff', tree2: '#dfe9f3'},
+  palace: {label: 'Palace gardens', tone: 'light', decor: 'topiary', land: '#dfe6cc', land2: '#d5dec0', patch: '#c3d8a2', water: '#93c4dc', grass: '#b7d494'},
+  watergarden: {label: 'Water garden', tone: 'light', decor: 'pond', land: '#d9e6d0', land2: '#cfdfc5', patch: '#bcd7b0', water: '#86c1d4'},
+  arctic: {label: 'Arctic', tone: 'light', decor: 'snowfolk', land: '#eef3f6', land2: '#e5edf2', patch: '#ffffff', water: '#7fb8d8', foam: '#eaf6fb', tree1: '#6f9a86', tree2: '#557f6c', grass: '#f3f7fa', check: 'rgba(255,255,255,.4)'},
+  savanna: {label: 'Savanna', tone: 'light', decor: 'bush', land: '#eadcab', land2: '#e2d29c', patch: '#d4c27e', water: '#86b9c4', tree1: '#9caf55', tree2: '#7a8c3c', grass: '#dccb8c'},
+  deepsea: {label: 'Deep sea', tone: 'dark', decor: 'bubble', land: '#123a4a', land2: '#0f3342', patch: '#1a4f5e', water: '#0a2433', foam: '#1f6f86', grass: '#1d4a55', tree1: '#2f8a7a', tree2: '#1f6a5e'},
+  fireflies: {label: 'Firefly night', tone: 'dark', decor: 'firefly', land: '#1e2b26', land2: '#1a2621', patch: '#26392f', water: '#18394a', tree1: '#2f5a3e', tree2: '#21452e', grass: '#2c4636'},
+  mars: {label: 'Red planet', tone: 'dark', decor: 'crater', land: '#6b3a2a', land2: '#633527', patch: '#7d4632', water: '#3a5f7a', foam: '#6a8fa8', grass: '#5e3426'},
+  twilight: {label: 'Twilight', tone: 'dark', decor: 'pine', land: '#262a3f', land2: '#222539', patch: '#2f3450', water: '#1d3254', foam: '#3a5a8a', tree1: '#3a4a6a', tree2: '#2a3654', grass: '#2e3350'},
+  festival: {label: 'Lantern festival', tone: 'dark', decor: 'lantern', land: '#2a2230', land2: '#251e2b', patch: '#3a2a36', water: '#1f3a52', foam: '#3a5f80', grass: '#3a2e3e', tree1: '#5a3a4a', tree2: '#40283a'},
+  cosmos: {label: 'Cosmos', tone: 'dark', decor: 'planet', land: '#1a1838', land2: '#16142f', patch: '#26224a', water: '#0e0c22', foam: '#3a3470', grass: '#24204a'}
 };
 const MAP_PAL_KEYS = ['land', 'land2', 'patch', 'water', 'foam', 'tree1', 'tree2', 'grass', 'check'];
 let mapPrefs = {theme: 'meadow', decor: 'auto', land: '', patch: '', water: '', road: '', moto: '', lastDay: 'meadow'};
@@ -4299,7 +4417,8 @@ function drawPatches(vr) {
    k seeds any per-item variety. Shadows follow the same sun as everything else. */
 const DECOR = {
   tree: 'Trees', pine: 'Pines', bush: 'Bushes', blossom: 'Blossom', autumn: 'Autumn trees', palm: 'Palms', cactus: 'Cacti',
-  snowpine: 'Snowy pines', pumpkin: 'Pumpkins', mushroom: 'Mushrooms', flowers: 'Flowers', rock: 'Rocks', crystal: 'Crystals'
+  snowpine: 'Snowy pines', pumpkin: 'Pumpkins', mushroom: 'Mushrooms', flowers: 'Flowers', rock: 'Rocks', crystal: 'Crystals',
+  topiary: 'Topiary', sunflower: 'Sunflowers', tulip: 'Tulips', lavender: 'Lavender', haybale: 'Hay bales', snowfolk: 'Snowballs', lantern: 'Lanterns', birch: 'Birches', willow: 'Willows', bamboo: 'Bamboo', coral: 'Coral', shell: 'Seashells', pond: 'Ponds', parasol: 'Parasols', balloon: 'Balloons', cupcake: 'Cupcakes', lollipop: 'Lollipops', gumdrop: 'Gumdrops', cloud: 'Clouds', bubble: 'Bubbles', crater: 'Craters', orchard: 'Fruit trees', firefly: 'Fireflies', planet: 'Planets'
 };
 function drawDecor(g, kind, X, Y, R, sway, k) {
   const sh = (x, y, rx, ry, h) => { g.globalAlpha = SUN.a; g.fillStyle = PAL.treeSh; g.beginPath(); g.ellipse(x + SUN.x * h, y + SUN.y * h, rx, ry, 0, 0, 6.3); g.fill(); g.globalAlpha = 1; };
@@ -4427,6 +4546,219 @@ function drawDecor(g, kind, X, Y, R, sway, k) {
       poly(0.75, base, 0, 0); poly(0.42, lite, -R * 0.15, -R * 0.15);
       if (h2 > 0.5) { poly(0.32, base, R * 0.62, R * 0.32); }
       break;
+    }
+    default: {                                             // p30 decorations: everything built from circles and ellipses
+      const circ = (x, y, r) => { g.moveTo(x + r, y); g.arc(x, y, r, 0, 6.3); };
+      const ell = (x, y, rx, ry, a) => { g.moveTo(x + Math.cos(a) * rx, y + Math.sin(a) * rx); g.ellipse(x, y, rx, ry, a, 0, 6.3); };
+      const lc = g.lineCap, lw = v => Math.max(0.3, v);
+      switch (kind) {
+        case 'topiary': {
+          sh(X, Y, R * 0.78, R * 0.78, R * 0.6);
+          dot(X + sway, Y, R * 0.74, '#3f7a45'); dot(X - R * 0.16 + sway, Y - R * 0.18, R * 0.5, '#5a9c58'); dot(X - R * 0.3 + sway, Y - R * 0.32, R * 0.17, 'rgba(255,255,255,.28)');
+          if (h1 > 0.45) { sh(X + R * 0.66, Y + R * 0.52, R * 0.34, R * 0.34, R * 0.3); dot(X + R * 0.66 + sway * 0.4, Y + R * 0.52, R * 0.34, '#3f7a45'); dot(X + R * 0.58 + sway * 0.4, Y + R * 0.44, R * 0.2, '#5a9c58'); }
+          break;
+        }
+        case 'sunflower': {
+          sh(X, Y, R * 0.8, R * 0.7, R * 0.4);
+          g.fillStyle = '#5f9a4b'; g.beginPath(); for (let i = 0; i < 4; i++) { const a = h1 * 6 + i * 1.57; ell(X + Math.cos(a) * R * 0.45, Y + Math.sin(a) * R * 0.45, R * 0.36, R * 0.16, a); } g.fill();
+          for (const [dx, dy, s_] of [[-0.28, -0.18, 0.62], [0.38, 0.22, 0.48]]) {
+            const fx = X + dx * R + sway * 0.6, fy = Y + dy * R, r_ = s_ * R;
+            g.fillStyle = '#ffc928'; g.beginPath(); for (let i = 0; i < 8; i++) { const a = i * 0.785; ell(fx + Math.cos(a) * r_ * 0.55, fy + Math.sin(a) * r_ * 0.55, r_ * 0.38, r_ * 0.2, a); } g.fill();
+            dot(fx, fy, r_ * 0.36, '#6b4220'); dot(fx - r_ * 0.1, fy - r_ * 0.1, r_ * 0.14, '#8a5a2b');
+          }
+          break;
+        }
+        case 'tulip': {
+          g.globalAlpha = 0.8; dot(X, Y, R * 0.72, PAL.tree1); g.globalAlpha = 1;
+          const cols = [['#e8455a', '#b8303f'], ['#ffb3c7', '#e07a98'], ['#ffd23a', '#d9a514'], ['#b07bff', '#7f52cc'], ['#ff8a3c', '#d4631c']];
+          for (let i = 0; i < 5; i++) {
+            const fx = X + (hash01(k, 300 + i) - 0.5) * R * 1.1 + sway * 0.5, fy = Y + (hash01(k, 310 + i) - 0.5) * R * 1.1, cc = cols[Math.floor(hash01(k, 320 + i) * cols.length)];
+            g.fillStyle = '#4f8d3f'; g.beginPath(); ell(fx - R * 0.15, fy + R * 0.1, R * 0.17, R * 0.07, 0.6); ell(fx + R * 0.15, fy + R * 0.1, R * 0.17, R * 0.07, -0.6); g.fill();
+            dot(fx, fy, R * 0.16, cc[1]); dot(fx, fy - R * 0.03, R * 0.1, cc[0]);
+          }
+          break;
+        }
+        case 'lavender': {
+          sh(X, Y + R * 0.1, R * 0.9, R * 0.55, R * 0.25);
+          g.fillStyle = '#7d9a5c'; rr_(g, X - R * 0.92, Y - R * 0.56, R * 1.84, R * 1.12, R * 0.5);
+          for (let row = 0; row < 2; row++) for (let i = 0; i < 4; i++) {
+            const fx = X - R * 0.64 + i * R * 0.42 + (row ? R * 0.16 : 0) + sway * 0.4, fy = Y - R * 0.22 + row * R * 0.46;
+            dot(fx, fy, R * 0.2, '#8a6cc4'); dot(fx - R * 0.05, fy - R * 0.06, R * 0.12, '#b39ae6');
+          }
+          break;
+        }
+        case 'haybale': {
+          const bale = (bx, by, s_, a0) => {
+            sh(bx, by, s_, s_, s_ * 0.7); dot(bx, by, s_, '#d9b65a'); dot(bx - s_ * 0.07, by - s_ * 0.07, s_ * 0.86, '#e8c96e');
+            g.strokeStyle = '#c29a3e'; g.lineWidth = lw(s_ * 0.08); g.lineCap = 'round'; g.beginPath();
+            for (let t = 0; t <= 15; t += 0.5) { const rad = t / 15 * s_ * 0.78, a = t + a0; t ? g.lineTo(bx + Math.cos(a) * rad, by + Math.sin(a) * rad) : g.moveTo(bx, by); }
+            g.stroke(); g.lineCap = lc;
+          };
+          bale(X, Y, R * 0.7, h1 * 6);
+          if (h2 > 0.5) bale(X + R * 0.8, Y + R * 0.55, R * 0.42, h3 * 6);
+          break;
+        }
+        case 'snowfolk': {                                 // a heap of snowballs (no snowmen: winter maps use snowy pines)
+          sh(X, Y + R * 0.1, R * 0.7, R * 0.55, R * 0.45);
+          for (const [dx, dy, r_] of [[-0.32, 0.2, 0.34], [0.3, 0.22, 0.3], [0, -0.12, 0.36], [0.05, 0.4, 0.22]]) {
+            dot(X + dx * R + sway * 0.2, Y + dy * R, r_ * R, '#dfe9f0'); dot(X + (dx - 0.05) * R + sway * 0.2, Y + (dy - 0.05) * R, r_ * R * 0.82, '#fbfdff');
+          }
+          break;
+        }
+        case 'lantern': {
+          const ga = theme === 'dark' ? 0.32 : 0.16;
+          for (const [dx, dy, s_, c] of [[-0.28, -0.15, 0.42, h1 > 0.5 ? '#e8453c' : '#ff8a3c'], [0.38, 0.3, 0.32, '#ffb347']]) {
+            const lx = X + dx * R + sway, ly = Y + dy * R, r_ = s_ * R;
+            sh(lx, ly, r_, r_, R * 0.9);
+            g.save(); g.globalCompositeOperation = 'lighter'; dot(lx, ly, r_ * 1.9, 'rgba(255,190,110,' + ga + ')'); g.restore();
+            dot(lx, ly, r_, c);
+            g.strokeStyle = 'rgba(120,30,20,.45)'; g.lineWidth = lw(R * 0.04); g.beginPath(); g.ellipse(lx, ly, r_ * 0.45, r_, 0, 0, 6.3); g.moveTo(lx, ly - r_); g.lineTo(lx, ly + r_); g.stroke();
+            dot(lx - r_ * 0.3, ly - r_ * 0.35, r_ * 0.25, 'rgba(255,240,200,.55)'); dot(lx, ly, r_ * 0.2, '#3a2a22');
+          }
+          break;
+        }
+        case 'birch': {
+          sh(X, Y, R * 0.88, R * 0.88, R * 0.55);
+          g.fillStyle = '#f4f2ec'; rr_(g, X - R * 0.1, Y + R * 0.4, R * 0.2, R * 0.66, R * 0.1);
+          dot(X - R * 0.02, Y + R * 0.92, R * 0.045, '#2b3036');
+          dot(X + sway, Y, R * 0.84, '#9fbf5a'); dot(X - R * 0.22 + sway, Y - R * 0.24, R * 0.54, '#c3d97a'); dot(X + R * 0.3 + sway, Y + R * 0.2, R * 0.26, '#b2cf6a');
+          g.fillStyle = '#e8e2a0'; g.beginPath(); for (let i = 0; i < 4; i++) ell(X + sway + (hash01(k, 360 + i) - 0.5) * R * 1.1, Y + (hash01(k, 365 + i) - 0.5) * R * 1.1, R * 0.12, R * 0.05, 1.3); g.fill();
+          break;
+        }
+        case 'willow': {
+          sh(X, Y, R, R, R * 0.5);
+          dot(X + sway * 0.5, Y, R * 0.92, '#7fae5e');
+          g.strokeStyle = '#a3ca80'; g.lineWidth = lw(R * 0.13); g.lineCap = 'round'; g.beginPath();
+          for (let i = 0; i < 14; i++) { const a = i * 0.449 + h1, ca = Math.cos(a), sa = Math.sin(a); g.moveTo(X + ca * R * 0.2, Y + sa * R * 0.2); g.quadraticCurveTo(X + ca * R * 0.62 + sway, Y + sa * R * 0.55, X + ca * R * 0.8 + sway, Y + sa * R * 0.8 + R * 0.1); }
+          g.stroke(); g.lineCap = lc;
+          dot(X + sway * 0.5, Y, R * 0.24, '#bfe09a');
+          break;
+        }
+        case 'bamboo': {
+          sh(X, Y, R * 0.7, R * 0.7, R * 0.6);
+          g.fillStyle = '#5f8f45'; g.beginPath(); for (let i = 0; i < 9; i++) { const a = i * 0.698 + h1 * 3; ell(X + Math.cos(a) * R * 0.55 + sway, Y + Math.sin(a) * R * 0.55, R * 0.4, R * 0.12, a); } g.fill();
+          g.fillStyle = '#86b85c'; g.beginPath(); for (let i = 0; i < 6; i++) { const a = i * 1.047 + h1 * 3 + 0.4; ell(X + Math.cos(a) * R * 0.38 + sway, Y + Math.sin(a) * R * 0.38, R * 0.3, R * 0.1, a); } g.fill();
+          for (const [dx, dy] of [[-0.18, -0.1], [0.16, -0.18], [0.02, 0.16], [-0.24, 0.24]]) { dot(X + dx * R + sway * 0.6, Y + dy * R, R * 0.12, '#a9cf6a'); dot(X + dx * R + sway * 0.6, Y + dy * R, R * 0.06, '#6f9a3c'); }
+          break;
+        }
+        case 'coral': {
+          sh(X, Y, R * 0.75, R * 0.6, R * 0.3);
+          const cc = [['#ff8a75', '#ffb4a2'], ['#ff6f91', '#ffa8c0'], ['#ffb347', '#ffd59a']][Math.floor(h1 * 3)], P = [];
+          for (let i = 0; i < 7; i++) { const a = i * 0.9 + h2 * 6, d = R * (0.15 + hash01(k, 330 + i) * 0.45); P.push([X + Math.cos(a) * d + sway * 0.3, Y + Math.sin(a) * d * 0.8, R * (0.2 + hash01(k, 340 + i) * 0.12)]); }
+          g.fillStyle = cc[0]; g.beginPath(); for (const [x, y, r_] of P) circ(x, y, r_); g.fill();
+          g.fillStyle = cc[1]; g.beginPath(); for (const [x, y, r_] of P) circ(x - r_ * 0.2, y - r_ * 0.2, r_ * 0.6); g.fill();
+          g.fillStyle = 'rgba(140,40,50,.3)'; g.beginPath(); for (const [x, y, r_] of P) circ(x + r_ * 0.15, y + r_ * 0.1, r_ * 0.16); g.fill();
+          break;
+        }
+        case 'shell': {
+          const c1 = h2 > 0.5 ? '#f6d6c8' : '#f8e7c9', c2 = h2 > 0.5 ? '#e3a996' : '#dcb98a';
+          sh(X, Y + R * 0.1, R * 0.55, R * 0.5, R * 0.18);
+          g.save(); g.translate(X, Y + R * 0.25); g.rotate((h1 - 0.5) * 1.6);
+          g.fillStyle = c1; g.beginPath(); for (let i = 0; i < 7; i++) { const a = -1.2 + i * 0.4; circ(Math.sin(a) * R * 0.52, -Math.cos(a) * R * 0.52, R * 0.17); } circ(0, -R * 0.24, R * 0.42); g.fill();
+          g.fillStyle = c1; rr_(g, -R * 0.17, -R * 0.08, R * 0.34, R * 0.18, R * 0.08);
+          g.strokeStyle = c2; g.lineWidth = lw(R * 0.05); g.lineCap = 'round'; g.beginPath(); for (let i = 0; i < 7; i++) { const a = -1.2 + i * 0.4; g.moveTo(0, 0); g.lineTo(Math.sin(a) * R * 0.56, -Math.cos(a) * R * 0.56); } g.stroke(); g.lineCap = lc;
+          g.restore();
+          break;
+        }
+        case 'pond': {
+          dot(X, Y, R * 0.86, theme === 'dark' ? '#3f6b48' : '#a9c98f'); dot(X, Y, R * 0.7, PAL.water);
+          g.fillStyle = 'rgba(255,255,255,.3)'; g.beginPath(); ell(X - R * 0.25, Y - R * 0.3, R * 0.22, R * 0.07, -0.4); g.fill();
+          for (const [dx, dy, s_] of [[0.25, 0.15, 0.2], [-0.2, 0.3, 0.15]]) { dot(X + dx * R, Y + dy * R, s_ * R, '#4f9b4f'); dot(X + dx * R - s_ * R * 0.25, Y + dy * R - s_ * R * 0.25, s_ * R * 0.55, '#6fb35e'); }
+          if (h1 > 0.4) dot(X + R * 0.25, Y + R * 0.15, R * 0.08, '#ff9ec7');
+          break;
+        }
+        case 'parasol': {
+          const pp = [['#e8453c', '#ffffff'], ['#2f7de1', '#ffffff'], ['#ffd23a', '#ff8a3c'], ['#3fbfad', '#fff3d6']][Math.floor(h1 * 4)];
+          g.fillStyle = pp[0]; rr_(g, X - R * 0.3, Y + R * 0.15, R * 0.6, R * 0.85, R * 0.16); g.fillStyle = pp[1]; rr_(g, X - R * 0.3, Y + R * 0.5, R * 0.6, R * 0.16, R * 0.08);
+          sh(X, Y, R * 0.8, R * 0.8, R * 0.9);
+          for (let i = 0; i < 8; i++) { g.fillStyle = pp[i % 2]; g.beginPath(); g.moveTo(X + sway * 0.3, Y); g.arc(X + sway * 0.3, Y, R * 0.78, i * 0.785 + h2, (i + 1) * 0.785 + h2); g.closePath(); g.fill(); }
+          dot(X + sway * 0.3, Y, R * 0.09, '#6b4a2e');
+          break;
+        }
+        case 'balloon': {
+          const cols = ['#e8453c', '#ffd23a', '#2f9bff', '#3fd16a', '#ff6fb5', '#a77bff'], B = [[-0.34, -0.32], [0.32, -0.4], [0.02, 0.02]].map(([dx, dy], i) => [X + dx * R + sway, Y + dy * R, R * 0.34, cols[Math.floor(hash01(k, 370 + i) * 6)]]);
+          for (const [bx, by, s_] of B) sh(bx, by, s_ * 0.9, s_, R * 1.2);
+          g.strokeStyle = 'rgba(70,70,70,.5)'; g.lineWidth = lw(R * 0.04); g.beginPath(); for (const [bx, by, s_] of B) { g.moveTo(bx, by + s_); g.quadraticCurveTo(bx, Y + R * 0.6, X, Y + R * 0.85); } g.stroke();
+          dot(X, Y + R * 0.85, R * 0.06, '#6b5f55');
+          for (const [bx, by, s_, c] of B) { g.fillStyle = c; g.beginPath(); g.ellipse(bx, by, s_ * 0.88, s_, 0, 0, 6.3); g.fill(); dot(bx, by + s_ * 0.98, s_ * 0.14, c); dot(bx - s_ * 0.3, by - s_ * 0.35, s_ * 0.22, 'rgba(255,255,255,.55)'); }
+          break;
+        }
+        case 'cupcake': {
+          const wrap = h1 > 0.5 ? '#9fd5f2' : '#f2b8cf', fr = ['#fff3f7', '#ffe08a', '#c9f2e3'][Math.floor(h2 * 3)];
+          sh(X, Y, R * 0.66, R * 0.66, R * 0.45);
+          g.fillStyle = wrap; g.beginPath(); circ(X, Y, R * 0.6); for (let i = 0; i < 12; i++) { const a = i * 0.5236; circ(X + Math.cos(a) * R * 0.6, Y + Math.sin(a) * R * 0.6, R * 0.1); } g.fill();
+          dot(X, Y, R * 0.5, fr);
+          g.strokeStyle = 'rgba(0,0,0,.09)'; g.lineWidth = lw(R * 0.07); g.lineCap = 'round'; g.beginPath(); for (let t = 0; t <= 12.6; t += 0.5) { const rad = R * 0.44 * (1 - t / 14), a = t; t ? g.lineTo(X + Math.cos(a) * rad, Y + Math.sin(a) * rad) : g.moveTo(X + rad, Y); } g.stroke();
+          for (let i = 0; i < 6; i++) { g.strokeStyle = ['#ff6b8b', '#7fe3ff', '#ffd23a'][i % 3]; g.beginPath(); const a = i * 1.05 + h3 * 6, d = R * 0.32, bx = X + Math.cos(a) * d, by = Y + Math.sin(a) * d; g.moveTo(bx - R * 0.04, by - R * 0.03); g.lineTo(bx + R * 0.04, by + R * 0.03); g.stroke(); }
+          g.lineCap = lc;
+          dot(X + R * 0.04, Y - R * 0.04, R * 0.14, '#d8203a'); dot(X, Y - R * 0.09, R * 0.05, 'rgba(255,255,255,.7)');
+          break;
+        }
+        case 'lollipop': {
+          const c = ['#ff6b8b', '#7fe3ff', '#ffd23a', '#a77bff'][Math.floor(h1 * 4)], lx = X + sway * 0.4, ly = Y - R * 0.15;
+          sh(lx, ly, R * 0.5, R * 0.5, R * 0.6);
+          g.fillStyle = '#f4f2ec'; rr_(g, X - R * 0.05, Y + R * 0.1, R * 0.1, R * 0.8, R * 0.05);
+          dot(lx, ly, R * 0.5, c);
+          g.strokeStyle = '#ffffff'; g.lineWidth = lw(R * 0.1); g.lineCap = 'round'; g.beginPath(); for (let t = 0; t <= 15; t += 0.5) { const rad = t / 15 * R * 0.42, a = t + h2 * 6; t ? g.lineTo(lx + Math.cos(a) * rad, ly + Math.sin(a) * rad) : g.moveTo(lx, ly); } g.stroke(); g.lineCap = lc;
+          dot(lx - R * 0.18, ly - R * 0.2, R * 0.08, 'rgba(255,255,255,.6)');
+          break;
+        }
+        case 'gumdrop': {
+          const cols = ['#ff6b8b', '#ffd23a', '#3fd16a', '#a77bff', '#ff8a3c', '#2f9bff'];
+          for (const [dx, dy, s_, i] of [[-0.32, -0.15, 0.36, 0], [0.34, -0.05, 0.3, 1], [0, 0.35, 0.32, 2]]) {
+            const bx = X + dx * R, by = Y + dy * R, r_ = s_ * R, c = cols[Math.floor(hash01(k, 380 + i) * 6)];
+            sh(bx, by, r_, r_, r_ * 0.7); dot(bx, by, r_, c); g.globalAlpha = 0.35; dot(bx - r_ * 0.2, by - r_ * 0.2, r_ * 0.6, '#ffffff'); g.globalAlpha = 1;
+            g.fillStyle = 'rgba(255,255,255,.75)'; g.beginPath(); for (let j = 0; j < 4; j++) circ(bx + (hash01(k + j, 390 + i) - 0.5) * r_ * 1.2, by + (hash01(k + j, 395 + i) - 0.5) * r_ * 1.2, r_ * 0.07); g.fill();
+          }
+          break;
+        }
+        case 'cloud': {
+          const P = [[-0.42, 0.12, 0.38], [0.4, 0.14, 0.36], [0, -0.12, 0.48], [-0.05, 0.28, 0.36]], cx = X + sway * 1.5;
+          g.globalAlpha = SUN.a * 0.8; g.fillStyle = PAL.treeSh; g.beginPath(); for (const [dx, dy, s_] of P) circ(cx + dx * R + SUN.x * R * 1.2, Y + dy * R + SUN.y * R * 1.2, s_ * R); g.fill(); g.globalAlpha = 1;
+          g.fillStyle = '#dbe6f1'; g.beginPath(); for (const [dx, dy, s_] of P) circ(cx + dx * R, Y + dy * R + R * 0.06, s_ * R); g.fill();
+          g.fillStyle = '#ffffff'; g.beginPath(); for (const [dx, dy, s_] of P) circ(cx + dx * R - R * 0.04, Y + dy * R - R * 0.03, s_ * R * 0.9); g.fill();
+          break;
+        }
+        case 'bubble': {
+          g.fillStyle = theme === 'dark' ? '#2f8a7a' : '#5fae8f'; g.beginPath(); for (let i = 0; i < 5; i++) ell(X + (i - 2) * R * 0.14 + sway * 0.5, Y + R * 0.45, R * 0.28, R * 0.07, -1.57 + (i - 2) * 0.35); g.fill();
+          for (const [dx, dy, s_] of [[-0.25, -0.2, 0.3], [0.3, -0.35, 0.2], [0.1, 0.1, 0.16], [-0.35, 0.25, 0.12]]) {
+            const bx = X + dx * R + sway, by = Y + dy * R, r_ = s_ * R;
+            g.fillStyle = 'rgba(200,240,255,.16)'; g.strokeStyle = 'rgba(220,250,255,.8)'; g.lineWidth = lw(R * 0.05); g.beginPath(); g.arc(bx, by, r_, 0, 6.3); g.fill(); g.stroke();
+            dot(bx - r_ * 0.35, by - r_ * 0.35, r_ * 0.22, 'rgba(255,255,255,.85)');
+          }
+          break;
+        }
+        case 'firefly': {
+          sh(X, Y + R * 0.1, R * 0.8, R * 0.55, R * 0.3);
+          for (const [dx, dy, r_] of [[-0.38, 0.1, 0.45], [0.38, 0.14, 0.42], [0, -0.18, 0.52]]) dot(X + dx * R + sway * 0.5, Y + dy * R, r_ * R, PAL.tree2);
+          for (const [dx, dy, r_] of [[-0.38, 0.1, 0.45], [0.38, 0.14, 0.42], [0, -0.18, 0.52]]) dot(X + dx * R - r_ * R * 0.2 + sway * 0.5, Y + dy * R - r_ * R * 0.25, r_ * R * 0.55, PAL.tree1);
+          g.save(); g.globalCompositeOperation = 'lighter';
+          for (let i = 0; i < 4; i++) { const tw = REDUCED_MOTION ? 0.8 : 0.5 + 0.5 * Math.sin(animT * 2.2 + k + i * 1.7), fx = X + (hash01(k, 400 + i) - 0.5) * R * 1.8, fy = Y + (hash01(k, 405 + i) - 0.5) * R * 1.6; dot(fx, fy, R * 0.28, 'rgba(255,225,110,' + (0.28 * tw).toFixed(2) + ')'); dot(fx, fy, R * 0.07, 'rgba(255,248,190,' + (0.4 + 0.6 * tw).toFixed(2) + ')'); }
+          g.restore();
+          break;
+        }
+        case 'crater': {
+          const base = /^#[0-9a-f]{6}$/i.test(PAL.land) ? PAL.land : '#7d4632', dk = mixHex(base, '#000000', 0.22), lt = mixHex(base, '#ffffff', 0.16);
+          const cr = (cx, cy, s_) => { dot(cx, cy, s_, lt); dot(cx + s_ * 0.08, cy + s_ * 0.08, s_ * 0.8, dk); dot(cx + s_ * 0.2, cy + s_ * 0.2, s_ * 0.58, mixHex(base, '#000000', 0.1)); };
+          cr(X, Y, R * 0.72); if (h1 > 0.4) cr(X + R * 0.75, Y + R * 0.45, R * 0.3);
+          g.fillStyle = lt; g.beginPath(); for (let i = 0; i < 3; i++) circ(X + (hash01(k, 410 + i) - 0.5) * R * 1.8, Y + (hash01(k, 415 + i) - 0.5) * R * 1.8, R * 0.08); g.fill();
+          break;
+        }
+        case 'planet': {
+          const pc = [['#f0b26a', '#ffd9a8', '#c59bff'], ['#7fc4e0', '#c9ecfb', '#ffd23a'], ['#e3799d', '#ffc2d6', '#9fe3d9']][Math.floor(h1 * 3)], s_ = R * 0.46, px = X + sway, py = Y, rot = -0.5 + h2 * 0.4;
+          sh(px, py, s_, s_, R * 1.1);
+          const ring = (a0, a1) => { g.save(); g.translate(px, py); g.rotate(rot); g.strokeStyle = pc[2]; g.lineWidth = lw(R * 0.1); g.beginPath(); g.ellipse(0, 0, s_ * 1.65, s_ * 0.5, 0, a0, a1); g.stroke(); g.restore(); };
+          ring(Math.PI, 2 * Math.PI); dot(px, py, s_, pc[0]); dot(px - s_ * 0.3, py - s_ * 0.3, s_ * 0.45, pc[1]); ring(0, Math.PI);
+          if (h3 > 0.4) { g.fillStyle = '#fff8d0'; g.beginPath(); for (let i = 0; i < 3; i++) circ(X + (hash01(k, 420 + i) - 0.5) * R * 2, Y + (hash01(k, 425 + i) - 0.5) * R * 2, R * 0.05); g.fill(); }
+          break;
+        }
+        case 'orchard': {
+          const fr = h1 < 0.5 ? '#e8453c' : '#ff9f1a';
+          sh(X, Y, R, R, R * 0.55); dot(X + sway, Y, R, PAL.tree2); dot(X - R * 0.22 + sway, Y - R * 0.25, R * 0.66, PAL.tree1);
+          for (let i = 0; i < 6; i++) { const a = i * 1.05 + h2 * 6, d = R * (0.3 + hash01(k, 350 + i) * 0.45), fx = X + Math.cos(a) * d + sway, fy = Y + Math.sin(a) * d; dot(fx, fy, R * 0.12, fr); dot(fx - R * 0.03, fy - R * 0.03, R * 0.045, 'rgba(255,255,255,.5)'); }
+          break;
+        }
+      }
     }
   }
 }
@@ -4709,7 +5041,17 @@ function paintMoto(path, dash, pillars) {
   ctx.save(); ctx.lineCap = 'round';
   ctx.strokeStyle = PAL.deckEdge; ctx.lineWidth = 15; ctx.stroke(path);
   const mg = GEN_P.moto[md];
-  if (mg && !custom) mg.forEach((c, i) => { ctx.strokeStyle = c; ctx.lineWidth = 12.6 - i * 12.6 / (mg.length + 0.7); ctx.stroke(path); });
+  if (mg && !custom) {
+    const sw = (i, W) => W - i * W / (mg.length + 0.7), xs = [].concat(mg.x || []);
+    if (mg.glow) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = rgba(xs[0], 0.15); ctx.lineWidth = 19; ctx.stroke(path); ctx.restore(); }
+    mg.forEach((c, i) => { ctx.strokeStyle = c; ctx.lineWidth = sw(i, 12.6); ctx.stroke(path); });
+    if (mg.k === 'edge' || mg.k === 'flowers') {          // round lamps / blooms peeping out along both edges
+      ctx.lineWidth = 13.4; const per = mg.k === 'edge' ? 10 : 7 * xs.length;
+      xs.forEach((c, i) => { ctx.strokeStyle = c; ctx.setLineDash([0.01, per]); ctx.lineDashOffset = -i * 7; ctx.stroke(path); });
+      ctx.setLineDash([]); ctx.lineDashOffset = 0;
+      mg.forEach((c, i) => { ctx.strokeStyle = c; ctx.lineWidth = sw(i, 10.2); ctx.stroke(path); });
+    } else if (mg.k === 'dots') { ctx.strokeStyle = xs[0]; ctx.lineWidth = 2.2; ctx.setLineDash([0.01, 13]); ctx.lineDashOffset = 3; ctx.stroke(dash); ctx.setLineDash([]); ctx.lineDashOffset = 0; }   // in the gaps of the lane dashes
+  }
   else if (md === 'rainbow' && !custom) {
     ['#ff4d4d', '#ff9f1a', '#ffd23a', '#3fd16a', '#2f9bff', '#8a5bff'].forEach((c, i) => { ctx.strokeStyle = c; ctx.lineWidth = 12.6 - i * 2.1; ctx.stroke(path); });
   } else if (md === 'sunset' && !custom) {
@@ -4794,8 +5136,12 @@ function bridgeParapet(path) {
   ctx.save(); ctx.lineCap = 'round';
   const bg = GEN_P.bridge[bd];
   if (bg) {
+    if (bg.glow) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = rgba(bg.glow, 0.13); ctx.lineWidth = RW + 12; ctx.stroke(path); ctx.restore(); }
     ctx.strokeStyle = bg[0]; ctx.lineWidth = RW + 7.5; ctx.stroke(path);
-    ctx.strokeStyle = bg[1]; ctx.setLineDash([1.6, 3.4]); ctx.lineCap = 'butt'; ctx.stroke(path);
+    if (bg.k === 'beads') { ctx.strokeStyle = bg[1]; ctx.lineWidth = RW + 8.4; ctx.setLineDash([0.01, bg.gap || 8]); ctx.stroke(path); }        // round-capped dots: soft scallops along both rails
+    else if (bg.k === 'flowers') { ctx.lineCap = 'butt'; bg.c.forEach((c, i) => { ctx.strokeStyle = c; ctx.setLineDash([1.8, 5 * bg.c.length - 1.8]); ctx.lineDashOffset = -i * 5; ctx.stroke(path); }); ctx.lineDashOffset = 0; }   // little blooms of each colour in turn
+    else if (bg.k === 'bands') { ctx.strokeStyle = bg[1]; ctx.setLineDash([4, 4]); ctx.lineCap = 'butt'; ctx.stroke(path); }
+    else { ctx.strokeStyle = bg[1]; ctx.setLineDash([1.6, 3.4]); ctx.lineCap = 'butt'; ctx.stroke(path); }
     ctx.setLineDash([]); ctx.lineCap = 'round'; ctx.strokeStyle = bg[2]; ctx.lineWidth = RW + 3.6; ctx.stroke(path);
   } else if (bd === 'wood') {
     ctx.strokeStyle = '#7a4f2b'; ctx.lineWidth = RW + 7; ctx.stroke(path);
@@ -4937,8 +5283,16 @@ function drawLightHeads(x, y, ls, dem) {
     if (lg) {                                              // a generated head: a housing of some colour and shape, maybe a ring and a glow
       if (lg.glow) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = rgba(lg.glow, 0.22); ctx.beginPath(); ctx.arc(X, Y, 4.8, 0, 6.3); ctx.fill(); ctx.restore(); }
       ctx.fillStyle = lg.h;
-      if (lg.shape === 'square') rr(X - 2.9, Y - 2.9, 5.8, 5.8, 1.8); else if (lg.shape === 'pill') rr(X - 3.6, Y - 2.3, 7.2, 4.6, 2.3); else { ctx.beginPath(); ctx.arc(X, Y, 3, 0, 6.3); }
-      ctx.fill(); if (lg.ring) { ctx.strokeStyle = lg.ring; ctx.lineWidth = 0.6; ctx.stroke(); }
+      if (lg.shape === 'flower' || lg.shape === 'cloud') {            // housings made of overlapping circles: outline first, so it only shows outside
+        const bl = lg.shape === 'flower' ? [[0, 0, 2.5], [0, -2.2, 1.55], [2.09, -0.68, 1.55], [1.29, 1.78, 1.55], [-1.29, 1.78, 1.55], [-2.09, -0.68, 1.55]] : [[-1.8, 0.5, 2], [1.8, 0.5, 2], [0, -0.7, 2.5]];
+        ctx.beginPath(); for (const [dx, dy, r_] of bl) { ctx.moveTo(X + dx + r_, Y + dy); ctx.arc(X + dx, Y + dy, r_, 0, 6.3); }
+        if (lg.ring) { ctx.strokeStyle = lg.ring; ctx.lineWidth = 1.2; ctx.stroke(); }
+        ctx.fill();
+      } else {
+        if (lg.shape === 'square') rr(X - 2.9, Y - 2.9, 5.8, 5.8, 1.8); else if (lg.shape === 'pill') rr(X - 3.6, Y - 2.3, 7.2, 4.6, 2.3); else { ctx.beginPath(); ctx.arc(X, Y, 3, 0, 6.3); }
+        ctx.fill(); if (lg.ring) { ctx.strokeStyle = lg.ring; ctx.lineWidth = 0.6; ctx.stroke(); }
+      }
+      if (lg.studs) { ctx.fillStyle = lg.studs; ctx.beginPath(); for (const [dx, dy] of [[-2.55, -2.55], [2.55, -2.55], [2.55, 2.55], [-2.55, 2.55]]) { ctx.moveTo(X + dx + 0.6, Y + dy); ctx.arc(X + dx, Y + dy, 0.6, 0, 6.3); } ctx.fill(); }
       ctx.fillStyle = '#1a1f24'; ctx.beginPath(); ctx.arc(X, Y, 1.95, 0, 6.3); ctx.fill();
       ctx.fillStyle = lamp; ctx.beginPath(); ctx.arc(X, Y, 1.5, 0, 6.3); ctx.fill();
     } else if (ld === 'modern') {
@@ -5729,6 +6083,15 @@ function drawCar(c, sizeBoost) {
     else if (cg.k === 'nose') { ctx.fillStyle = cs[0]; ctx.beginPath(); ctx.ellipse(f, 0, L * 0.26, hw * 1.15, 0, 0, 6.3); ctx.fill(); }
     else if (cg.k === 'fade') { const gg = ctx.createLinearGradient(r, 0, f, 0); gg.addColorStop(0, rgba(cs[0], 0.8)); gg.addColorStop(0.55, rgba(cs[1], 0.3)); gg.addColorStop(1, rgba(cs[1], 0)); ctx.fillStyle = gg; ctx.fillRect(r, -hw, L, Wd); }
     else if (cg.k === 'zebra') { ctx.strokeStyle = cs[0]; ctx.lineWidth = 0.8; ctx.lineCap = 'round'; ctx.beginPath(); for (let x = r - Wd; x < f; x += 2.1) { ctx.moveTo(x, hw + 0.5); ctx.lineTo(x + Wd * 0.8, -hw - 0.5); } ctx.stroke(); }
+    else if (cg.k === 'spots') { for (let i = 0; i < 9; i++) { const sx = r + 1 + hash01(i, 121) * (L - 2), sy = (hash01(i, 122) - 0.5) * (Wd - 1.4), s_ = 0.55 + hash01(i, 123) * 0.4; ctx.fillStyle = cs[0]; ctx.beginPath(); ctx.ellipse(sx, sy, s_, s_ * 0.8, hash01(i, 124) * 3, 0, 6.3); ctx.fill(); if (cs[1]) { ctx.fillStyle = cs[1]; ctx.beginPath(); ctx.arc(sx, sy, s_ * 0.45, 0, 6.3); ctx.fill(); } } }
+    else if (cg.k === 'roundel') { const rx = (bon0 + bon1) / 2; ctx.fillStyle = cs[0]; sfr(r + 0.4, -0.25, L - 0.8, 0.5); ctx.beginPath(); ctx.arc(rx, 0, hw * 0.62, 0, 6.3); ctx.fill(); ctx.fillStyle = cs[1] || col; ctx.beginPath(); ctx.arc(rx, 0, hw * 0.28, 0, 6.3); ctx.fill(); }
+    else if (cg.k === 'split') { ctx.fillStyle = cs[0]; rr(r - 1, -hw - 1, L * 0.5 + 1, Wd + 2, hw + 1); ctx.fill(); }
+    else if (cg.k === 'confetti') { cs.forEach((cc, j) => { ctx.fillStyle = cc; ctx.beginPath(); for (let i = j; i < 22; i += cs.length) { const ex = r + 0.6 + hash01(i, 131) * (L - 1.2), ey = (hash01(i, 132) - 0.5) * (Wd - 0.8), a = hash01(i, 133) * 3.1; ctx.moveTo(ex + Math.cos(a) * 0.6, ey + Math.sin(a) * 0.6); ctx.ellipse(ex, ey, 0.6, 0.28, a, 0, 6.3); } ctx.fill(); }); }
+    else if (cg.k === 'plaid') { ctx.globalAlpha = 0.5; ctx.fillStyle = cs[0]; for (const yy of [-hw * 0.5, hw * 0.5]) sfr(r, yy - 0.45, L, 0.9); ctx.fillStyle = cs[1] || cs[0]; for (let x = r + 1.2; x < f; x += 2.4) sfr(x, -hw, 0.8, Wd); ctx.globalAlpha = 1; for (const yy of [-hw * 0.5, hw * 0.5]) sfr(r, yy - 0.08, L, 0.16); }
+    else if (cg.k === 'clouds') { ctx.fillStyle = cs[0]; ctx.beginPath(); for (let x = r + 0.4, i = 0; x < f + 0.5; x += 1.5, i++) { const s_ = 0.85 + (i % 2) * 0.3; ctx.moveTo(x + s_, -hw); ctx.arc(x, -hw, s_, 0, 6.3); ctx.moveTo(x + 0.75 + s_, hw); ctx.arc(x + 0.75, hw, s_, 0, 6.3); } ctx.fill(); }
+    else if (cg.k === 'scales') { ctx.strokeStyle = cs[0]; ctx.lineWidth = 0.32; ctx.globalAlpha = 0.85; ctx.beginPath(); for (let y = -hw - 0.2, j = 0; y < hw + 1; y += 1.3, j++) for (let x = r + (j % 2) * 0.85; x < f + 1; x += 1.7) { ctx.moveTo(x + 0.85, y); ctx.arc(x, y, 0.85, 0, Math.PI); } ctx.stroke(); ctx.globalAlpha = 1; }
+    else if (cg.k === 'flowers') { for (let i = 0; i < 3; i++) { const fx = r + L * (0.18 + i * 0.32), fy = (i % 2 ? 0.32 : -0.32) * hw; ctx.fillStyle = cs[0]; ctx.beginPath(); for (let j = 0; j < 5; j++) { const a = j * 1.2566 + i, px = fx + Math.cos(a) * 0.62, py = fy + Math.sin(a) * 0.62; ctx.moveTo(px + 0.42, py); ctx.arc(px, py, 0.42, 0, 6.3); } ctx.fill(); ctx.fillStyle = cs[1] || '#ffd23a'; ctx.beginPath(); ctx.arc(fx, fy, 0.36, 0, 6.3); ctx.fill(); } }
+    else if (cg.k === 'rings') { ctx.strokeStyle = cs[0]; ctx.lineWidth = 0.35; ctx.beginPath(); for (let i = 0; i < 4; i++) { const x = r + L * (0.16 + i * 0.22), y = (i % 2 ? 0.3 : -0.3) * hw, s_ = 0.75 + (i % 2) * 0.25; ctx.moveTo(x + s_, y); ctx.arc(x, y, s_, 0, 6.3); } ctx.stroke(); }
     else if (cg.k === 'wave') { ctx.strokeStyle = cs[0]; ctx.lineWidth = 0.75; ctx.lineCap = 'round'; ctx.beginPath(); for (let x = r; x <= f + 0.01; x += 0.4) { const yy = Math.sin((x - r) * 1.1) * hw * 0.45; x === r ? ctx.moveTo(x, yy) : ctx.lineTo(x, yy); } ctx.stroke(); }
     ctx.restore();
   }
@@ -6872,6 +7235,7 @@ function openModal(id) {
    Weeklys, Tutorial, Feedback and Watch a player on the right; your balance top left. The middle shows
    whichever section is picked. */
 let mmPane = null, playMode = 'standard', cusTab = 'mine';
+function setIsoPending(n) { isoPending = n; if (mmPane === 'play' && !$('m-start').hidden) renderPlay(); }
 function setCusTab(t) {
   cusTab = t;
   document.querySelectorAll('[data-cus]').forEach(b => b.setAttribute('aria-pressed', b.dataset.cus === t ? 'true' : 'false'));
@@ -6880,7 +7244,8 @@ function setCusTab(t) {
 }
 /* what's new, sliding by above the weekly tile */
 const NEWS = [
-  {tag: 'New designs', title: 'Over 100 new designs', text: 'At least 24 of every kind: cars, houses, roads, stores, lights, roundabouts, bridges and motorways.', go: 'store', art: ['car', 'tidal']},
+  {tag: 'New mode', title: 'ISO 1v1', text: 'Challenge a player: live side by side, or a daily duel scored category by category.', go: 'iso', art: ['car', 'rainbowstripe']},
+  {tag: 'New designs', title: 'Hundreds of new designs', text: 'At least 36 of everything: cars, houses, roads, stores, lights, roundabouts, bridges, motorways, themes, maps, decorations and panel styles.', go: 'store', art: ['car', 'tidal']},
   {tag: 'Collection', title: 'Track your collection', text: 'See everything you own and how to get the rest, in Customise and Account.', go: 'coll', art: ['house', 'observatory']},
   {tag: 'Weekly', title: 'See this week\u2019s map', text: 'A seed makes the same map for everyone. Look it over before you play.', go: 'weekly', art: 'seed'},
   {tag: 'Crates', title: 'Mystery crates', text: 'Colour, item and object crates hold unique designs the Store never sells.', go: 'store', art: ['store', 'golden']},
@@ -6892,7 +7257,7 @@ function renderNews() {
   if (!tr.childElementCount) {
     tr.innerHTML = NEWS.map((n, i) => '<button type="button" class="news-s" data-n="' + i + '"><span class="news-t"><em>' + n.tag + '</em><b>' + n.title + '</b><small>' + n.text + '</small></span><canvas width="' + (n.art === 'seed' ? 120 : 132) + '" height="' + (n.art === 'seed' ? 120 : 88) + '"></canvas></button>').join('');
     $('news-dots').innerHTML = NEWS.map((n, i) => '<button type="button" data-nd="' + i + '" aria-label="' + n.title + '"></button>').join('');
-    tr.querySelectorAll('.news-s').forEach(b => b.addEventListener('click', () => { const n = NEWS[+b.dataset.n]; if (n.go === 'coll') { showMM('custom'); setCusTab('coll'); } else showMM(n.go); }));
+    tr.querySelectorAll('.news-s').forEach(b => b.addEventListener('click', () => { const n = NEWS[+b.dataset.n]; if (n.go === 'coll') { showMM('custom'); setCusTab('coll'); } else if (n.go === 'iso') { playMode = 'iso'; showMM('play'); } else showMM(n.go); }));
     $('news-dots').querySelectorAll('[data-nd]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); newsAt = +b.dataset.nd; showNews(); }));
     $('mm-news').addEventListener('mouseenter', () => { newsHover = true; }); $('mm-news').addEventListener('mouseleave', () => { newsHover = false; });
   }
@@ -7061,21 +7426,101 @@ function renderWeeks() {
   box.querySelectorAll('[data-wk]').forEach(b => b.onclick = () => { if (window.JunctionOnline && window.JunctionOnline.openExpert) window.JunctionOnline.openExpert(+b.dataset.wk); else toast('Leaderboards need the online service.', 'warn'); });
 }
 /* Play: pick a game mode, then one of its five save slots */
+const PLAY_MODES = ['chill', 'standard', 'frantic', 'zen', 'iso'];
+let isoPending = 0;                                    // challenges waiting on you (shown on the ISO button)
 function renderPlay() {
   const box = $('mm-modes'); if (!box) return;
   const sd = expertSeed();
-  box.innerHTML = SLOT_MODES.map(m => '<button type="button" class="rl-mode' + (m === 'expert' ? ' expert' : '') + '" data-pmode="' + m + '" aria-pressed="' + (m === playMode) + '"><b>' + DIFFS[m].label + '</b><small>' +
-    (m === 'expert' ? 'This week: \u201c' + sd.name + '\u201d' : DIFFS[m].note) + '</small></button>').join('');
-  box.querySelectorAll('[data-pmode]').forEach(b => b.onclick = () => { playMode = b.dataset.pmode; if (playMode !== 'expert') startDiff = playMode; renderPlay(); });
-  $('mm-play-h').textContent = DIFFS[playMode].label + ' \u2014 your five saves';
+  box.innerHTML = PLAY_MODES.map(m => '<button type="button" class="rl-mode' + (m === 'expert' ? ' expert' : '') + '" data-pmode="' + m + '" aria-pressed="' + (m === playMode) + '"><b>' + DIFFS[m].label + '</b><small>' +
+    (m === 'iso' ? 'Challenge a player: live, or a daily duel' : DIFFS[m].note) + (m === 'iso' && isoPending ? '<em class="tabbadge">' + isoPending + '</em>' : '') + '</small></button>').join('');
+  box.querySelectorAll('[data-pmode]').forEach(b => b.onclick = () => { playMode = b.dataset.pmode; if (playMode !== 'iso') startDiff = playMode; renderPlay(); });
+  if (playMode === 'iso') {
+    $('mm-play-h').textContent = 'ISO 1v1 — challenges';
+    const on = window.JunctionOnline;
+    if (!(on && on.ready && on.renderIso && on.renderIso($('mm-play-slots')))) $('mm-play-slots').innerHTML = '<p class="mini">ISO matches are played online. The online service is still connecting, or isn’t available right now.</p>';
+    return;
+  }
+  $('mm-play-h').textContent = DIFFS[playMode].label + ' — your five saves';
   renderSlotsFor($('mm-play-slots'), playMode, false);
   showStartBest();
+}
+/* ---- ISO 1v1. Two players on the same seeded map. Live: both cities run at the same time and the same speed;
+   pausing or changing speed is asked of the other player and only happens if they agree; the last city standing
+   wins. Daily: each plays the map on their own within a day (pause and speed as they like), and the runs are scored
+   category by category. online.js runs the match; the game shows it. */
+const isoLive = () => !!(iso && iso.kind === 'live' && diffKey === 'iso' && started && !over && !spectating);
+const ISO_ASK = {pause: 'pause', resume: 'carry on', 'speed:1': 'go back to normal speed', 'speed:2': 'go 2\u00d7 speed', 'speed:3': 'go 3\u00d7 speed', 'speed:0.5': 'go half speed'};
+function isoAsk(what) {
+  if (!isoLive()) return;
+  if (iso.prop && iso.prop.mine) { hint('Still waiting for ' + iso.opp.name + ' to answer.'); return; }
+  JEvents.emit('isoAsk', {what});
+  hint('Asked ' + iso.opp.name + ' to ' + (ISO_ASK[what] || what) + ' \u2014 it happens when they agree.');
+}
+function startIso(m) {
+  iso = {id: m.id, kind: m.kind, seed: m.seed >>> 0, opp: m.opp, endsAt: m.endsAt || 0, ctl: {paused: false, speed: 1}, prop: null, oppSt: null, oppKey: '', note: ''};
+  document.querySelectorAll('.modal').forEach(x => { x.hidden = true; }); modalOpen = false; closeMenu(); toggleCust(false);
+  pendingSlot = ''; resetGame('iso'); running = true; speed = 1; refreshHud(); layout(); renderIsoHud();
+  hint(m.kind === 'live' ? 'Go! Same map as ' + m.opp.name + '. Last city standing wins.' : 'Your daily run against ' + m.opp.name + ' \u2014 play at your own pace.');
+}
+const isoClock = sec => { sec = Math.max(0, Math.round(sec)); const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s2 = sec % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s2).padStart(2, '0'); };
+function renderIsoHud() {
+  const box = $('iso-hud'); if (!box) return;
+  const on = !!(iso && diffKey === 'iso' && started && !spectating);
+  box.hidden = !on; if (!on) return;
+  $('ih-kind').textContent = iso.kind === 'live' ? 'Live' : 'Daily';
+  $('ih-vs').textContent = 'vs ' + iso.opp.name;
+  const o = iso.oppSt || {}, row = (l, a, b) => '<tr><th>' + l + '</th><td>' + a + '</td><td>' + (b === undefined ? '\u2014' : b) + '</td></tr>';
+  $('ih-stats').innerHTML = '<table><tr><th></th><td>You</td><td>' + escH(iso.opp.name) + '</td></tr>' +
+    row('Time', isoClock(clock), o.sec !== undefined ? isoClock(o.sec) : undefined) + row('Parcels', score, o.parcels) + row('Week', week, o.week) +
+    row('Earned', '$' + Math.round(stats.earned || 0), o.earned !== undefined ? '$' + Math.round(o.earned) : undefined) + '</table>' +
+    (o.over ? '<p class="ih-over">' + escH(iso.opp.name) + '\u2019s city has ended.</p>' : '') + (iso.note ? '<p class="ih-note">' + escH(iso.note) + '</p>' : '');
+  const key = o.city ? o.city.length + ':' + (o.sec || 0) : '';
+  if (key !== iso.oppKey) { iso.oppKey = key; const cv2 = $('ih-map'); if (o.city) drawCitySnap(cv2, o.city); else { const g = cv2.getContext('2d'); g.fillStyle = PAL.land; g.fillRect(0, 0, cv2.width, cv2.height); } }
+  $('ih-map').hidden = iso.kind !== 'live' && !o.city;
+  const P = iso.prop, pr = $('ih-prop');
+  pr.hidden = !P || over;
+  if (P && !over) pr.innerHTML = P.mine ? 'Waiting for ' + escH(iso.opp.name) + ' to agree to ' + (ISO_ASK[P.what] || P.what) + '\u2026'
+    : '<b>' + escH(iso.opp.name) + '</b> asks to ' + (ISO_ASK[P.what] || P.what) + '. <span class="btnrow"><button class="bigbtn" type="button" data-isoans="1">Agree</button><button class="act" type="button" data-isoans="0">No</button></span>';
+  let ctl = '';
+  if (over) ctl = '';
+  else if (iso.kind === 'live') {
+    ctl = '<button class="act small" type="button" data-isoask="' + (running ? 'pause' : 'resume') + '">' + (running ? 'Ask to pause' : 'Ask to carry on') + '</button>' +
+      [1, 2, 3].filter(v => v !== speed).map(v => '<button class="act small" type="button" data-isoask="speed:' + v + '">Ask ' + v + '\u00d7</button>').join('');
+  } else {
+    const left = iso.endsAt ? iso.endsAt - Date.now() : 0;
+    ctl = '<button class="act small" type="button" data-isofin="1">Finish and submit</button>' + (left > 0 ? '<small>' + fmtLeft(left) + ' left to play</small>' : '');
+  }
+  $('ih-ctl').innerHTML = ctl;
+}
+function bindIsoHud() {
+  $('iso-hud').addEventListener('click', e => {
+    const a = e.target.closest('[data-isoask]'); if (a) { isoAsk(a.dataset.isoask); return; }
+    const r = e.target.closest('[data-isoans]'); if (r) { JEvents.emit('isoReply', {ok: r.dataset.isoans === '1'}); iso.prop = null; renderIsoHud(); return; }
+    if (e.target.closest('[data-isofin]')) { if (confirm('Finish your run now? It\u2019s scored as it stands.')) endGame('You finished your run.'); return; }
+    if (e.target.closest('.ih-head')) $('iso-hud').classList.toggle('min');
+  });
+  setInterval(() => { if (iso) renderIsoHud(); }, 1000);
+}
+/* the match result, with each category side by side */
+function showIsoResult(r) {
+  $('ir-kind').textContent = 'ISO 1v1 \u00b7 ' + (r.kind === 'live' ? 'Live' : 'Daily') + ' vs ' + r.oppName;
+  $('ir-title').textContent = r.outcome === 'win' ? 'You won!' : r.outcome === 'lose' ? r.oppName + ' won' : 'A draw';
+  $('ir-sub').textContent = r.reason || '';
+  $('ir-table').innerHTML = '<table><tr><th></th><th>You</th><th>' + escH(r.oppName) + '</th></tr>' + r.rows.map(x =>
+    '<tr><td>' + x.label + '</td><td class="' + (x.win === 'me' ? 'w' : '') + '">' + x.me + '</td><td class="' + (x.win === 'them' ? 'w' : '') + '">' + x.them + '</td></tr>').join('') +
+    (r.points ? '<tr class="tot"><td>Points</td><td>' + r.points[0] + '</td><td>' + r.points[1] + '</td></tr>' : '') + '</table>';
+  $('ir-again').onclick = () => { closeModal('m-iso-res'); JEvents.emit('isoRematch', {}); };
+  openModal('m-iso-res');
 }
 /* the Main menu button in the game: save the city, then back to the menu with its own background city.
    "Continue last city" brings the saved one back, into the same save slot. */
 let resumeSlot = '';
 function goHome() {
   if (spectating) { if (window.JunctionAPI && window.JunctionAPI.showStart) window.JunctionAPI.showStart(); return; }
+  if (iso && diffKey === 'iso' && started && !over) {
+    if (!confirm(iso.kind === 'live' ? 'Leave the match? Your city ends now, so ' + iso.opp.name + ' wins.' : 'End your daily run now? It’s scored as it stands.')) return;
+    endGame(iso.kind === 'live' ? 'You left the match.' : 'You ended your run.');
+  }
   const keep = started && !over && !tutorialMode ? curSlot : '';
   saveGame(true);
   closeMenu(); toggleCust(false); closeInspector();
@@ -7100,7 +7545,7 @@ function bindMainMenu() {
   $('sm-close').addEventListener('click', () => closeModal('m-seedmap'));
   $('sm-play').addEventListener('click', () => { closeModal('m-seedmap'); $('btn-expert').click(); });
   $('m-start').addEventListener('click', e => { if (e.target === $('m-start') && $('m-start').classList.contains('center-pane')) showMM(null); });   // the dimmed backdrop closes the Store or Weeklys
-  bindCrates();
+  bindCrates(); bindIsoHud();
   document.querySelectorAll('[data-cus]').forEach(b => b.addEventListener('click', () => setCusTab(b.dataset.cus)));
   // the game's HUD hides while the menu shows: follow the menu however it's opened or closed (some paths just hide it)
   new MutationObserver(() => { const on = !$('m-start').hidden; $('app').classList.toggle('in-menu', on); if (!on) $('app').classList.remove('menu-over'); })
@@ -7110,7 +7555,7 @@ function bindMainMenu() {
 function renderMenuTiles() { const t = $('tile-seed'); if (t) { const sd = expertSeed(); t.textContent = sd.name; $('tile-seedwk').textContent = sd.label; } }
 function closeModal(id) { if (id === 'm-start') $('app').classList.remove('in-menu'); $(id).hidden = true; modalOpen = !!document.querySelector('.modal:not([hidden])'); }
 function offerUpgrade(grew) {
-  lastGrew = grew; rerollLeft = 1; running = false; openModal('m-upgrade'); renderUpgrade();
+  lastGrew = grew; rerollLeft = 1; if (!isoLive()) running = false; openModal('m-upgrade'); renderUpgrade();
   refreshUI();
 }
 let upRoads = 12;
@@ -7132,7 +7577,7 @@ function renderUpgrade(reroll) {
     b.innerHTML = '<span class="pic">' + icon(p.icon, 30) + '</span>' + lvl + '<b>' + p.name + '</b><i>' + p.desc() + '</i><small>+ ' + upRoads + ' road tiles</small>';
     b.addEventListener('click', () => {
       inv.road += upRoads; p.apply(); sfx('upgrade');
-      closeModal('m-upgrade'); running = true; refreshUI(); renderPerks();
+      closeModal('m-upgrade'); running = !(isoLive() && iso.ctl.paused); refreshUI(); renderPerks();
     });
     wrap.append(b);
   }
@@ -7302,7 +7747,7 @@ function bindInput() {
   document.addEventListener('keyup', e => { if (e.key === ' ') spaceHeld = false; });
   $('i-close').addEventListener('click', closeInspector);
   $('btn-play').addEventListener('click', togglePlay);
-  document.querySelectorAll('#speed-seg button').forEach(b => b.addEventListener('click', () => { speed = +b.dataset.speed; refreshUI(); }));
+  document.querySelectorAll('#speed-seg button').forEach(b => b.addEventListener('click', () => { if (isoLive()) { if (+b.dataset.speed !== speed) isoAsk('speed:' + b.dataset.speed); return; } speed = +b.dataset.speed; refreshUI(); }));
   bindTips(); bindSettings(); bindTipsToggle();
   $('btn-heat').addEventListener('click', () => { showHeat = !showHeat; refreshUI(); });
   $('btn-side').addEventListener('click', () => { keepLeft = !keepLeft; laneSign = keepLeft ? -1 : 1; pathCache.ver = -1; refreshUI(); });
@@ -7412,8 +7857,8 @@ function bindInput() {
   window.addEventListener('beforeunload', saveGame);
   document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(true); });
 }
-function togglePlay() { if (over || modalOpen || spectating) return; running = !running; refreshUI(); }
-function cycleSpeed(d) { if (spectating) return; const s = CFG_SPEEDS; let i = s.indexOf(speed); i = (i + d + s.length) % s.length; speed = s[i]; refreshUI(); }
+function togglePlay() { if (over || modalOpen || spectating) return; if (isoLive()) { isoAsk(running ? 'pause' : 'resume'); return; } running = !running; refreshUI(); }
+function cycleSpeed(d) { if (spectating) return; const s = CFG_SPEEDS; let i = s.indexOf(speed); i = (i + d + s.length) % s.length; if (isoLive()) { isoAsk('speed:' + s[i]); return; } speed = s[i]; refreshUI(); }
 const CFG_SPEEDS = [0.5, 1, 2, 3];
 function toggleMute() { muted = !muted; audioWake(); savePrefs(); refreshUI(); musicTick(); }
 /* M hides the motorways (and anything driving on them) so the streets underneath are easy to see */
@@ -7596,9 +8041,69 @@ const UI_THEMES = {
   rosegold: {label: 'Rose gold', plate: '#f5e3de', accent: '#b45f4e'},
   ocean:    {label: 'Ocean',    plate: '#0f3550', accent: '#7fe3ff'},
   aurora:   {label: 'Aurora',   plate: '#0e1b2e', accent: '#4dffc3'},
-  molten:   {label: 'Molten',   plate: '#2a0f0a', accent: '#ff6a2b'}
+  molten:   {label: 'Molten',   plate: '#2a0f0a', accent: '#ff6a2b'},
+  /* p30 interface themes */
+  lagoon: {label: 'Lagoon', plate: '#0e3b3e', accent: '#5ff2d0'},
+  slate: {label: 'Slate', plate: '#2c3440', accent: '#ffb86b'},
+  cocoa: {label: 'Cocoa', plate: '#3a2a22', accent: '#f6c28b'},
+  berry: {label: 'Berry', plate: '#3d1430', accent: '#ff7ab8'},
+  moss: {label: 'Moss', plate: '#2e3a1f', accent: '#c6e36b'},
+  navy: {label: 'Navy', plate: '#13254a', accent: '#ff8a5c'},
+  charcoal: {label: 'Charcoal', plate: '#1d1f22', accent: '#ff5f6d'},
+  lavender: {label: 'Lavender', plate: '#ece6f6', accent: '#6b4bc4'},
+  mint: {label: 'Mint', plate: '#e3f5ec', accent: '#178a6a'},
+  peach: {label: 'Peach', plate: '#fbe6d8', accent: '#d0563b'},
+  sky: {label: 'Sky', plate: '#e4f1fb', accent: '#1e6fd0'},
+  butter: {label: 'Butter', plate: '#fbf3d5', accent: '#b5541c'},
+  blush: {label: 'Blush', plate: '#fbe4ea', accent: '#c2185b'},
+  sage: {label: 'Sage', plate: '#e6ece0', accent: '#4a6b3a'},
+  denim: {label: 'Denim', plate: '#1f3550', accent: '#f5d06f'},
+  wine: {label: 'Wine', plate: '#3b1018', accent: '#ffcf70'},
+  pine: {label: 'Pine', plate: '#0f2a24', accent: '#ffd166'},
+  storm: {label: 'Storm', plate: '#2b3445', accent: '#7fd1ff'},
+  coral: {label: 'Coral', plate: '#ffe9e3', accent: '#e2553f'},
+  ivory: {label: 'Ivory', plate: '#fffaf0', accent: '#8a5a00'},
+  sunset: {label: 'Sunset', plate: '#2d1638', accent: '#ffa05c'},
+  galaxy: {label: 'Galaxy', plate: '#140c2e', accent: '#c59bff'}
 };
-const UI_STYLES = ['clean', 'glass', 'sign'];
+/* p30 panel styles: each is a base style (clean, glass or road sign, maybe frosted) with its own corner radius, edge,
+   shadow, sheen and button shape, applied through CSS variables (see applyUiTheme and the v1.11 block in styles.css) */
+const PANEL_X = {
+  pebble: {label: 'Pebble', base: 'clean', r: 20, ring: 'inset 0 0 0 1px var(--line)', rings: 'inset 0 0 0 1px var(--line)', drop: 'var(--shadow)', sheen: 'none', bgs: 'auto', btn: 'pill'},
+  pillow: {label: 'Pillow', base: 'clean', r: 18, ring: 'inset 0 1px 0 rgba(255,255,255,.3),inset 0 0 0 1px rgba(255,255,255,.14)', rings: 'inset 0 1px 0 rgba(255,255,255,.3),inset 0 0 0 1px rgba(255,255,255,.14)', drop: '0 18px 40px rgba(0,0,0,.28),0 4px 10px rgba(0,0,0,.14)', sheen: 'linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,0) 42%)', bgs: 'auto', btn: 'pill'},
+  outline: {label: 'Accent outline', base: 'clean', r: 14, ring: 'inset 0 0 0 1.5px rgba(var(--accent-rgb),.9)', rings: 'inset 0 0 0 1.5px rgba(var(--accent-rgb),.9)', drop: 'var(--shadow)', sheen: 'none', bgs: 'auto', btn: ''},
+  ribbon: {label: 'Top ribbon', base: 'clean', r: 14, ring: 'inset 0 3px 0 rgba(var(--accent-rgb),.95),inset 0 0 0 1px var(--line)', rings: 'inset 0 2px 0 rgba(var(--accent-rgb),.95),inset 0 0 0 1px var(--line)', drop: 'var(--shadow)', sheen: 'none', bgs: 'auto', btn: ''},
+  tab: {label: 'Side tab', base: 'clean', r: 12, ring: 'inset 4px 0 0 rgba(var(--accent-rgb),.95),inset 0 0 0 1px var(--line)', rings: 'inset 3px 0 0 rgba(var(--accent-rgb),.95),inset 0 0 0 1px var(--line)', drop: 'var(--shadow)', sheen: 'none', bgs: 'auto', btn: ''},
+  underline: {label: 'Underline', base: 'clean', r: 16, ring: 'inset 0 -3px 0 rgba(var(--accent-rgb),.9),inset 0 0 0 1px var(--line)', rings: 'inset 0 -2px 0 rgba(var(--accent-rgb),.9),inset 0 0 0 1px var(--line)', drop: 'var(--shadow)', sheen: 'none', bgs: 'auto', btn: 'soft'},
+  flat: {label: 'Flat', base: 'clean', r: 10, ring: 'inset 0 0 0 1px var(--line)', rings: 'inset 0 0 0 1px var(--line)', drop: '0 1px 2px rgba(0,0,0,.12)', sheen: 'none', bgs: 'auto', btn: ''},
+  floating: {label: 'Floating', base: 'clean', r: 18, ring: 'inset 0 0 0 1px var(--line)', rings: 'inset 0 0 0 1px var(--line)', drop: '0 18px 40px rgba(0,0,0,.28),0 4px 10px rgba(0,0,0,.14)', sheen: 'none', bgs: 'auto', btn: ''},
+  halo: {label: 'Halo', base: 'clean', r: 18, ring: 'inset 0 0 0 1px var(--line)', rings: 'inset 0 0 0 1px var(--line)', drop: '0 0 0 3px rgba(var(--accent-rgb),.32),var(--shadow)', sheen: 'none', bgs: 'auto', btn: 'pill'},
+  glow: {label: 'Accent glow', base: 'clean', r: 16, ring: 'inset 0 0 0 1px rgba(var(--accent-rgb),.55)', rings: 'inset 0 0 0 1px rgba(var(--accent-rgb),.55)', drop: '0 0 0 1px rgba(var(--accent-rgb),.3),0 6px 24px rgba(var(--accent-rgb),.42)', sheen: 'none', bgs: 'auto', btn: ''},
+  sticker: {label: 'Sticker', base: 'clean', r: 18, ring: '0 0 #0000', rings: '0 0 #0000', drop: '0 0 0 3px rgba(255,255,255,.92),0 8px 18px rgba(0,0,0,.26)', sheen: 'none', bgs: 'auto', btn: 'pill'},
+  toy: {label: 'Toy block', base: 'clean', r: 16, ring: 'inset 0 1.5px 0 rgba(255,255,255,.22),inset 0 -2.5px 0 rgba(0,0,0,.16),inset 0 0 0 1px var(--line)', rings: 'inset 0 1px 0 rgba(255,255,255,.22),inset 0 -1.5px 0 rgba(0,0,0,.16)', drop: '0 4px 0 rgba(var(--accent-rgb),.85),0 10px 22px rgba(0,0,0,.2)', sheen: 'none', bgs: 'auto', btn: 'pill'},
+  bevel: {label: 'Bevelled', base: 'clean', r: 12, ring: 'inset 0 1.5px 0 rgba(255,255,255,.22),inset 0 -2.5px 0 rgba(0,0,0,.16),inset 0 0 0 1px var(--line)', rings: 'inset 0 1px 0 rgba(255,255,255,.22),inset 0 -1.5px 0 rgba(0,0,0,.16)', drop: '0 4px 0 rgba(0,0,0,.24),0 10px 20px rgba(0,0,0,.16)', sheen: 'none', bgs: 'auto', btn: 'soft'},
+  glossy: {label: 'Glossy', base: 'clean', r: 16, ring: 'inset 0 1px 0 rgba(255,255,255,.3),inset 0 0 0 1px rgba(255,255,255,.14)', rings: 'inset 0 1px 0 rgba(255,255,255,.3),inset 0 0 0 1px rgba(255,255,255,.14)', drop: 'var(--shadow)', sheen: 'linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,0) 42%)', bgs: 'auto', btn: ''},
+  tinted: {label: 'Tinted', base: 'clean', r: 14, ring: 'inset 0 0 0 1px rgba(var(--accent-rgb),.55)', rings: 'inset 0 0 0 1px rgba(var(--accent-rgb),.55)', drop: 'var(--shadow)', sheen: 'linear-gradient(160deg,rgba(var(--accent-rgb),.16),rgba(var(--accent-rgb),.03) 60%)', bgs: 'auto', btn: ''},
+  dusk: {label: 'Dusk fade', base: 'clean', r: 16, ring: 'inset 0 0 0 1px var(--line)', rings: 'inset 0 0 0 1px var(--line)', drop: 'var(--shadow)', sheen: 'linear-gradient(180deg,rgba(var(--accent-rgb),0) 35%,rgba(var(--accent-rgb),.15))', bgs: 'auto', btn: ''},
+  spotlight: {label: 'Spotlight', base: 'clean', r: 16, ring: 'inset 0 0 0 1px var(--line)', rings: 'inset 0 0 0 1px var(--line)', drop: 'var(--shadow)', sheen: 'radial-gradient(120% 90% at 0% 0%,rgba(255,255,255,.16),rgba(255,255,255,0) 60%)', bgs: 'auto', btn: ''},
+  polka: {label: 'Polka dots', base: 'clean', r: 16, ring: 'inset 0 0 0 1px var(--line)', rings: 'inset 0 0 0 1px var(--line)', drop: 'var(--shadow)', sheen: 'radial-gradient(circle,rgba(var(--ov),.08) 1.3px,transparent 1.9px)', bgs: '12px 12px', btn: 'pill'},
+  duotone: {label: 'Duotone', base: 'clean', r: 18, ring: 'inset 0 0 0 1px rgba(var(--accent-rgb),.55)', rings: 'inset 0 0 0 1px rgba(var(--accent-rgb),.55)', drop: '0 10px 26px rgba(var(--accent-rgb),.32),0 2px 6px rgba(0,0,0,.14)', sheen: 'linear-gradient(135deg,rgba(var(--accent-rgb),.17),rgba(255,255,255,.04) 55%,rgba(var(--accent-rgb),.09))', bgs: 'auto', btn: 'pill'},
+  comic: {label: 'Comic', base: 'clean', r: 14, ring: 'inset 0 0 0 2.5px var(--ink)', rings: 'inset 0 0 0 2px var(--ink)', drop: '0 4px 0 rgba(0,0,0,.24),0 10px 20px rgba(0,0,0,.16)', sheen: 'none', bgs: 'auto', btn: 'soft'},
+  deep: {label: 'Deep shadow', base: 'clean', r: 16, ring: 'inset 0 0 0 1px var(--line)', rings: 'inset 0 0 0 1px var(--line)', drop: '0 24px 50px rgba(0,0,0,.35),0 8px 16px rgba(0,0,0,.18)', sheen: 'linear-gradient(180deg,rgba(0,0,0,0) 45%,rgba(0,0,0,.14))', bgs: 'auto', btn: ''},
+  fizzy: {label: 'Fizzy', base: 'clean', r: 18, ring: 'inset 0 0 0 1px var(--line)', rings: 'inset 0 0 0 1px var(--line)', drop: 'var(--shadow)', sheen: 'radial-gradient(circle at 30% 30%,rgba(var(--ov),.07) 0 5px,transparent 6px),radial-gradient(circle at 72% 68%,rgba(var(--ov),.05) 0 9px,transparent 10px)', bgs: '46px 46px', btn: 'pill'},
+  roundsign: {label: 'Rounded sign', base: 'sign', r: 20, ring: 'inset 0 0 0 3px var(--plate),inset 0 0 0 4.5px var(--keyline)', rings: 'inset 0 0 0 1.5px var(--keyline)', drop: 'var(--shadow)', sheen: 'none', bgs: 'auto', btn: 'pill'},
+  accentsign: {label: 'Accent sign', base: 'sign', r: 12, ring: 'inset 0 0 0 3px var(--plate),inset 0 0 0 4.5px rgba(var(--accent-rgb),.9)', rings: 'inset 0 0 0 1.5px rgba(var(--accent-rgb),.9)', drop: 'var(--shadow)', sheen: 'none', bgs: 'auto', btn: ''},
+  enamel: {label: 'Enamel sign', base: 'sign', r: 14, ring: 'inset 0 0 0 3px var(--plate),inset 0 0 0 4.5px var(--keyline)', rings: 'inset 0 0 0 1.5px var(--keyline)', drop: '0 18px 40px rgba(0,0,0,.28),0 4px 10px rgba(0,0,0,.14)', sheen: 'linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,0) 42%)', bgs: 'auto', btn: 'soft'},
+  bubbleglass: {label: 'Bubble glass', base: 'glass', r: 20, ring: 'inset 0 1px 0 rgba(255,255,255,.3),inset 0 0 0 1px rgba(255,255,255,.14)', rings: 'inset 0 1px 0 rgba(255,255,255,.3),inset 0 0 0 1px rgba(255,255,255,.14)', drop: 'var(--shadow)', sheen: 'linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,0) 42%)', bgs: 'auto', btn: 'pill'},
+  tintglass: {label: 'Tinted glass', base: 'glass', r: 16, ring: 'inset 0 0 0 1px rgba(var(--accent-rgb),.55)', rings: 'inset 0 0 0 1px rgba(var(--accent-rgb),.55)', drop: 'var(--shadow)', sheen: 'linear-gradient(160deg,rgba(var(--accent-rgb),.16),rgba(var(--accent-rgb),.03) 60%)', bgs: 'auto', btn: ''},
+  glassline: {label: 'Glass outline', base: 'glass', r: 14, ring: 'inset 0 0 0 1.5px rgba(var(--accent-rgb),.9)', rings: 'inset 0 0 0 1.5px rgba(var(--accent-rgb),.9)', drop: '0 1px 2px rgba(0,0,0,.12)', sheen: 'none', bgs: 'auto', btn: ''},
+  iceglass: {label: 'Ice glass', base: 'glass', r: 18, ring: 'inset 0 1px 0 rgba(255,255,255,.3),inset 0 0 0 1px rgba(255,255,255,.14)', rings: 'inset 0 1px 0 rgba(255,255,255,.3),inset 0 0 0 1px rgba(255,255,255,.14)', drop: '0 18px 40px rgba(0,0,0,.28),0 4px 10px rgba(0,0,0,.14)', sheen: 'linear-gradient(160deg,rgba(255,255,255,.16),rgba(255,255,255,.04) 45%,rgba(255,255,255,.08))', bgs: 'auto', btn: 'soft', frost: 1},
+  frostglow: {label: 'Frosted glow', base: 'glass', r: 16, ring: 'inset 0 1px 0 rgba(255,255,255,.3),inset 0 0 0 1px rgba(255,255,255,.14)', rings: 'inset 0 1px 0 rgba(255,255,255,.3),inset 0 0 0 1px rgba(255,255,255,.14)', drop: '0 0 0 1px rgba(var(--accent-rgb),.3),0 6px 24px rgba(var(--accent-rgb),.42)', sheen: 'linear-gradient(160deg,rgba(255,255,255,.16),rgba(255,255,255,.04) 45%,rgba(255,255,255,.08))', bgs: 'auto', btn: '', frost: 1},
+  aurora: {label: 'Aurora panels', base: 'clean', r: 18, ring: 'inset 0 0 0 1px rgba(var(--accent-rgb),.55)', rings: 'inset 0 0 0 1px rgba(var(--accent-rgb),.55)', drop: '0 0 0 1px rgba(var(--accent-rgb),.3),0 6px 24px rgba(var(--accent-rgb),.42)', sheen: 'linear-gradient(120deg,rgba(77,255,195,.16),rgba(127,90,255,.14) 50%,rgba(47,214,255,.14))', bgs: 'auto', btn: 'pill'},
+  gilded: {label: 'Gilded', base: 'sign', r: 14, ring: 'inset 0 0 0 3px var(--plate),inset 0 0 0 4.5px #d4af37,inset 0 0 0 5.5px rgba(255,241,168,.45)', rings: 'inset 0 0 0 1.5px #d4af37', drop: '0 18px 40px rgba(0,0,0,.28),0 4px 10px rgba(0,0,0,.14)', sheen: 'linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,0) 42%)', bgs: 'auto', btn: 'soft'},
+  opal: {label: 'Opal glass', base: 'glass', r: 20, ring: 'inset 0 1px 0 rgba(255,255,255,.3),inset 0 0 0 1px rgba(255,255,255,.14)', rings: 'inset 0 1px 0 rgba(255,255,255,.3),inset 0 0 0 1px rgba(255,255,255,.14)', drop: '0 18px 40px rgba(0,0,0,.28),0 4px 10px rgba(0,0,0,.14)', sheen: 'linear-gradient(135deg,rgba(255,170,220,.18),rgba(170,220,255,.16) 50%,rgba(200,255,210,.14))', bgs: 'auto', btn: 'pill', frost: 1}
+};
+const UI_STYLES = ['clean', 'glass', 'sign'].concat(Object.keys(PANEL_X));
 let uiTheme = {preset: 'petrol', style: 'clean', frost: false, plate: '', btn: '', accent: ''};
 const hexOk = h => typeof h === 'string' && /^#[0-9a-f]{6}$/i.test(h);
 function lum(hex) {                                   // WCAG relative luminance
@@ -7633,8 +8138,11 @@ function applyUiTheme() {
   };
   for (const k in vars) st.setProperty(k, vars[k]);
   root.dataset.uiTone = light ? 'light' : 'dark';
-  root.dataset.uiStyle = UI_STYLES.includes(uiTheme.style) ? uiTheme.style : 'clean';
-  root.dataset.uiFrost = uiTheme.frost ? '1' : '0';
+  const pv = PANEL_X[uiTheme.style];
+  root.dataset.uiStyle = pv ? pv.base : UI_STYLES.includes(uiTheme.style) ? uiTheme.style : 'clean';
+  root.dataset.uiFrost = uiTheme.frost || (pv && pv.frost) ? '1' : '0';
+  root.dataset.uiPx = pv ? '1' : '0'; root.dataset.uiPbtn = pv ? pv.btn : '';
+  if (pv) { const pvv = {'--px-r': pv.r + 'px', '--px-ring': pv.ring, '--px-ring-s': pv.rings, '--px-drop': pv.drop, '--px-sheen': pv.sheen, '--px-bgs': pv.bgs}; for (const k in pvv) st.setProperty(k, pvv[k]); }
   const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.content = plate;
 }
 function saveUiTheme() { try { localStorage.setItem(UI_KEY, JSON.stringify(uiTheme)); } catch (e) {} rememberMode(); }
@@ -7736,6 +8244,114 @@ const COSMETICS = {
   'decor:cactus': [30, 'Cacti'], 'decor:blossom': [35, 'Blossom trees'], 'decor:palm': [35, 'Palms'], 'decor:snowpine': [45, 'Snowy pines'],
   'decor:mushroom': [55, 'Mushrooms'], 'decor:pumpkin': [60, 'Pumpkins']
 };
+/* p30: more interface themes, map themes, decorations and panel styles */
+Object.assign(COSMETICS, {
+  'ui:lagoon': [35, 'Lagoon theme'],
+  'ui:slate': [25, 'Slate theme'],
+  'ui:cocoa': [30, 'Cocoa theme'],
+  'ui:berry': [45, 'Berry theme'],
+  'ui:moss': [30, 'Moss theme'],
+  'ui:navy': [30, 'Navy theme'],
+  'ui:charcoal': [25, 'Charcoal theme'],
+  'ui:lavender': [35, 'Lavender theme'],
+  'ui:mint': [35, 'Mint theme'],
+  'ui:peach': [35, 'Peach theme'],
+  'ui:sky': [30, 'Sky theme'],
+  'ui:butter': [30, 'Butter theme'],
+  'ui:blush': [40, 'Blush theme'],
+  'ui:sage': [30, 'Sage theme'],
+  'ui:denim': [35, 'Denim theme'],
+  'ui:wine': [55, 'Wine theme'],
+  'ui:pine': [30, 'Pine theme'],
+  'ui:storm': [50, 'Storm theme'],
+  'ui:coral': [50, 'Coral theme'],
+  'ui:ivory': [45, 'Ivory theme'],
+  'ui:sunset': [0, 'Sunset theme', 'U'],
+  'ui:galaxy': [0, 'Galaxy theme', 'U'],
+  'map:orchard': [30, 'Orchard map'],
+  'map:provence': [40, 'Provence map'],
+  'map:sunfields': [35, 'Sunflower fields map'],
+  'map:harvest': [30, 'Harvest map'],
+  'map:tulips': [35, 'Tulip fields map'],
+  'map:birchwood': [30, 'Birch wood map'],
+  'map:marsh': [30, 'Marshland map'],
+  'map:bamboo': [40, 'Bamboo grove map'],
+  'map:reef': [55, 'Coral reef map'],
+  'map:seaside': [35, 'Seaside map'],
+  'map:riviera': [45, 'Riviera map'],
+  'map:fairground': [40, 'Fairground map'],
+  'map:bakery': [60, 'Bakery map'],
+  'map:lollipop': [40, 'Lollipop lane map'],
+  'map:gumdrop': [40, 'Gumdrop hills map'],
+  'map:cloudland': [55, 'Cloudland map'],
+  'map:palace': [35, 'Palace gardens map'],
+  'map:watergarden': [30, 'Water garden map'],
+  'map:arctic': [40, 'Arctic map'],
+  'map:savanna': [35, 'Savanna map'],
+  'map:deepsea': [50, 'Deep sea map'],
+  'map:fireflies': [50, 'Firefly night map'],
+  'map:mars': [45, 'Red planet map'],
+  'map:twilight': [40, 'Twilight map'],
+  'map:festival': [0, 'Lantern festival map', 'U'],
+  'map:cosmos': [0, 'Cosmos map', 'U'],
+  'decor:topiary': [30, 'Topiary'],
+  'decor:sunflower': [30, 'Sunflowers'],
+  'decor:tulip': [25, 'Tulips'],
+  'decor:lavender': [30, 'Lavender'],
+  'decor:haybale': [25, 'Hay bales'],
+  'decor:snowfolk': [40, 'Snowballs'],
+  'decor:lantern': [55, 'Lanterns'],
+  'decor:birch': [25, 'Birches'],
+  'decor:willow': [45, 'Willows'],
+  'decor:bamboo': [35, 'Bamboo'],
+  'decor:coral': [45, 'Coral'],
+  'decor:shell': [30, 'Seashells'],
+  'decor:pond': [35, 'Ponds'],
+  'decor:parasol': [40, 'Parasols'],
+  'decor:balloon': [50, 'Balloons'],
+  'decor:cupcake': [55, 'Cupcakes'],
+  'decor:lollipop': [45, 'Lollipops'],
+  'decor:gumdrop': [35, 'Gumdrops'],
+  'decor:cloud': [40, 'Clouds'],
+  'decor:bubble': [35, 'Bubbles'],
+  'decor:crater': [30, 'Craters'],
+  'decor:orchard': [30, 'Fruit trees'],
+  'decor:firefly': [0, 'Fireflies', 'U'],
+  'decor:planet': [0, 'Planets', 'U'],
+  'style:pebble': [25, 'Pebble panels'],
+  'style:pillow': [30, 'Pillow panels'],
+  'style:outline': [25, 'Accent outline panels'],
+  'style:ribbon': [25, 'Top ribbon panels'],
+  'style:tab': [25, 'Side tab panels'],
+  'style:underline': [25, 'Underline panels'],
+  'style:flat': [25, 'Flat panels'],
+  'style:floating': [30, 'Floating panels'],
+  'style:halo': [45, 'Halo panels'],
+  'style:glow': [50, 'Accent glow panels'],
+  'style:sticker': [40, 'Sticker panels'],
+  'style:toy': [45, 'Toy block panels'],
+  'style:bevel': [30, 'Bevelled panels'],
+  'style:glossy': [35, 'Glossy panels'],
+  'style:tinted': [30, 'Tinted panels'],
+  'style:dusk': [35, 'Dusk fade panels'],
+  'style:spotlight': [30, 'Spotlight panels'],
+  'style:polka': [45, 'Polka dots panels'],
+  'style:duotone': [55, 'Duotone panels'],
+  'style:comic': [40, 'Comic panels'],
+  'style:deep': [35, 'Deep shadow panels'],
+  'style:fizzy': [45, 'Fizzy panels'],
+  'style:roundsign': [35, 'Rounded sign panels'],
+  'style:accentsign': [40, 'Accent sign panels'],
+  'style:enamel': [50, 'Enamel sign panels'],
+  'style:bubbleglass': [40, 'Bubble glass panels'],
+  'style:tintglass': [45, 'Tinted glass panels'],
+  'style:glassline': [35, 'Glass outline panels'],
+  'style:iceglass': [55, 'Ice glass panels'],
+  'style:frostglow': [60, 'Frosted glow panels'],
+  'style:aurora': [0, 'Aurora panels panels', 'U'],
+  'style:gilded': [0, 'Gilded panels', 'U'],
+  'style:opal': [0, 'Opal glass panels', 'U']
+});
 for (const cat in DESIGNS) for (const k in DESIGNS[cat].items) { const [n, pr, cur, achId] = DESIGNS[cat].items[k]; if (pr || cur) COSMETICS['design:' + cat + ':' + k] = [pr, n + ' ' + DESIGNS[cat].one, cur || '#', achId]; }
 for (const id in COSMETICS) { const c = COSMETICS[id]; if (!c[2] || c[2] === '#') c[0] = newPrice(c[0]); }
 /* every library colour is its own item (standard #500-700, premium ones rare); the Unique group only comes from crates */
@@ -8075,6 +8691,7 @@ function mapPreview(cvs, id, custom, decor) {
   PAL = keep; theme = keepTheme;
 }
 const STYLE_ITEMS = {clean: 'Clean', glass: 'Glass', sign: 'Road sign', frost: 'Frosted glass'};
+for (const k in PANEL_X) STYLE_ITEMS[k] = PANEL_X[k].label;
 function decorPreview(g, id) {
   g.fillStyle = PAL.land2; g.fillRect(0, 0, 64, 64); g.fillStyle = PAL.patch; rr_(g, 6, 38, 52, 20, 8);
   drawDecor(g, id === 'auto' ? (MAP_THEMES[mapPrefs.theme] || MAP_THEMES.meadow).decor : id, 32, 32, 17, 0, 5);
@@ -8465,7 +9082,7 @@ function frame(now) {
   requestAnimationFrame(frame);
   const real = Math.min(0.1, (now - last) / 1000); last = now;
   animT += real;
-  if (running && !over && started && (!modalOpen || demoMode)) {     // the menu's background city keeps playing behind it
+  if (running && !over && started && (!modalOpen || demoMode || isoLive())) {     // the menu's background city keeps playing behind it (and a live match never waits)
     simAcc += real * speed;
     let n = 0;
     while (simAcc >= SIM_STEP && n < 12) {
@@ -8609,7 +9226,19 @@ if (typeof window !== 'undefined' && (location.hostname === 'localhost' || locat
       if (spectating) this.spectate.exit(); else { running = false; }
       showStartBest(); $('btn-resume').hidden = !hasSave(); openModal('m-start'); refreshUI();
     },
-    toast, openModal, closeModal, renderCollection,
+    toast, openModal, closeModal, renderCollection, setIsoPending, openIsoPane() { openModal('m-start'); showMM('play'); playMode = 'iso'; renderPlay(); },
+    startIso, showIsoResult,
+    get iso() { return iso && diffKey === 'iso' ? {id: iso.id, kind: iso.kind, over} : null; },
+    isoOpp(st) { if (!iso) return; iso.oppSt = st; renderIsoHud(); },
+    isoProp(p) { if (!iso) return; iso.prop = p; renderIsoHud(); if (p && !p.mine) sfx('click'); },
+    isoNote(t) { if (!iso) return; iso.note = t || ''; renderIsoHud(); },
+    isoControl(c) {                                        // what both players agreed: applied the same on both sides
+      if (!iso || diffKey !== 'iso' || over) return;
+      iso.ctl = {paused: !!c.paused, speed: CFG_SPEEDS.includes(c.speed) ? c.speed : 1};
+      running = !iso.ctl.paused; speed = iso.ctl.speed; refreshUI(); renderIsoHud();
+      hint(iso.ctl.paused ? 'Paused — you both agreed.' : 'Running at ' + speed + '× — you both agreed.');
+    },
+    isoEnd(why) { if (iso && diffKey === 'iso' && started && !over) endGame(why); },
     spectate: {
       enter(d, meta, keepCam) {
         const was = spectating, c0 = {x: cam.x, y: cam.y, z: cam.z, auto: cam.auto};

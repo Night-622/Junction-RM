@@ -193,6 +193,13 @@
 
     <div id="hint" role="status"></div>
     <div id="tip" role="tooltip" hidden></div>
+    <!-- ISO 1v1: the match beside your city -->
+    <div class="iso-hud plate" id="iso-hud" hidden>
+      <button type="button" class="ih-head"><b>ISO · <span id="ih-kind">Live</span></b><span id="ih-vs">vs —</span></button>
+      <div class="ih-body"><canvas id="ih-map" width="180" height="180" aria-label="Your opponent's city"></canvas><div class="ih-stats" id="ih-stats"></div></div>
+      <div class="ih-prop" id="ih-prop" hidden></div>
+      <div class="ih-ctl" id="ih-ctl"></div>
+    </div>
     <div class="specbar plate" id="spec-bar" hidden>
       <span class="livedot" aria-hidden="true"></span>
       <span id="spec-text">Watching</span>
@@ -390,6 +397,39 @@
       </div>
     </div>
 
+    <!-- a player, opened from a leaderboard: their records, their game right now, and ways to reach them -->
+    <div class="modal" id="m-player" hidden>
+      <div class="card plate wide playercard">
+        <div class="acct-head"><div class="acct-av" id="pl-av" aria-hidden="true"></div><div class="acct-id"><h2 id="pl-name">Player</h2><p class="mini" id="pl-sub"></p></div></div>
+        <div class="pl-live" id="pl-live"></div>
+        <h4 class="frh">Records</h4>
+        <div id="pl-rec"><p class="mini">Loading…</p></div>
+        <div class="btnrow pl-btns" id="pl-btns"></div>
+        <div class="btnrow"><button class="bigbtn ghost" id="pl-close" type="button">Close</button></div>
+      </div>
+    </div>
+    <!-- challenge someone to ISO 1v1 -->
+    <div class="modal" id="m-chal" hidden>
+      <div class="card plate chalcard">
+        <h2>Challenge <span id="ch-name">them</span></h2>
+        <p class="lead">ISO 1v1: you both get the same map.</p>
+        <button type="button" class="chal-opt" data-kind="live"><b>Live</b><span>Play side by side right now. Same speed for both of you; pausing or speeding up needs you both to agree. The last city standing wins.</span></button>
+        <button type="button" class="chal-opt" data-kind="daily"><b>Daily</b><span>Each of you plays the map in your own time within 24 hours, pausing and speeding up as you like. Scored on time survived, parcels, money, trips and fewest tow trucks: a point for each one you win.</span></button>
+        <p class="formerr" id="ch-err" role="alert"></p>
+        <div class="btnrow"><button class="bigbtn ghost" id="ch-cancel" type="button">Cancel</button></div>
+      </div>
+    </div>
+    <!-- an ISO match result -->
+    <div class="modal" id="m-iso-res" hidden>
+      <div class="card plate isocard">
+        <small id="ir-kind">ISO 1v1</small>
+        <h2 id="ir-title">Result</h2>
+        <p class="lead" id="ir-sub"></p>
+        <div class="ir-table" id="ir-table"></div>
+        <div class="btnrow"><button class="bigbtn" id="ir-again" type="button">Rematch</button><button class="bigbtn ghost" id="ir-close" type="button">Close</button></div>
+      </div>
+    </div>
+
     <!-- a mystery crate opening -->
     <div class="modal" id="m-crate" hidden>
       <div class="card plate crate-card">
@@ -460,7 +500,7 @@
         <div class="acct-pane" data-pane="msgs" hidden>
           <div id="msg-list" class="msglist"><p class="mini">Loading…</p></div>
           <div id="msg-thread" class="msgthread" hidden>
-            <div class="mt-head"><button class="linkbtn" id="msg-back" type="button">← All messages</button><b id="msg-with"></b><button class="act small" id="msg-addfriend" type="button" hidden>Add friend</button></div>
+            <div class="mt-head"><button class="linkbtn" id="msg-back" type="button">← All messages</button><b id="msg-with"></b><button class="act small" id="msg-chal" type="button">Challenge</button> <button class="act small" id="msg-addfriend" type="button" hidden>Add friend</button></div>
             <div class="mt-body" id="msg-body"></div>
             <div class="mt-reply"><input id="msg-text" type="text" maxlength="500" placeholder="Write a message…" autocomplete="off"><button class="bigbtn" id="msg-send" type="button">Send</button></div>
             <p class="formerr" id="msg-err" role="alert"></p>
@@ -600,7 +640,7 @@
           <canvas id="run-map" width="420" height="420" aria-label="Their city"></canvas>
           <div><div class="statgrid" id="run-stats"></div><p class="mini" id="run-note"></p></div>
         </div>
-        <div class="btnrow"><button class="bigbtn" id="run-msg" type="button">Message</button><button class="bigbtn ghost" id="run-friend" type="button" hidden>Add friend</button><button class="bigbtn ghost" id="run-close" type="button">Close</button></div>
+        <div class="btnrow"><button class="bigbtn" id="run-msg" type="button">Message</button><button class="bigbtn" id="run-chal" type="button">Challenge</button><button class="bigbtn ghost" id="run-friend" type="button" hidden>Add friend</button><button class="bigbtn ghost" id="run-close" type="button">Close</button></div>
       </div>
     </div>
 

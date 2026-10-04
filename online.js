@@ -30,7 +30,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js';
 import {
   getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs, query, orderBy, limit,
-  onSnapshot, runTransaction, serverTimestamp, deleteField, addDoc, where
+  onSnapshot, runTransaction, serverTimestamp, deleteField, addDoc, where, Timestamp
 } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js';
 
 const firebaseConfig = {
@@ -214,6 +214,7 @@ async function claimName(name) {
 }
 async function syncBoardName() {
   const uid = O.user.uid, name = myName(), star = isPerm(), ach3 = myAch3();
+  pushProfile();
   await Promise.all(MODES.map(async m => {
     try { const r = boardRef(m, uid), s = await getDoc(r); if (s.exists()) await updateDoc(r, {name, star, ach3}); } catch (e) { /* no entry on this board */ }
   }));
@@ -324,7 +325,7 @@ $('user-signin').addEventListener('click', () => busy(null, async () => {
 
 /* ------------------------------------------------------ account widgets */
 function renderAccount() {
-  startInbox(); migrateLegacySaves();
+  startInbox(); startChallenges(); migrateLegacySaves();
   const sa = $('start-account');
   sa.hidden = false;
   sa.innerHTML = '<span>Playing as <b>' + nameHTML(myName(), isPerm(), myAch3()) + '</b>' + (isPerm() ? '' : ' <small>(guest)</small>') + '</span>' +
@@ -576,6 +577,7 @@ async function openSaves(arg) {
 let slotsBox = null, slotsMode = 'standard', slotsTabs = false;
 async function renderSlots(box, mode, tabs) {
   slotsBox = box; slotsMode = SAVE_MODES.includes(mode) ? mode : slotsMode; slotsTabs = !!tabs;
+  if (isoBox === box) isoBox = null;                    // the box now shows save slots, not ISO
   const want = slotsMode;
   box.innerHTML = (slotsTabs ? slotTabsHTML() : '') + '<p class="mini">Loading\u2026</p>';
   bindSlotTabs(box);
@@ -658,6 +660,7 @@ $('saves-back').addEventListener('click', () => closeM('m-saves'));
 API.events.on('autosave', e => { cloudSave(e && e.urgent); maybeBoard(false); });
 API.events.on('week', () => { cloudSave(true); maybeBoard(true); });
 API.events.on('over', async e => {
+  if (e.diffKey === 'iso') { isoOver(); return; }
   if (e.diffKey === 'expert') submitExpert(API.state());
   else if (e.diffKey !== 'zen') submitBest(e.diffKey, {parcels: e.score, weeks: e.week});
   if (O.ready && O.slot) {
@@ -772,7 +775,7 @@ async function openBoard(tab, mode) {
     snap.forEach(s => {
       const d = s.data(); if (!(d[boardTab] > 0)) return;
       const me = O.user && s.id === O.user.uid; if (me) meIn = true;
-      rows.push('<li class="' + (me ? 'me' : '') + '"><span class="rank">' + (rows.length + 1) + '</span><span class="who">' + nameHTML(d.name || '?', d.star, d.ach3) +
+      rows.push('<li class="click' + (me ? ' me' : '') + '" data-player="' + esc(s.id) + '" data-name="' + esc(d.name || '') + '" tabindex="0"><span class="rank">' + (rows.length + 1) + '</span><span class="who">' + nameHTML(d.name || '?', d.star, d.ach3) +
         '</span><b class="num">' + B.fmt(d[boardTab]) + '</b></li>');
     });
     $('board-list').innerHTML = rows.join('') || '<li class="mini">No entries yet \u2014 be the first.</li>';
@@ -846,7 +849,11 @@ async function expertTop(ago, n) {
   snap.forEach(x => { const d = x.data(); expertRows[x.id] = d; out.push({uid: x.id, name: d.name || '?', parcels: d.parcels || 0, weeks: d.weeks || 0, city: d.city || ''}); });
   return out;
 }
-$('board-list').addEventListener('click', e => { const li = e.target.closest('[data-run]'); if (li && boardMode === 'expert') openRun(API.expertSeed(expertAgo).key, li.dataset.run); });
+$('board-list').addEventListener('click', e => {
+  const li = e.target.closest('[data-run]'); if (li && boardMode === 'expert') { openRun(API.expertSeed(expertAgo).key, li.dataset.run); return; }
+  const p = e.target.closest('[data-player]'); if (p) openPlayer(p.dataset.player, p.dataset.name);
+});
+$('board-list').addEventListener('keydown', e => { if (e.key !== 'Enter') return; const p = e.target.closest('[data-player]'); if (p) openPlayer(p.dataset.player, p.dataset.name); });
 $('board-list').addEventListener('keydown', e => { if (e.key === 'Enter') { const li = e.target.closest('[data-run]'); if (li && boardMode === 'expert') openRun(API.expertSeed(expertAgo).key, li.dataset.run); } });
 let runOf = null;
 function openRun(wk, uid) {
@@ -860,12 +867,13 @@ function openRun(wk, uid) {
   $('run-stats').innerHTML = stat((d.parcels || 0).toLocaleString(), 'parcels delivered') + stat('Week ' + (d.weeks || 0), 'reached') + stat(money(d.earned || 0), 'earned') +
     stat((d.trips || 0).toLocaleString(), 'trips') + stat(d.cars || 0, 'cars') + stat(d.roads || 0, 'road tiles') + stat(d.tows || 0, 'tow-truck rescues') + stat(hm(d.playSec || 0), 'played');
   $('run-note').textContent = ok ? 'Their city at their best moment on this seed: roads, motorways, lights (red dots), roundabouts (green dots), houses and stores.' : 'No map saved for this run.';
-  $('run-msg').hidden = !O.user || uid === O.user.uid;
+  $('run-msg').hidden = !O.user || uid === O.user.uid; $('run-chal').hidden = $('run-msg').hidden;
   loadFriends().then(renderRunFriend);
   $('run-msg').textContent = 'Message ' + (d.name || 'them');
   openM('m-run');
 }
 $('run-close').addEventListener('click', () => closeM('m-run'));
+$('run-chal').addEventListener('click', () => { if (runOf) openChallenge(runOf.uid, runOf.name); });
 $('run-friend').addEventListener('click', async () => { if (!runOf) return; const err = await addFriend(runOf.uid, runOf.name); API.toast(err || runOf.name + ' is now your friend \u2014 find them under Friends on the main menu.', err ? 'warn' : 'good'); renderRunFriend(); });
 function renderRunFriend() { const b = $('run-friend'); if (!b || !runOf) return; const f = isFriend(runOf.uid); b.hidden = !O.user || runOf.uid === O.user.uid || f; }
 $('run-msg').addEventListener('click', () => { if (!runOf) return; closeM('m-run'); closeM('m-board'); openThread(runOf.uid, runOf.name); });
@@ -911,6 +919,7 @@ function renderMsgs() {
 }
 function renderThread() {
   $('msg-with').textContent = msgWith.name || 'Player';
+  const mc = $('msg-chal'); if (mc) mc.onclick = () => openChallenge(msgWith.uid, msgWith.name);
   const af = $('msg-addfriend'); if (af) { af.hidden = isFriend(msgWith.uid); af.onclick = async () => { const err = await addFriend(msgWith.uid, msgWith.name); API.toast(err || (msgWith.name || 'They') + ' is now your friend', err ? 'warn' : 'good'); renderThread(); }; }
   const ms = O.inbox.filter(m => m.from === msgWith.uid).concat(O.sent.filter(m => m.to === msgWith.uid)).sort((a, b) => msAt(a) - msAt(b));
   const body = $('msg-body');
@@ -1020,10 +1029,12 @@ async function renderFriends(box) {
 }
 async function renderFriendMain() {
   const main = $('fr-main'); if (!main || !frSel) return;
-  main.innerHTML = '<div class="frhead"><b>' + esc(frSel.name) + '</b><button class="linkbtn" type="button" id="fr-remove">Remove friend</button></div>' +
+  main.innerHTML = '<div class="frhead"><b>' + esc(frSel.name) + '</b><span><button class="act small" type="button" id="fr-chal">Challenge</button> <button class="act small" type="button" id="fr-view">Profile</button> <button class="linkbtn" type="button" id="fr-remove">Remove friend</button></span></div>' +
     '<div id="fr-rec"><p class="mini">Loading records\u2026</p></div>' +
     '<h4 class="frh">Chat</h4><div class="mt-body" id="fr-chat"></div>' +
     '<div class="mt-reply"><input id="fr-text" type="text" maxlength="500" placeholder="Message ' + esc(frSel.name) + '\u2026" autocomplete="off"><button class="bigbtn" id="fr-send" type="button">Send</button></div><p class="formerr" id="fr-cerr" role="alert"></p>';
+  $('fr-chal').onclick = () => openChallenge(frSel.uid, frSel.name);
+  $('fr-view').onclick = () => openPlayer(frSel.uid, frSel.name);
   $('fr-remove').onclick = async () => { try { await deleteDoc(friendRef(frSel.uid)); } catch (e) {} frSel = null; await loadFriends(true); renderFriends(); };
   const send = async () => { $('fr-cerr').textContent = ''; const err = await sendTo(frSel.uid, frSel.name, $('fr-text').value); if (err) { $('fr-cerr').textContent = err; return; } $('fr-text').value = ''; renderFriendChat(); };
   $('fr-send').onclick = send; $('fr-text').onkeydown = e => { if (e.key === 'Enter') send(); };
@@ -1079,7 +1090,12 @@ async function setupLive(forceNew) {
     O.watchedUntil = w ? w + WATCH_FRESH : 0;
     if (!was && O.watchedUntil > Date.now()) { O.lastLiveStr = ''; pushLive(true); API.toast('Someone is watching your city live', 'tip'); }
   }, () => {});
-  renderLiveCode();
+  renderLiveCode(); pushProfile();
+}
+/* profiles/{uid}: the little that anyone can see about a player — their name and live code */
+async function pushProfile() {
+  if (!O.user || !O.profile || !O.profile.name) return;
+  await setDoc(doc(db, 'profiles', O.user.uid), {name: myName(), star: isPerm(), ach3: myAch3(), live: O.liveCode || null, updatedAt: serverTimestamp()}).catch(e => console.warn('Profile not shared', e));
 }
 async function dropLive(remove) {
   if (O.liveUnsub) { O.liveUnsub(); O.liveUnsub = null; }
@@ -1091,6 +1107,7 @@ async function pushLive(force) {
   if (!O.liveCode || !O.ready) return;
   const st = API.state(), now = Date.now();
   const playing = st.started && !st.atMenu && !st.tutorialMode && !st.spectating && !st.over;
+  if (playing !== O.livePlaying) { O.livePlaying = playing; force = true; }      // starting or stopping a city shows straight away
   const watched = O.watchedUntil > now;
   const ref = doc(db, 'live', O.liveCode);
   if (watched && playing) {
@@ -1204,6 +1221,289 @@ function stopWatching(silent) {
 $('spec-exit').addEventListener('click', () => stopWatching(false));
 
 /* ============================================================== FEEDBACK */
+/* ============================================================ PLAYERS
+   Tap a player on a leaderboard (or a friend's Profile): their records, whether they're playing right now
+   (watch them), and buttons to message, add or challenge them. */
+async function openPlayer(uid, name) {
+  if (!O.ready || !O.user) return;
+  $('pl-name').innerHTML = esc(name || 'Player'); $('pl-av').textContent = String(name || '?').charAt(0).toUpperCase();
+  $('pl-sub').textContent = uid === O.user.uid ? 'This is you.' : '';
+  $('pl-live').innerHTML = '<p class="mini">Checking whether they\u2019re playing\u2026</p>';
+  $('pl-rec').innerHTML = '<p class="mini">Loading\u2026</p>';
+  const me = uid === O.user.uid;
+  const btns = () => {
+    $('pl-btns').innerHTML = me ? '' : '<button class="bigbtn" type="button" id="pl-chal">Challenge</button><button class="bigbtn ghost" type="button" id="pl-msg">Message</button>' +
+      (isFriend(uid) ? '<span class="mini pl-fr">\u2713 Friends</span>' : '<button class="bigbtn ghost" type="button" id="pl-add">Add friend</button>');
+    if (me) return;
+    $('pl-chal').onclick = () => { closeM('m-player'); openChallenge(uid, name); };
+    $('pl-msg').onclick = () => { closeM('m-player'); closeM('m-board'); openThread(uid, name); };
+    const add = $('pl-add'); if (add) add.onclick = async () => { const err = await addFriend(uid, name); API.toast(err || name + ' is now your friend', err ? 'warn' : 'good'); btns(); };
+  };
+  btns();
+  openM('m-player');
+  loadFriends().then(btns);
+  friendRecordsOf(uid).then(r => { if (!$('m-player').hidden) $('pl-rec').innerHTML = recordsHTML(r); });
+  try {
+    const p = await getDoc(doc(db, 'profiles', uid)), code = p.exists() ? p.data().live : null;
+    const l = code ? await getDoc(doc(db, 'live', code)) : null, d = l && l.exists() ? l.data() : null;
+    const fresh = d && d.updatedAt && d.updatedAt.toMillis && Date.now() - d.updatedAt.toMillis() < 3 * LIVE_HEARTBEAT;
+    if (d && d.playing && fresh && !me) {
+      $('pl-live').innerHTML = '<div class="pl-on"><i></i><span><b>Playing now</b><small>' + (d.meta && d.meta.running === false ? 'paused' : 'their city is running') + '</small></span><button class="bigbtn" type="button" id="pl-watch">Watch live</button></div>';
+      $('pl-watch').onclick = () => { closeM('m-player'); closeM('m-board'); startWatching(code, d); };
+    } else $('pl-live').innerHTML = '<p class="mini">' + (me ? 'Your own records.' : fresh ? 'Online, on the menu.' : 'Not playing right now.') + '</p>';
+  } catch (e) { $('pl-live').innerHTML = '<p class="mini">Couldn\u2019t check whether they\u2019re playing.</p>'; }
+}
+$('pl-close').addEventListener('click', () => closeM('m-player'));
+
+/* ============================================================ ISO 1v1
+   challenges/{id}: {from, fromName, to, toName, kind 'live'|'daily', seed, status, createdAt, expiresAt,
+   acceptedAt, ready {uid: true}, startAt, ctl {paused, speed, v}, prop {by, what}, res {uid: stats}, winner, reason, endedAt}
+   challenges/{id}/live/{uid}: during a live match, each player's city (compact) and numbers every few seconds. */
+const ISO_CATS = [
+  ['sec', 'Time survived', v => mmss(v)], ['parcels', 'Parcels delivered', v => (v || 0).toLocaleString()], ['earned', 'Money earned', v => money(v || 0)],
+  ['trips', 'Trips made', v => (v || 0).toLocaleString()], ['tows', 'Fewest tow trucks', v => v || 0, true]
+];
+const LIVE_PUSH = 3e3, LIVE_GONE = 60e3;
+O.chals = {}; O.iso = null; let chalUnsubs = [], chalWith = null;
+const chalRef = id => doc(db, 'challenges', id);
+const meOf = d => d.from === O.user.uid ? 'from' : 'to', oppOf = d => d.from === O.user.uid ? {uid: d.to, name: d.toName} : {uid: d.from, name: d.fromName};
+const tms = t => t && t.toMillis ? t.toMillis() : 0;
+function startChallenges() {
+  if (!O.user || O.chalUid === O.user.uid) return;
+  O.chalUid = O.user.uid; chalUnsubs.forEach(u => u()); chalUnsubs = []; O.chals = {};
+  for (const f of ['to', 'from']) chalUnsubs.push(onSnapshot(query(collection(db, 'challenges'), where(f, '==', O.user.uid), limit(60)), snap => {
+    snap.docChanges().forEach(ch => {
+      const d = Object.assign({id: ch.doc.id}, ch.doc.data()), old = O.chals[d.id];
+      if (ch.type === 'removed') { delete O.chals[d.id]; return; }
+      O.chals[d.id] = d; onChal(d, old);
+    });
+    API.setIsoPending(Object.values(O.chals).filter(d => d.to === O.user.uid && d.status === 'pending' && tms(d.expiresAt) > Date.now()).length);
+    if (isoBox) renderIso();
+  }, e => console.warn('Challenges unavailable', e)));
+}
+/* react to a challenge changing: new ones, answers, the live start, asks, and the result */
+function onChal(d, old) {
+  const me = O.user.uid, opp = oppOf(d), kind = d.kind === 'live' ? 'live' : 'daily';
+  if (!old && d.to === me && d.status === 'pending' && tms(d.createdAt) > Date.now() - 6e5) API.toast(d.fromName + ' challenged you to a ' + kind + ' ISO match \u2014 open Play \u2192 ISO 1v1', 'good');
+  if (old && old.status === 'pending' && d.status === 'accepted' && d.from === me) API.toast(d.toName + ' accepted your ' + kind + ' challenge' + (kind === 'live' ? ' \u2014 press Ready in Play \u2192 ISO 1v1' : ''), 'good');
+  if (old && old.status === 'pending' && d.status === 'declined' && d.from === me) API.toast(d.toName + ' declined your challenge', 'warn');
+  if (kind === 'live' && d.status === 'accepted') {
+    const rd = d.ready || {};
+    if (rd[d.from] && rd[d.to] && !d.startAt && d.from === me) runTransaction(db, async tx => {        // both ready: the challenger sets the start, a few seconds ahead
+      const x = await tx.get(chalRef(d.id)); if (!x.exists() || x.data().startAt) return;
+      tx.update(chalRef(d.id), {startAt: Timestamp.fromMillis(Date.now() + 5000), ctl: {paused: false, speed: 1, v: 0}});
+    }).catch(e => console.warn(e));
+    if (d.startAt && !(O.iso && O.iso.id === d.id) && !O.isoStarting && Date.now() - tms(d.startAt) < 20e3) {
+      O.isoStarting = d.id; const wait = Math.max(0, tms(d.startAt) - Date.now());
+      API.toast('Live match against ' + opp.name + ' starts in ' + Math.ceil(wait / 1000) + '\u2026', 'tip');
+      setTimeout(() => { O.isoStarting = null; beginMatch(O.chals[d.id] || d); }, wait);
+    }
+  }
+  if (O.iso && O.iso.id === d.id) {
+    const p = d.prop && d.prop.what ? {what: d.prop.what, mine: d.prop.by === me} : null;
+    API.isoProp(p);
+    if (d.ctl && (!old || !old.ctl || old.ctl.v !== d.ctl.v) && d.ctl.v > 0) API.isoControl(d.ctl);
+  }
+  if (d.status === 'accepted' && kind === 'daily') {
+    const res = d.res || {};
+    if (res[d.from] && res[d.to]) finishMatch(d, null);
+    else if (tms(d.expiresAt) && Date.now() > tms(d.expiresAt)) finishMatch(d, res[d.from] ? d.from : res[d.to] ? d.to : 'none', 'Time ran out before both runs were in.');
+  }
+  if (d.status === 'done' && old && old.status !== 'done') showMatchResult(d);
+}
+function beginMatch(d) {
+  if (!O.ready) return;
+  O.slot = null; O.lastSaveStr = '';
+  const opp = oppOf(d);
+  O.iso = {id: d.id, kind: d.kind, opp, oppAt: Date.now(), done: false};
+  API.startIso({id: d.id, kind: d.kind, seed: d.seed, opp, endsAt: d.kind === 'daily' ? tms(d.expiresAt) : 0});
+  if (d.kind !== 'live') return;
+  pushMatch(true);
+  O.iso.push = setInterval(() => pushMatch(false), LIVE_PUSH);
+  O.iso.unsub = onSnapshot(doc(db, 'challenges', d.id, 'live', opp.uid), x => {
+    if (!O.iso || O.iso.id !== d.id) return;
+    const v = x.data(); if (!v) return;
+    O.iso.oppAt = Date.now(); API.isoNote('');
+    API.isoOpp({city: v.city, sec: v.sec, parcels: v.parcels, week: v.week, earned: v.earned, over: v.over});
+    O.iso.lastOpp = {sec: v.sec, parcels: v.parcels, earned: v.earned, trips: v.trips, tows: v.tows};
+    if (v.over && !O.iso.done) { const st = API.state(); if (!st.over) finishMatch(O.chals[d.id] || d, O.user.uid, opp.name + '\u2019s city ended first.'); }
+  }, () => {});
+  O.iso.watch = setInterval(() => {                     // an opponent who's gone quiet
+    if (!O.iso || O.iso.done) return;
+    const gone = Date.now() - O.iso.oppAt;
+    if (gone > LIVE_GONE * 2) finishMatch(O.chals[d.id] || d, O.user.uid, opp.name + ' left the match.');
+    else if (gone > LIVE_GONE) API.isoNote(opp.name + ' seems to have lost connection\u2026');
+  }, 5000);
+}
+const myStats = () => { const st = API.state(); return {sec: Math.floor(st.clock || 0), parcels: st.score || 0, earned: Math.floor(st.earned || 0), trips: st.trips || 0, tows: st.tows || 0, week: st.week || 1}; };
+async function pushMatch(force) {
+  const M = O.iso; if (!M || M.kind !== 'live' || M.done) return;
+  const st = API.state(); if (!st.started || st.spectating) return;
+  const v = Object.assign(myStats(), {city: API.citySnap(), over: !!st.over, at: serverTimestamp()});
+  if (v.city.length > 300000) v.city = '';
+  await setDoc(doc(db, 'challenges', M.id, 'live', O.user.uid), v).catch(e => console.warn('Match update failed', e));
+}
+function stopMatch() {
+  const M = O.iso; if (!M) return;
+  if (M.push) clearInterval(M.push); if (M.watch) clearInterval(M.watch); if (M.unsub) M.unsub();
+  M.done = true;
+}
+/* my city ended (game over, finished, or left) */
+async function isoOver() {
+  const M = O.iso; if (!M || M.done) return;
+  const d = O.chals[M.id]; if (!d) return;
+  if (M.kind === 'live') { await pushMatch(true); finishMatch(d, oppOf(d).uid, myName() + '\u2019s city ended first.'); return; }
+  stopMatch();
+  await updateDoc(chalRef(d.id), {['res.' + O.user.uid]: myStats()}).catch(e => API.toast('Couldn\u2019t submit your run: ' + e.message, 'warn'));
+  API.toast('Run submitted. ' + (d.res && d.res[oppOf(d).uid] ? '' : 'Waiting for ' + oppOf(d).name + '\u2019s run.'), 'good');
+}
+/* settle a match (once, whoever gets there first): live by who lasted, daily by categories */
+function scoreDaily(a, b) {
+  const rows = ISO_CATS.map(([k, label, fmt, low]) => {
+    const x = a[k] || 0, y = b[k] || 0, win = x === y ? '' : (low ? x < y : x > y) ? 'a' : 'b';
+    return {k, label, fmt, x, y, win};
+  });
+  return {rows, pa: rows.filter(r => r.win === 'a').length, pb: rows.filter(r => r.win === 'b').length};
+}
+async function finishMatch(d, winner, reason) {
+  if (O.finishing === d.id) return; O.finishing = d.id;
+  if (O.iso && O.iso.id === d.id) stopMatch();
+  try {
+    await runTransaction(db, async tx => {
+      const x = await tx.get(chalRef(d.id)); if (!x.exists()) return;
+      const cur = x.data(); if (cur.status === 'done') return;
+      let w = winner, why = reason || '';
+      const res = cur.res || {};
+      if (!w) { const sc = scoreDaily(res[cur.from] || {}, res[cur.to] || {}); w = sc.pa === sc.pb ? 'draw' : sc.pa > sc.pb ? cur.from : cur.to; why = 'Points ' + Math.max(sc.pa, sc.pb) + '\u2013' + Math.min(sc.pa, sc.pb) + '.'; }
+      const up = {status: 'done', winner: w, reason: why, endedAt: serverTimestamp()};
+      if (cur.kind === 'live' && !res[O.user.uid]) up['res.' + O.user.uid] = myStats();
+      tx.update(chalRef(d.id), up);
+    });
+  } catch (e) { console.warn('Settling the match failed', e); }
+  O.finishing = null;
+}
+function showMatchResult(d) {
+  const me = O.user.uid, opp = oppOf(d), res = d.res || {}, a = res[me] || (O.iso && O.iso.id === d.id ? myStats() : {});
+  const b = res[opp.uid] || (O.iso && O.iso.id === d.id && O.iso.lastOpp) || null;
+  const sc = scoreDaily(a, b || {});
+  const outcome = d.winner === 'draw' || d.winner === 'none' ? 'draw' : d.winner === me ? 'win' : 'lose';
+  const mine = myName(), why = String(d.reason || '').replace(mine + '\u2019s city', 'Your city').replace(mine + ' left', 'You left');
+  API.showIsoResult({kind: d.kind, oppName: opp.name, outcome, reason: why,
+    rows: sc.rows.map(r => ({label: r.label, me: r.fmt(r.x), them: b ? r.fmt(r.y) : '\u2014', win: r.win === 'a' ? 'me' : r.win === 'b' ? 'them' : ''})),
+    points: d.kind === 'daily' ? [sc.pa, sc.pb] : null});
+  chalWith = opp;
+  if (O.iso && O.iso.id === d.id && d.kind === 'live') { const st = API.state(); if (!st.over && d.winner === me) API.isoNote('You won! Keep building, or head back to the menu.'); }
+}
+API.events.on('isoRematch', () => { if (chalWith) openChallenge(chalWith.uid, chalWith.name); });
+API.events.on('isoAsk', e => {
+  const M = O.iso; if (!M) return;
+  updateDoc(chalRef(M.id), {prop: {by: O.user.uid, what: e.what}}).catch(err => API.toast('Couldn\u2019t ask: ' + err.message, 'warn'));
+  API.isoProp({what: e.what, mine: true});
+});
+API.events.on('isoReply', e => {
+  const M = O.iso, d = M && O.chals[M.id]; if (!d || !d.prop) return;
+  const what = d.prop.what, c = Object.assign({paused: false, speed: 1, v: 0}, d.ctl || {});
+  if (!e.ok) { updateDoc(chalRef(d.id), {prop: null}).catch(() => {}); return; }
+  if (what === 'pause') c.paused = true; else if (what === 'resume') c.paused = false;
+  else if (/^speed:/.test(what)) { c.speed = +what.slice(6) || 1; c.paused = false; }
+  c.v = (c.v || 0) + 1;
+  updateDoc(chalRef(d.id), {prop: null, ctl: c}).catch(err => API.toast('Couldn\u2019t answer: ' + err.message, 'warn'));
+});
+/* sending and answering */
+function openChallenge(uid, name) {
+  if (!O.ready || !O.user) { API.toast('Online features are still connecting \u2014 try again in a moment.', 'warn'); return; }
+  if (!O.profile || !O.profile.name) { openUserModal(); return; }
+  if (uid === O.user.uid) return;
+  chalWith = {uid, name}; $('ch-name').textContent = name || 'them'; $('ch-err').textContent = '';
+  openM('m-chal');
+}
+document.querySelectorAll('#m-chal .chal-opt').forEach(b => b.addEventListener('click', async () => {
+  if (!chalWith) return;
+  const err = await sendChallenge(chalWith.uid, chalWith.name, b.dataset.kind);
+  if (err) { $('ch-err').textContent = err; return; }
+  closeM('m-chal'); API.toast('Challenge sent to ' + chalWith.name + (b.dataset.kind === 'live' ? ' \u2014 when they accept, press Ready' : ''), 'good');
+}));
+$('ch-cancel').addEventListener('click', () => closeM('m-chal'));
+$('ir-close').addEventListener('click', () => closeM('m-iso-res'));
+async function sendChallenge(uid, name, kind) {
+  if (Object.values(O.chals).some(d => d.from === O.user.uid && d.to === uid && (d.status === 'pending' || d.status === 'accepted') && tms(d.expiresAt) > Date.now()))
+    return 'You already have a challenge open with ' + name + '.';
+  try {
+    await addDoc(collection(db, 'challenges'), {from: O.user.uid, fromName: myName(), to: uid, toName: String(name || 'Player').slice(0, 16), kind: kind === 'live' ? 'live' : 'daily',
+      seed: Math.floor(Math.random() * 2147483647), status: 'pending', createdAt: serverTimestamp(), expiresAt: Timestamp.fromMillis(Date.now() + 864e5)});
+    return '';
+  } catch (e) { return 'Couldn\u2019t send the challenge: ' + e.message; }
+}
+async function answerChal(d, act) {
+  const ref = chalRef(d.id);
+  try {
+    if (act === 'accept') await updateDoc(ref, Object.assign({status: 'accepted', acceptedAt: serverTimestamp()},
+      d.kind === 'live' ? {['ready.' + O.user.uid]: true, expiresAt: Timestamp.fromMillis(Date.now() + 15 * 60e3)} : {expiresAt: Timestamp.fromMillis(Date.now() + 864e5)}));
+    else if (act === 'decline') await updateDoc(ref, {status: 'declined'});
+    else if (act === 'cancel') await updateDoc(ref, {status: 'cancelled'});
+    else if (act === 'ready') await updateDoc(ref, {['ready.' + O.user.uid]: true});
+    else if (act === 'play') beginMatch(d);
+    else if (act === 'result') showMatchResult(d);
+    else if (act === 'remove') await deleteDoc(ref);
+  } catch (e) { API.toast('Couldn\u2019t do that: ' + e.message, 'warn'); }
+}
+/* the ISO 1v1 page in Play: challenges waiting, going, and done, and who to challenge */
+let isoBox = null;
+async function renderIso(box) {
+  isoBox = box || isoBox; if (!isoBox || !isoBox.isConnected) { isoBox = null; return; }
+  if (slotsBox === isoBox) slotsBox = null;            // and not save slots, which may still be loading
+  if (!O.profile || !O.profile.name) { isoBox.innerHTML = '<p class="mini">Pick a username first, then you can challenge players.</p>'; return; }
+  const me = O.user.uid, now = Date.now();
+  const list = Object.values(O.chals).sort((a, b) => tms(b.createdAt) - tms(a.createdAt));
+  const line = d => {
+    const opp = oppOf(d), mine = d.from === me, kind = d.kind === 'live' ? 'Live' : 'Daily', exp = tms(d.expiresAt), rd = d.ready || {};
+    let st = '', acts = [];
+    if (d.status === 'pending') {
+      if (exp && now > exp) { st = 'Expired'; acts = [['remove', 'Clear']]; }
+      else if (mine) { st = 'Waiting for ' + esc(opp.name) + ' to accept'; acts = [['cancel', 'Cancel']]; }
+      else { st = esc(opp.name) + ' challenged you'; acts = [['accept', 'Accept'], ['decline', 'Decline']]; }
+    } else if (d.status === 'accepted') {
+      if (d.kind === 'live') {
+        if (exp && now > exp && !d.startAt) { st = 'Expired'; acts = [['remove', 'Clear']]; }
+        else if (d.startAt) st = 'Starting\u2026';
+        else if (!rd[me]) { st = esc(opp.name) + ' is ready'; acts = [['ready', 'Ready']]; }
+        else st = 'Waiting for ' + esc(opp.name) + ' to be ready';
+      } else {
+        const res = d.res || {}, left = exp - now;
+        if (res[me]) st = 'Your run is in \u00b7 waiting for ' + esc(opp.name);
+        else { st = (left > 0 ? fmtLeftMs(left) + ' left to play' : 'Time\u2019s up'); if (left > 0) acts = [['play', 'Play your run']]; }
+      }
+    } else if (d.status === 'done') {
+      const w = d.winner === me ? 'Won' : d.winner === 'draw' || d.winner === 'none' ? 'Draw' : 'Lost';
+      st = '<b class="iso-' + w.toLowerCase() + '">' + w + '</b>' + (d.reason ? ' \u00b7 ' + esc(d.reason) : ''); acts = [['result', 'Result'], ['remove', 'Clear']];
+    } else { st = d.status === 'declined' ? 'Declined' : 'Cancelled'; acts = [['remove', 'Clear']]; }
+    return '<div class="iso-row"><span class="av">' + esc(String(opp.name || '?').charAt(0).toUpperCase()) + '</span><span class="iso-who"><b>' + esc(opp.name) + '</b><em class="iso-kind k-' + d.kind + '">' + kind + '</em><small>' + st + '</small></span>' +
+      '<span class="iso-acts">' + acts.map(([a, l]) => '<button type="button" class="' + (a === 'accept' || a === 'ready' || a === 'play' ? 'bigbtn' : 'act') + ' small" data-ch="' + esc(d.id) + '" data-act="' + a + '">' + l + '</button>').join('') + '</span></div>';
+  };
+  const friends = await loadFriends();
+  if (!isoBox) return;
+  isoBox.innerHTML = '<div class="iso-intro"><p><b>Live</b> \u2014 play side by side, right now. Same speed for both of you; pausing or speeding up needs you both to agree. The last city standing wins.</p>' +
+      '<p><b>Daily</b> \u2014 each of you plays the same map within 24 hours, pausing and speeding up as you like. A point for each category you win: time survived, parcels, money, trips and fewest tow trucks.</p></div>' +
+    '<h3>Your challenges</h3>' + (list.length ? list.map(line).join('') : '<p class="mini">None yet. Challenge a friend below, or tap a player on any leaderboard.</p>') +
+    '<h3>Challenge someone</h3><div class="fradd"><input id="iso-name" type="text" maxlength="16" placeholder="Their username" autocomplete="off" spellcheck="false"><button class="bigbtn" id="iso-go" type="button">Challenge</button></div><p class="formerr" id="iso-err" role="alert"></p>' +
+    (friends.length ? '<div class="iso-friends">' + friends.map(f => '<button type="button" class="act" data-chf="' + esc(f.uid) + '" data-name="' + esc(f.name) + '">' + esc(f.name) + '</button>').join('') + '</div>' : '');
+  isoBox.querySelectorAll('[data-ch]').forEach(b => b.onclick = () => { const d = O.chals[b.dataset.ch]; if (d) answerChal(d, b.dataset.act); });
+  isoBox.querySelectorAll('[data-chf]').forEach(b => b.onclick = () => openChallenge(b.dataset.chf, b.dataset.name));
+  const go = async () => {
+    const n = $('iso-name').value.trim(); $('iso-err').textContent = '';
+    if (!NAME_RE.test(n)) { $('iso-err').textContent = 'Usernames are 3\u201316 letters, numbers, _ or -.'; return; }
+    try {
+      const u = await getDoc(nameRef(n.toLowerCase()));
+      if (!u.exists()) { $('iso-err').textContent = 'No player called ' + n + '.'; return; }
+      if (u.data().uid === O.user.uid) { $('iso-err').textContent = 'That\u2019s you.'; return; }
+      openChallenge(u.data().uid, n);
+    } catch (e) { $('iso-err').textContent = e.message; }
+  };
+  $('iso-go').onclick = go; $('iso-name').onkeydown = e => { if (e.key === 'Enter') go(); };
+}
+const fmtLeftMs = ms => { const m = Math.ceil(ms / 60000); return m >= 60 ? Math.floor(m / 60) + 'h ' + (m % 60) + 'm' : m + 'm'; };
+setInterval(() => { if (isoBox && isoBox.isConnected && Object.keys(O.chals).length) renderIso(); }, 30e3);
+
 const FB_CATS = {Bug: 'bugs', Idea: 'ideas', Other: 'other'};
 // Web app URL from Apps Script → Deploy → New deployment (see apps-script/Code.gs).
 const FEEDBACK_MAIL_URL = 'https://script.google.com/macros/s/AKfycbx3beH9XQi7sGw5iYKYAeaWpJKJ80vqdtUqpTop6ngbQ4eRS9vH_XYHHAKi0HgJTo-M/exec';
@@ -1246,5 +1546,7 @@ window.JunctionOnline = {
   renderFriends(box) { renderFriends(box); },
   expertTop(ago, n) { return expertTop(ago, n); },
   openRun(ago, uid) { openRun(API.expertSeed(ago || 0).key, uid); },
+  renderIso(box) { if (!O.ready) return false; renderIso(box); return true; },
+  openPlayer(uid, name) { openPlayer(uid, name); }, openChallenge(uid, name) { openChallenge(uid, name); },
   openExpert(ago) { if (!O.ready) { API.toast('Online features are still connecting \u2014 try again in a moment.', 'warn'); return; } openExpert(ago); }
 };

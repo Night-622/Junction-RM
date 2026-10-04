@@ -11,6 +11,8 @@ rules_version = '2';
 //   messages/{id}             player-to-player messages                        only sender and recipient read
 //   live/{code}               live-view channel                                read by code only (no listing)
 //   feedback/{cat}/entries    guest feedback (bugs / ideas / other)            create only; read in the console
+//   profiles/{uid}            a player's public card (name, live code)         everyone reads, owner writes
+//   challenges/{id}           ISO 1v1 matches (+ live/{uid} city snapshots)   only the two players
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -49,6 +51,12 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly(['data', 'score', 'week', 'diffKey', 'over', 'updatedAt'])
           && (!('data' in request.resource.data)
               || (request.resource.data.data is string && request.resource.data.data.size() < 1000000));
+      }
+
+      // lifetime stats and achievements, mirrored from the browser
+      match /stats/{sid} {
+        allow get: if isMe(uid);
+        allow create, update: if isMe(uid) && sid == 'life' && request.resource.data.keys().hasOnly(['modes', 'ach', 'updatedAt']);
       }
 
       match /friends/{fid} {
@@ -157,6 +165,49 @@ service cloud.firestore {
       allow update: if signedIn() && resource.data.to == request.auth.uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
       allow delete: if signedIn() && (resource.data.to == request.auth.uid || resource.data.from == request.auth.uid);
+    }
+
+    // A player's public card, so others can open them from a leaderboard and watch their game.
+    match /profiles/{uid} {
+      allow read: if signedIn();
+      allow create, update: if isMe(uid)
+        && request.resource.data.keys().hasOnly(['name', 'star', 'ach3', 'live', 'updatedAt'])
+        && validName(request.resource.data.name)
+        && (request.resource.data.live == null || (request.resource.data.live is string && request.resource.data.live.matches('^[0-9]{6}$')));
+      allow delete: if isMe(uid);
+    }
+
+    // ISO 1v1 matches. Only the two players can see or change one; the players and seed never change, and each
+    // player can only write their own result.
+    function inMatch(d) { return signedIn() && (d.from == request.auth.uid || d.to == request.auth.uid); }
+    match /challenges/{id} {
+      allow read: if inMatch(resource.data);
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['from', 'fromName', 'to', 'toName', 'kind', 'seed', 'status', 'createdAt', 'expiresAt'])
+        && request.resource.data.from == request.auth.uid
+        && request.resource.data.to is string && request.resource.data.to.size() > 0 && request.resource.data.to.size() < 128
+        && request.resource.data.to != request.auth.uid
+        && validName(request.resource.data.fromName)
+        && request.resource.data.toName is string && request.resource.data.toName.size() <= 16
+        && request.resource.data.kind in ['live', 'daily']
+        && request.resource.data.seed is int
+        && request.resource.data.status == 'pending'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.expiresAt is timestamp;
+      allow update: if inMatch(resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'acceptedAt', 'expiresAt', 'ready', 'startAt', 'ctl', 'prop', 'res', 'winner', 'reason', 'endedAt'])
+        && request.resource.data.get('res', {}).diff(resource.data.get('res', {})).affectedKeys().hasOnly([request.auth.uid])
+        && request.resource.data.get('ready', {}).diff(resource.data.get('ready', {})).affectedKeys().hasOnly([request.auth.uid])
+        && request.resource.data.status in ['pending', 'accepted', 'declined', 'cancelled', 'done'];
+      allow delete: if inMatch(resource.data);
+
+      match /live/{uid} {
+        allow read: if inMatch(get(/databases/$(database)/documents/challenges/$(id)).data);
+        allow create, update: if isMe(uid) && inMatch(get(/databases/$(database)/documents/challenges/$(id)).data)
+          && request.resource.data.keys().hasOnly(['city', 'sec', 'parcels', 'week', 'earned', 'trips', 'tows', 'over', 'at'])
+          && request.resource.data.city is string && request.resource.data.city.size() < 400000;
+        allow delete: if isMe(uid);
+      }
     }
 
     // Guests' feedback. Players can add a note but nobody can read, edit or delete
