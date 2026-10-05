@@ -56,7 +56,18 @@ service cloud.firestore {
       // lifetime stats and achievements, mirrored from the browser
       match /stats/{sid} {
         allow get: if isMe(uid);
-        allow create, update: if isMe(uid) && sid == 'life' && request.resource.data.keys().hasOnly(['modes', 'ach', 'updatedAt']);
+        allow create, update: if isMe(uid) && (
+          (sid == 'life' && request.resource.data.keys().hasOnly(['modes', 'ach', 'updatedAt']))
+          || (sid == 'shop' && request.resource.data.keys().hasOnly(['v', 'bucks', 'toward', 'rbucks', 'owned', 'hired', 'designs', 'streak', 'prof', 'quests', 'updatedAt'])
+              && request.resource.data.bucks is int && request.resource.data.bucks >= 0 && request.resource.data.bucks < 100000000));
+      }
+
+      // players this one has blocked or muted
+      match /blocked/{bid} {
+        allow get, list, delete: if isMe(uid);
+        allow create, update: if isMe(uid) && bid != uid
+          && request.resource.data.keys().hasOnly(['name', 'mute', 'at'])
+          && request.resource.data.mute is bool;
       }
 
       match /friends/{fid} {
@@ -130,7 +141,7 @@ service cloud.firestore {
     match /boards/{mode}/players/{uid} {
       allow read: if signedIn();
       allow create, update: if isMe(uid) && mode in ['chill', 'standard', 'frantic', 'zen']
-        && request.resource.data.keys().hasOnly(['name', 'star', 'ach3', 'parcels', 'weeks', 'goalsSec', 'playSec', 'earned', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['name', 'star', 'ach3', 'title', 'frame', 'parcels', 'weeks', 'goalsSec', 'playSec', 'earned', 'updatedAt'])
         && validName(request.resource.data.name);
       allow delete: if isMe(uid);
     }
@@ -139,7 +150,7 @@ service cloud.firestore {
     match /expert/{week}/players/{uid} {
       allow read: if signedIn();
       allow create, update: if isMe(uid) && week.matches('^[0-9]{4}-W[0-9]{2}$')
-        && request.resource.data.keys().hasOnly(['name', 'star', 'ach3', 'parcels', 'weeks', 'earned', 'trips', 'tows', 'cars', 'roads', 'playSec',
+        && request.resource.data.keys().hasOnly(['name', 'star', 'ach3', 'title', 'frame', 'parcels', 'weeks', 'earned', 'trips', 'tows', 'cars', 'roads', 'playSec',
                                                 'seedName', 'seedCode', 'weekLabel', 'city', 'updatedAt'])
         && validName(request.resource.data.name)
         && request.resource.data.parcels is int && request.resource.data.parcels >= 0 && request.resource.data.parcels < 10000000
@@ -171,8 +182,10 @@ service cloud.firestore {
     match /profiles/{uid} {
       allow read: if signedIn();
       allow create, update: if isMe(uid)
-        && request.resource.data.keys().hasOnly(['name', 'star', 'ach3', 'live', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['name', 'star', 'ach3', 'live', 'banner', 'frame', 'title', 'pins', 'updatedAt'])
+        && !('flag' in request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys())
         && validName(request.resource.data.name)
+        && (!('pins' in request.resource.data) || (request.resource.data.pins is list && request.resource.data.pins.size() <= 3))
         && (request.resource.data.live == null || (request.resource.data.live is string && request.resource.data.live.matches('^[0-9]{6}$')));
       allow delete: if isMe(uid);
     }
@@ -196,6 +209,7 @@ service cloud.firestore {
         && request.resource.data.expiresAt is timestamp;
       allow update: if inMatch(resource.data)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'acceptedAt', 'expiresAt', 'ready', 'startAt', 'ctl', 'prop', 'res', 'winner', 'reason', 'endedAt'])
+        && !(resource.data.get('ranked', false) && request.resource.data.status == 'cancelled')
         && request.resource.data.get('res', {}).diff(resource.data.get('res', {})).affectedKeys().hasOnly([request.auth.uid])
         && request.resource.data.get('ready', {}).diff(resource.data.get('ready', {})).affectedKeys().hasOnly([request.auth.uid])
         && request.resource.data.status in ['pending', 'accepted', 'declined', 'cancelled', 'done'];
@@ -210,12 +224,166 @@ service cloud.firestore {
       }
     }
 
+    // Ranked ISO. Ratings are written only by the Cloud Functions; players may only queue (one doc, their own)
+    // and sign up to tournaments. Challenge docs with ranked: true are created by the functions.
+    match /rankedPlayers/{uid} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+    match /rankedQueue/{uid} {
+      allow read: if isMe(uid);
+      allow create: if isMe(uid)
+        && request.resource.data.keys().hasOnly(['name', 'rating', 'kind', 'at'])
+        && validName(request.resource.data.name)
+        && request.resource.data.kind in ['live', 'daily']
+        && request.resource.data.at == request.time;
+      allow delete: if isMe(uid);
+    }
+    match /rankedLimits/{uid} { allow read, write: if false; }
+    match /tournaments/{id} {
+      allow read: if signedIn();
+      allow create: if registered()
+        && request.resource.data.keys().hasOnly(['name', 'size', 'kind', 'host', 'hostName', 'status', 'rounds', 'startsAt', 'createdAt'])
+        && request.resource.data.host == request.auth.uid
+        && request.resource.data.size in [8, 16]
+        && request.resource.data.kind in ['live', 'daily']
+        && request.resource.data.status == 'signup'
+        && request.resource.data.name is string && request.resource.data.name.size() >= 3 && request.resource.data.name.size() <= 32;
+      allow update, delete: if false;
+      match /signups/{uid} {
+        allow read: if signedIn();
+        allow create, update: if isMe(uid) && request.resource.data.keys().hasOnly(['name', 'rating', 'at']) && validName(request.resource.data.name);
+        allow delete: if isMe(uid);
+      }
+    }
+    // server-granted items (season rewards): read by the owner, written by the functions
+    match /users/{uid}/stats/grants { allow get: if isMe(uid); allow write: if false; }
+    // error reports: create only, rate limited by the functions
+    match /logs/{id} {
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['kind', 'uid', 'msg', 'where', 'ver', 'ua', 'at'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.kind == 'error'
+        && request.resource.data.msg is string && request.resource.data.msg.size() <= 500;
+      allow read, update, delete: if false;
+    }
+
+    // Community maps. maps/{code} is a published map: anyone signed in can read it, only its author can change or
+    // delete it, and other players may only count a like (+-1) or a play (+1) on it. maps/{code}/likes/{uid} marks
+    // a like (only the liker adds or removes theirs) and maps/{code}/runs/{uid} is a player's best run on the map,
+    // with a compact copy of their city, like the weekly Expert runs.
+    function validMapDoc() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['code', 'name', 'desc', 'data', 'author', 'authorName', 'mode', 'goalText', 'likes', 'plays', 'createdAt', 'updatedAt', 'thumb'])
+        && d.code is string && d.code.matches('^[A-HJ-NP-Z2-9]{6}$')
+        && d.name is string && d.name.size() >= 3 && d.name.size() <= 32
+        && d.desc is string && d.desc.size() <= 140
+        && d.data is string && d.data.size() > 0 && d.data.size() <= 40000
+        && validName(d.authorName)
+        && d.mode in ['chill', 'standard', 'frantic']
+        && d.goalText is string && d.goalText.size() <= 80
+        && d.likes is int && d.likes >= 0 && d.plays is int && d.plays >= 0
+        && d.thumb is string && d.thumb.size() <= 8192;
+    }
+    match /maps/{code} {
+      allow read: if signedIn();
+      allow create: if signedIn() && validMapDoc()
+        && request.resource.data.code == code
+        && request.resource.data.author == request.auth.uid
+        && request.resource.data.likes == 0 && request.resource.data.plays == 0
+        && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+      allow update: if signedIn() && validMapDoc()
+        && request.resource.data.code == resource.data.code
+        && request.resource.data.author == resource.data.author
+        && request.resource.data.createdAt == resource.data.createdAt
+        && (request.resource.data.likes - resource.data.likes) in [-1, 0, 1]
+        && (request.resource.data.plays - resource.data.plays) in [0, 1]
+        // the author edits the map (and may like or play it too); anyone else only counts a like or a play
+        && (resource.data.author == request.auth.uid
+            || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'plays']));
+      allow delete: if signedIn() && resource.data.author == request.auth.uid;
+
+      match /likes/{uid} {
+        allow read: if signedIn();
+        allow create: if isMe(uid) && request.resource.data.keys().hasOnly(['at']) && request.resource.data.at == request.time;
+        allow delete: if isMe(uid);
+      }
+
+      match /runs/{uid} {
+        allow read: if signedIn();
+        allow create, update: if isMe(uid)
+          && request.resource.data.keys().hasOnly(['name', 'star', 'ach3', 'title', 'frame', 'parcels', 'weeks', 'earned', 'playSec', 'goal', 'city', 'updatedAt'])
+          && validName(request.resource.data.name)
+          && request.resource.data.parcels is int && request.resource.data.parcels >= 0 && request.resource.data.parcels < 10000000
+          && request.resource.data.weeks is int && request.resource.data.weeks >= 0 && request.resource.data.weeks < 100000
+          && request.resource.data.goal is bool
+          && request.resource.data.city is string && request.resource.data.city.size() < 400000;
+        allow delete: if isMe(uid);
+      }
+    }
+
+    // Co-op cities. The host owns the session doc and writes the city into it; invited players add and remove
+    // themselves under members (only their own entry), send build actions the host applies, and share cursors.
+    function coopData(id) { return get(/databases/$(database)/documents/coop/$(id)).data; }
+    function coopMember(d) { return signedIn() && (d.host == request.auth.uid || request.auth.uid in d.members); }
+    function coopCan(d) { return coopMember(d) || (signedIn() && request.auth.uid in d.invited); }
+    function validCoop() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['host', 'hostName', 'members', 'invited', 'status', 'seed', 'mode', 'createdAt', 'updatedAt', 'state', 'stateAt', 'meta', 'expireAt'])
+        && d.host == request.auth.uid
+        && validName(d.hostName)
+        && d.members is map && d.invited is list && d.invited.size() <= 40
+        && d.status in ['open', 'playing', 'ended']
+        && d.mode in ['chill', 'standard', 'frantic', 'zen', 'expert']
+        && (!('state' in d) || d.state == null || (d.state is string && d.state.size() < 1000000));
+    }
+    match /coop/{id} {
+      allow read: if signedIn() && (resource.data.host == request.auth.uid || request.auth.uid in resource.data.members || request.auth.uid in resource.data.invited);
+      allow create: if signedIn() && validCoop() && request.resource.data.status != 'ended';
+      allow update: if signedIn() && (
+        // the host changes anything (but stays the host)
+        (resource.data.host == request.auth.uid && validCoop())
+        // a member or invitee only joins or leaves: their own entry under members
+        || (coopCan(resource.data)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members', 'updatedAt'])
+            && request.resource.data.members.diff(resource.data.members).affectedKeys().hasOnly([request.auth.uid])));
+      allow delete: if signedIn() && resource.data.host == request.auth.uid;
+
+      match /actions/{aid} {
+        allow read: if coopMember(coopData(id));
+        allow create: if coopMember(coopData(id))
+          && request.resource.data.keys().hasOnly(['by', 'name', 't', 'seq', 'act', 'k', 'k2', 'kind', 'payload', 'at'])
+          && request.resource.data.by == request.auth.uid
+          && request.resource.data.act in ['road', 'erase', 'special', 'moto', 'park', 'depot', 'sign', 'oneway', 'upjunc', 'upstore', 'tow', 'car', 'buy', 'emote']
+          && request.resource.data.k is int && request.resource.data.k2 is int
+          && request.resource.data.kind is string && request.resource.data.kind.size() <= 16
+          && (request.resource.data.payload == null || (request.resource.data.payload is string && request.resource.data.payload.size() <= 32))
+          && request.resource.data.t is number && request.resource.data.at == request.time;
+        // the host marks an action applied (or refused, with a short note)
+        allow update: if coopData(id).host == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['done', 'ok', 'note'])
+          && (!('note' in request.resource.data) || (request.resource.data.note is string && request.resource.data.note.size() <= 160));
+        allow delete: if coopData(id).host == request.auth.uid;
+      }
+      match /cursors/{uid} {
+        allow read: if coopMember(coopData(id));
+        allow create, update: if isMe(uid) && coopMember(coopData(id))
+          && request.resource.data.keys().hasOnly(['x', 'y', 'name', 'colour', 'at'])
+          && request.resource.data.x is number && request.resource.data.y is number
+          && request.resource.data.name is string && request.resource.data.name.size() <= 16
+          && request.resource.data.colour is string && request.resource.data.colour.size() <= 12;
+        allow delete: if isMe(uid) || coopData(id).host == request.auth.uid;
+      }
+    }
+
     // Guests' feedback. Players can add a note but nobody can read, edit or delete
     // them from the game — you read them in the Firebase console.
     function validFeedback() {
       let d = request.resource.data;
-      return d.keys().hasOnly(['uid', 'name', 'message', 'details', 'replyTo', 'createdAt'])
+      return d.keys().hasOnly(['uid', 'name', 'message', 'details', 'replyTo', 'about', 'aboutName', 'createdAt'])
         && d.uid == request.auth.uid
+        && (!('about' in d) || (d.about is string && d.about.size() < 128))
+        && (!('aboutName' in d) || (d.aboutName is string && d.aboutName.size() <= 16))
         && d.message is string && d.message.size() >= 3 && d.message.size() <= 1500
         && (!('details' in d) || (d.details is string && d.details.size() <= 2000))
         && (!('name' in d) || validName(d.name))

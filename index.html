@@ -7,6 +7,9 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#143845">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
 <title>Junction — keep the city moving</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,9 +17,13 @@
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+<!-- the splash: shown while the game loads, faded out by boot() -->
+<div id="splash" aria-hidden="true"><div class="sp-mark"><i></i><i></i><i></i></div><div class="sp-logo">JUNCTION</div><div class="sp-sub">keep the city moving</div><div class="sp-bar"><i id="sp-bar"></i></div></div>
+<div id="fade" hidden aria-hidden="true"></div>
 <div id="app">
   <div id="stage">
     <canvas id="cv" aria-label="City map"></canvas>
+    <div id="coop-layer" aria-hidden="true"></div>
 
     <!-- top bar -->
     <header id="topbar">
@@ -52,6 +59,7 @@
         </div>
         <span class="csep" aria-hidden="true"></span>
         <button class="cbtn txt" id="btn-heat" type="button" aria-pressed="false" title="Show where traffic is standing still (H)">Jams</button>
+        <button class="cbtn" id="btn-flow" type="button" aria-pressed="false" title="Traffic flow (F2)" aria-label="Traffic flow (F2)" data-tip="Traffic flow" data-key="F2" data-sub="Roads tinted by how busy they are, junctions ringed by their average wait, and the worst spots listed"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h11"/><path d="M12 4l3 3-3 3"/><path d="M4 12h15"/><path d="M16 9l3 3-3 3"/><path d="M4 17h9"/><path d="M10 14l3 3-3 3"/></svg></button>
         <button class="cbtn txt" id="btn-side" type="button" title="Which side cars drive on">Keep left</button>
         <span class="csep" aria-hidden="true"></span>
         <button class="cbtn" id="btn-undo" type="button" title="Undo (Ctrl+Z)" aria-label="Undo"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/></svg></button>
@@ -129,12 +137,31 @@
           </div>
           <p class="mnote" id="notes-note"></p>
         </section>
+        <section class="msec" id="gfx-sec">
+          <h4>Quality</h4>
+          <div class="seg" id="gfx-pre" role="group" aria-label="Quality preset"><button type="button" data-gfx="high">High</button><button type="button" data-gfx="balanced">Balanced</button><button type="button" data-gfx="battery">Battery saver</button></div>
+          <p class="mnote" id="gfx-note"></p>
+          <div class="gfxrow"><span>Shadows</span><div class="seg small" id="gfx-shadows" role="group" aria-label="Shadows"><button type="button" data-v="on">On</button><button type="button" data-v="simple">Simple</button><button type="button" data-v="off">Off</button></div></div>
+          <div class="gfxrow"><span>Decorations</span><div class="seg small" id="gfx-decor" role="group" aria-label="Decoration density"><button type="button" data-v="1">100%</button><button type="button" data-v="0.6">60%</button><button type="button" data-v="0.3">30%</button></div></div>
+          <div class="gfxrow"><span>Frame cap</span><div class="seg small" id="gfx-cap" role="group" aria-label="Frame rate cap"><button type="button" data-v="0">None</button><button type="button" data-v="60">60</button><button type="button" data-v="30">30</button></div></div>
+          <label class="tgl"><input type="checkbox" id="gfx-smooth"><span>Smooth motion <small class="tglsub">draw vehicles between simulation steps</small></span></label>
+        </section>
+        <section class="msec" id="acc-sec">
+          <h4>Accessibility</h4>
+          <label class="slid"><span>Interface size <b id="acc-scale-v" class="num">100%</b></span><input type="range" id="acc-scale" min="90" max="130" step="5" value="100"></label>
+          <label class="tgl"><input type="checkbox" id="acc-contrast"><span>High contrast</span></label>
+          <div class="gfxrow"><span>Motion</span><div class="seg small" id="acc-motion" role="group" aria-label="Motion"><button type="button" data-v="auto">System</button><button type="button" data-v="reduce">Reduce</button><button type="button" data-v="full">Full</button></div></div>
+          <p class="mnote">Reduce motion turns off zooms, sways and pulses. Every icon button also has a label for screen readers.</p>
+        </section>
         <section class="msec" id="snd-sec">
           <h4>Sound</h4>
           <label class="tgl"><input type="checkbox" id="snd-music" checked><span>Music <small class="tglsub">a calm, slowly changing soundtrack</small></span></label>
           <label class="slid"><span>Music volume</span><input type="range" id="snd-musicvol" min="0" max="100" value="60"></label>
           <label class="slid"><span>Traffic in the distance</span><input type="range" id="snd-traffic" min="0" max="100" value="45"></label>
           <label class="tgl"><input type="checkbox" id="snd-sfx" checked><span>Sound effects</span></label>
+          <label class="slid"><span>Effects volume</span><input type="range" id="snd-sfxvol" min="0" max="100" value="100"></label>
+          <label class="tgl"><input type="checkbox" id="snd-ui" checked><span>Button clicks</span></label>
+          <label class="tgl" id="snd-haptics-wrap"><input type="checkbox" id="snd-haptics" checked><span>Vibration <small class="tglsub">on phones: deliveries, week ends, game over, crates</small></span></label>
           <p class="mnote">The speaker button, or <kbd>N</kbd>, mutes everything.</p>
         </section>
         <section class="msec">
@@ -155,13 +182,23 @@
           </div>
           <input type="file" id="file-import" accept=".json,application/json" hidden>
         </section>
+        <section class="msec" id="app-sec">
+          <h4>App</h4>
+          <p class="mnote" id="app-note">Junction can be installed like an app: it opens full screen with no browser bars, and single player works offline.</p>
+          <div class="mgrid"><button class="act" id="btn-install" type="button" hidden>Install app</button><button class="act" id="btn-update" type="button" hidden>Update available — reload</button></div>
+        </section>
+        <section class="msec" id="guides-sec">
+          <h4>Guides</h4>
+          <p class="mnote">Short guides pop up the first time you open ISO 1v1, Weeklys, the Store, a crate, Chats and Friends.</p>
+          <button class="act" id="btn-guides" type="button">Replay guides</button>
+        </section>
         <section class="msec">
           <h4>Feedback</h4>
           <p class="mnote">Found a bug or have an idea? It goes straight to the developer.</p>
           <button class="act" id="btn-feedback" type="button">Send feedback</button>
         </section>
       
-          <p class="ver">Junction v1.6</p>
+          <p class="ver"><button type="button" class="linkbtn" id="ver-btn">Junction v<span id="ver">2.3</span> · What’s new</button></p>
         </div>
         <div class="mtab-pane" data-mtab="store" hidden>
           <div class="jbbar"><span class="jbcoin" aria-hidden="true">◎</span><div><b id="jb-bal">◎0 Junc Bucks</b><small>You earn 2 ◎ for every 3 parcels. The Store restocks every hour with 6 items and 6 colours; the daily special costs <b class="rtag">✦</b>, which only come from <b>Frantic</b> cities (1 for every parcel). Mystery crates can hold unique items you can't buy. Tap once to see the price, again to buy.</small></div></div>
@@ -194,12 +231,44 @@
     <div id="hint" role="status"></div>
     <div id="tip" role="tooltip" hidden></div>
     <!-- ISO 1v1: the match beside your city -->
+    <div class="plate" id="flow-panel" hidden>
+      <div class="fp-head"><b>Traffic flow</b><button type="button" class="fp-close" id="flow-close" aria-label="Hide the traffic flow view">&times;</button></div>
+      <p class="fp-legend"><span><i class="fl-move"></i>moving</span><span><i class="fl-jam"></i>queued</span><span><i class="fl-ring"></i>junction wait</span></p>
+      <div class="fp-list" id="flow-list"></div>
+    </div>
+    <div class="camp-hud plate" id="camp-hud" hidden aria-live="polite">
+      <b id="ch-title">Campaign</b>
+      <span id="ch-goal"></span>
+      <div class="ch-bar"><i id="ch-bar"></i></div>
+      <span id="ch-prog" class="num"></span>
+      <small id="ch-stars"></small>
+    </div>
     <div class="iso-hud plate" id="iso-hud" hidden>
       <button type="button" class="ih-head"><b>ISO · <span id="ih-kind">Live</span></b><span id="ih-vs">vs —</span></button>
       <div class="ih-body"><canvas id="ih-map" width="180" height="180" aria-label="Your opponent's city"></canvas><div class="ih-stats" id="ih-stats"></div></div>
       <div class="ih-prop" id="ih-prop" hidden></div>
       <div class="ih-ctl" id="ih-ctl"></div>
     </div>
+    <!-- Co-op: who is in the city, the shared cash, reactions -->
+    <div class="coop-hud plate" id="coop-hud" hidden>
+      <button type="button" class="ch-head"><b>Co-op</b><span id="ch-sub">—</span></button>
+      <div class="ch-body">
+        <div class="ch-members" id="ch-members"></div>
+        <div class="ch-stats" id="ch-stats"></div>
+        <p class="ch-note" id="ch-note" hidden></p>
+        <div class="ch-emotes" aria-label="Reactions"><button type="button" class="act" data-emote="👍" aria-label="Thumbs up">👍</button><button type="button" class="act" data-emote="⚠️" aria-label="Watch out">⚠️</button><button type="button" class="act" data-emote="🚧" aria-label="Building here">🚧</button></div>
+        <div class="ch-ctl"><button type="button" class="act small" id="ch-invite">Invite</button><button type="button" class="act small" id="ch-leave">Leave</button><button type="button" class="act small" id="ch-end" hidden>End session</button></div>
+      </div>
+    </div>
+    <!-- the map editor's bar, and the strip shown while a map (yours or a community one) is played -->
+    <div class="ed-bar plate" id="ed-bar" hidden aria-label="Map editor">
+      <div class="eb-head"><div><small>Map editor</small><b id="eb-name">Untitled map</b><span id="eb-sub"></span></div><button type="button" class="act small" id="eb-settings">Settings</button></div>
+      <div class="eb-tools" id="eb-tools"></div>
+      <div class="eb-opts" id="eb-opts" hidden></div>
+      <small class="eb-count" id="eb-count"></small>
+      <div class="eb-act"><button class="bigbtn" type="button" id="eb-test">Test play</button><button class="act" type="button" id="eb-save">Save draft</button><button class="act" type="button" id="eb-publish">Publish</button><button class="act" type="button" id="eb-exit">Exit</button></div>
+    </div>
+    <div class="ed-test plate" id="ed-test" hidden><span id="et-text"></span><span class="et-btns" id="et-btns"></span></div>
     <div class="specbar plate" id="spec-bar" hidden>
       <span class="livedot" aria-hidden="true"></span>
       <span id="spec-text">Watching</span>
@@ -306,6 +375,7 @@
         <div class="rl-bal" data-tip="Your balance" data-sub="2 Junc Bucks (◎) for every 3 parcels; rare bucks (✦) from Frantic cities">
           <span class="jbcoin" aria-hidden="true">◎</span><div><b id="mm-bucks" class="num">◎0</b><small><span id="mm-rbucks" class="rtag num">✦0</span> · <span id="mm-next">0/3</span> to next ◎</small></div>
         </div>
+        <button type="button" class="rl-streak" id="mm-streak" aria-label="Daily reward streak"></button>
         <div class="rl-topr">
           <div class="acct-strip" id="start-account" hidden></div>
           <button type="button" class="rl-icon" data-mm="chats" aria-pressed="false" title="Chats"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg><em class="tabbadge mm-chat-badge" hidden>0</em></button>
@@ -352,6 +422,13 @@
             <b id="mm-store-bal" hidden>#0</b>
             <div class="shoplist" id="mm-store"></div>
           </div>
+          <div class="mm-pane" data-mm="campaign" hidden><div id="mm-campaign"></div></div>
+          <div class="mm-pane" data-mm="quests" hidden><div id="mm-quests"></div></div>
+          <div class="mm-pane" data-mm="coop" hidden><div id="mm-coop"></div></div>
+          <div class="mm-pane" data-mm="editor" hidden>
+            <div class="seg boardtabs" id="ed-tabs" role="group" aria-label="Maps"><button type="button" data-edtab="browse" aria-pressed="true">Community</button><button type="button" data-edtab="mine" aria-pressed="false">My maps</button><button type="button" data-edtab="drafts" aria-pressed="false">Drafts</button></div>
+            <div id="mm-editor"></div>
+          </div>
           <div class="mm-pane" data-mm="weekly" hidden>
             <div class="wk">
               <div class="wk-l">
@@ -384,10 +461,14 @@
         <button type="button" class="rl-tile t-board" id="btn-board-s"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 01-10 0z"/><path d="M7 6H4v2a3 3 0 003 3M17 6h3v2a3 3 0 01-3 3"/></svg> Leaderboard</small><b>Top cities</b></button>
         <button type="button" class="rl-tile t-tut" id="btn-try-tutorial"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8l9-4 9 4-9 4z"/><path d="M7 10v5c0 1.7 2.2 3 5 3s5-1.3 5-3v-5M21 8v6"/></svg> Tutorial</small><b>Learn to play</b></button>
         <button type="button" class="rl-tile t-watch" id="btn-watch-s"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg> Watch</small><b>A live city</b></button>
-        <button type="button" class="rl-tile wide t-fb" id="btn-feedback-s"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12h5"/></svg> Feedback</small><b>Tell us what you think</b></button>
+        <button type="button" class="rl-tile wide t-camp" data-mm="campaign" aria-pressed="false"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19l5-2 6 2 5-2V5l-5 2-6-2-5 2z"/><path d="M9 5v12M15 7v12"/></svg> Campaign</small><b>30 levels, 3 chapters</b><span class="cp-tilest">0 / 90 ★</span></button>
+        <button type="button" class="rl-tile t-editor" data-mm="editor" aria-pressed="false"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/></svg> Map editor</small><b>Build and share maps</b></button>
+        <button type="button" class="rl-tile t-coop" data-mm="coop" aria-pressed="false"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="3"/><circle cx="16.5" cy="9.5" r="2.5"/><path d="M2.5 19c0-3.3 2.5-5.5 5.5-5.5s5.5 2.2 5.5 5.5M14 18.5c0-2.4 1.6-4 3.5-4s3.5 1.6 3.5 4"/></svg> Co-op</small><b>Build a city together<em class="tabbadge coop-badge" hidden>0</em></b></button>
+        <button type="button" class="rl-tile t-quests" data-mm="quests" aria-pressed="false"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3 7-7"/><path d="M20 12v6a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h9"/></svg> Quests</small><b>Daily and weekly<em class="tabbadge q-badge" hidden>0</em></b></button>
+        <button type="button" class="rl-tile t-fb" id="btn-feedback-s"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12h5"/></svg> Feedback</small><b>Tell us what you think</b></button>
         <div id="start-online" hidden></div>
       </aside>
-      <div class="rl-foot">Esc closes a panel · Junction v1.8</div>
+      <div class="rl-foot">Esc closes a panel · Junction v<span id="ver-foot">2.3</span></div>
     </div>
 
     <!-- the whole map of this week's Expert seed -->
@@ -404,7 +485,8 @@
     <!-- a player, opened from a leaderboard: their records, their game right now, and ways to reach them -->
     <div class="modal" id="m-player" hidden>
       <div class="card plate wide playercard">
-        <div class="acct-head"><div class="acct-av" id="pl-av" aria-hidden="true"></div><div class="acct-id"><h2 id="pl-name">Player</h2><p class="mini" id="pl-sub"></p></div></div>
+        <div class="acct-head has-banner" id="pl-banner"><div class="acct-av" id="pl-av" aria-hidden="true"></div><div class="acct-id"><h2 id="pl-name">Player</h2><p class="mini" id="pl-sub"></p></div></div>
+        <div class="pl-pins" id="pl-pins" hidden></div>
         <div class="pl-live" id="pl-live"></div>
         <h4 class="frh">Records</h4>
         <div id="pl-rec"><p class="mini">Loading…</p></div>
@@ -430,7 +512,95 @@
         <h2 id="ir-title">Result</h2>
         <p class="lead" id="ir-sub"></p>
         <div class="ir-table" id="ir-table"></div>
-        <div class="btnrow"><button class="bigbtn" id="ir-again" type="button">Rematch</button><button class="bigbtn ghost" id="ir-close" type="button">Close</button></div>
+        <div class="btnrow"><button class="bigbtn" id="ir-again" type="button">Rematch</button><button class="bigbtn ghost" id="ir-share" type="button">Share</button><button class="bigbtn ghost" id="ir-close" type="button">Close</button></div>
+      </div>
+    </div>
+
+    <!-- a yes/no question, in the game's own style (replaces the browser's confirm box) -->
+    <div class="modal" id="m-ask" hidden role="alertdialog" aria-labelledby="ask-title" aria-describedby="ask-text">
+      <div class="card plate askcard">
+        <h2 id="ask-title">Are you sure?</h2>
+        <p class="lead" id="ask-text"></p>
+        <div class="btnrow"><button class="bigbtn" id="ask-ok" type="button">OK</button><button class="bigbtn ghost" id="ask-cancel" type="button">Cancel</button></div>
+        <p class="mini askkeys"><kbd>Enter</kbd> confirms · <kbd>Esc</kbd> cancels</p>
+      </div>
+    </div>
+    <!-- campaign: a level's intro card -->
+    <div class="modal" id="m-level" hidden aria-labelledby="lv-title">
+      <div class="card plate lvcard">
+        <small class="lv-k" id="lv-kicker">Chapter 1 · Level 1</small>
+        <h2 id="lv-title">Level</h2>
+        <p class="lead" id="lv-blurb"></p>
+        <div class="lv-chips" id="lv-rules"></div>
+        <div class="lv-goal" id="lv-goal"></div>
+        <div class="lv-starrow" id="lv-stars"></div>
+        <div class="btnrow"><button class="bigbtn" id="lv-play" type="button">Play</button><button class="bigbtn ghost" id="lv-close" type="button">Back</button></div>
+      </div>
+    </div>
+    <!-- campaign: the result card (stars, stats, next / replay / map) -->
+    <div class="modal" id="m-level-done" hidden aria-labelledby="ld-title">
+      <div class="card plate lvcard done">
+        <small class="lv-k" id="ld-kicker">Level complete</small>
+        <h2 id="ld-title">Level</h2>
+        <div class="lv-stars" id="ld-stars" aria-hidden="true"></div>
+        <p class="lead" id="ld-sub"></p>
+        <div class="pause-stats" id="ld-stats"></div>
+        <div class="lv-unlock" id="ld-unlock" hidden></div>
+        <div class="btnrow" id="ld-btns"></div>
+      </div>
+    </div>
+    <!-- the pause menu -->
+    <div class="modal" id="m-pause" hidden aria-label="Paused">
+      <div class="card plate pausecard">
+        <small class="pause-kicker">Paused</small>
+        <h2 id="pause-title">Take a breath</h2>
+        <div class="pause-stats" id="pause-stats"></div>
+        <div class="pause-grid">
+          <button class="bigbtn" id="pause-resume" type="button">Resume</button>
+          <button class="act" id="pause-edit" type="button">Edit city</button>
+          <button class="act" id="pause-restart" type="button">Restart city</button>
+          <button class="act" id="pause-settings" type="button">Settings</button>
+          <button class="act" id="pause-help" type="button">How to play</button>
+          <button class="act danger" id="pause-quit" type="button">Save &amp; quit</button>
+        </div>
+        <p class="mini pause-note"><kbd>Esc</kbd> or <kbd>P</kbd> to carry on</p>
+      </div>
+    </div>
+
+    <!-- what's new -->
+    <div class="modal" id="m-whatsnew" hidden>
+      <div class="card plate wide newscard">
+        <small class="over-kicker">What’s new</small>
+        <h2>Junction <span id="wn-ver">2.3</span></h2>
+        <div id="wn-list" class="wn-list"></div>
+        <div class="btnrow"><button class="bigbtn" id="wn-close" type="button">Nice</button></div>
+      </div>
+    </div>
+    <!-- the daily reward -->
+    <div class="modal" id="m-daily" hidden aria-label="Daily reward">
+      <div class="card plate dailycard">
+        <small class="over-kicker">Daily reward</small>
+        <h2 id="daily-title">Welcome back!</h2>
+        <p class="lead" id="daily-sub"></p>
+        <div class="daily-strip" id="daily-strip"></div>
+        <div class="daily-got" id="daily-got" hidden></div>
+        <div class="btnrow"><button class="bigbtn" id="daily-claim" type="button">Claim</button><button class="bigbtn ghost" id="daily-close" type="button">Later</button></div>
+      </div>
+    </div>
+    <div id="confetti" aria-hidden="true"></div>
+
+    <!-- report a player -->
+    <div class="modal" id="m-report" hidden aria-label="Report a player">
+      <div class="card plate reportcard">
+        <h2>Report <span id="rp-name">player</span></h2>
+        <p class="lead">Tell us what’s wrong. Reports go to the developer, along with their last few messages to you.</p>
+        <div class="seg rp-why" id="rp-why" role="group" aria-label="Reason">
+          <button type="button" data-why="Harassment" aria-pressed="true">Harassment</button><button type="button" data-why="Spam" aria-pressed="false">Spam</button><button type="button" data-why="Cheating" aria-pressed="false">Cheating</button><button type="button" data-why="Bad name" aria-pressed="false">Bad name</button><button type="button" data-why="Other" aria-pressed="false">Other</button>
+        </div>
+        <label class="field"><span>Details <small>(optional)</small></span><textarea id="rp-text" rows="3" maxlength="800" placeholder="What happened?"></textarea></label>
+        <label class="tgl"><input type="checkbox" id="rp-block" checked><span>Also block them</span></label>
+        <p class="formerr" id="rp-err" role="alert"></p>
+        <div class="btnrow"><button class="bigbtn" id="rp-send" type="button">Send report</button><button class="bigbtn ghost" id="rp-cancel" type="button">Cancel</button></div>
       </div>
     </div>
 
@@ -444,6 +614,96 @@
       </div>
     </div>
 
+    <!-- first-time guides for the online features (ISO, Weeklys, Store, crates, Chats, Friends) -->
+    <div class="modal" id="m-guide" hidden>
+      <div class="card plate tutintro guide">
+        <div class="ti-stage" id="gd-stage"></div>
+        <div class="ti-dots" id="gd-dots"></div>
+        <div class="btnrow"><button class="bigbtn ghost" id="gd-back" type="button">Back</button><button class="bigbtn" id="gd-next" type="button">Next</button></div>
+      </div>
+    </div>
+
+    <!-- tournaments -->
+    <div class="modal" id="m-tour" hidden>
+      <div class="card plate wide tourcard">
+        <div class="sm-head"><div><small class="over-kicker">Ranked ISO</small><h2>Tournaments</h2></div><button class="act" id="tour-close" type="button">Close</button></div>
+        <p class="lead">Weekend cups: 8 or 16 players, seeded by rating. Matches are ranked ISO games; winners advance until one is left.</p>
+        <div id="tour-list"></div>
+      </div>
+    </div>
+
+    <!-- p62: the time-lapse replay of a finished city, one frame a day -->
+    <div class="modal" id="m-replay" hidden>
+      <div class="card plate replaycard">
+        <h2>Replay</h2>
+        <p class="lead" id="rp-cap">Week 1 · 0 parcels</p>
+        <canvas id="rp-cv" width="720" height="720" aria-label="Time-lapse of your city, one frame a day"></canvas>
+        <div class="rp-bar"><input type="range" id="rp-bar" min="0" max="1000" value="0" aria-label="Scrub through the replay"><div class="rp-marks" id="rp-marks" aria-hidden="true"></div></div>
+        <div class="btnrow rp-ctl"><button class="bigbtn" id="rp-play" type="button">Pause</button><button class="bigbtn ghost" id="rp-speed" type="button" title="Playback speed">1×</button><button class="bigbtn ghost" id="rp-save" type="button">Save video</button><button class="bigbtn ghost" id="rp-close" type="button">Close</button></div>
+        <p class="mini">Save video records the replay as a .webm file with your run card at the end. There is no GIF export.</p>
+      </div>
+    </div>
+
+    <!-- map editor: settings for the map being built -->
+    <div class="modal" id="m-edset" hidden aria-label="Map settings">
+      <div class="card plate edsetcard">
+        <h2>Map settings</h2>
+        <div class="es-grid">
+          <label class="field"><span>Name <small>(3–32)</small></span><input id="es-name" type="text" maxlength="32" placeholder="Harbour Loop"></label>
+          <label class="field"><span>Description <small>(optional)</small></span><input id="es-desc" type="text" maxlength="140" placeholder="Two rivers, not much road."></label>
+          <label class="field"><span>Size <b id="es-spanv">14×14</b></span><input id="es-span" type="range" min="10" max="24" step="2" value="14"></label>
+          <div class="field"><span>Pace</span><div class="seg" id="es-mode"><button type="button" data-v="chill" aria-pressed="false">Relaxed</button><button type="button" data-v="standard" aria-pressed="true">Standard</button><button type="button" data-v="frantic" aria-pressed="false">Frantic</button></div></div>
+          <label class="field"><span>Starting cash</span><input id="es-cash" type="number" min="0" max="5000" step="5" value="0"></label>
+          <label class="field"><span>Starting road tiles</span><input id="es-roads" type="number" min="0" max="200" value="20"></label>
+          <div class="field es-wide"><span>Goal</span><div class="seg" id="es-goal"><button type="button" data-v="survive" aria-pressed="true">Survive as long as you can</button><button type="button" data-v="parcels" aria-pressed="false">Deliver parcels by a week</button></div>
+            <div class="es-goalrow" id="es-goalrow" hidden><label>Deliver <input id="es-goaln" type="number" min="1" max="100000" value="100"> parcels</label><label>by the end of week <input id="es-goalw" type="number" min="1" max="200" value="5"></label></div></div>
+          <div class="field es-wide"><span>Not allowed on this map</span><div class="es-bans" id="es-bans"></div></div>
+        </div>
+        <p class="formerr" id="es-err" role="alert"></p>
+        <div class="btnrow"><button class="bigbtn" id="es-ok" type="button">Apply</button><button class="bigbtn ghost" id="es-cancel" type="button">Cancel</button></div>
+      </div>
+    </div>
+    <!-- map editor: the map is published -->
+    <div class="modal" id="m-edpub" hidden>
+      <div class="card plate edpubcard">
+        <h2 id="ep-title">Published!</h2>
+        <p class="lead">Anyone can play it from Community maps, or by entering this code in the Map editor:</p>
+        <code class="ep-code num" id="ep-code">——————</code>
+        <div class="btnrow"><button class="bigbtn" id="ep-copy" type="button">Copy code</button><button class="bigbtn ghost" id="ep-share" type="button">Share</button><button class="bigbtn ghost" id="ep-done" type="button">Done</button></div>
+      </div>
+    </div>
+    <!-- community maps: a map's own leaderboard -->
+    <div class="modal" id="m-mapboard" hidden>
+      <div class="card plate wide mapboard">
+        <h2 id="mb-name">Map</h2>
+        <p class="mini" id="mb-sub"></p>
+        <div class="mb-body"><ol class="board" id="mb-list"><li class="mini">Loading…</li></ol><div><canvas id="mb-map" width="320" height="320" aria-label="The map"></canvas><p class="mini" id="mb-note"></p></div></div>
+        <div class="btnrow"><button class="bigbtn" id="mb-play" type="button">Play this map</button><button class="bigbtn ghost" id="mb-close" type="button">Close</button></div>
+      </div>
+    </div>
+    <!-- community maps: report one -->
+    <div class="modal" id="m-mapreport" hidden aria-label="Report a map">
+      <div class="card plate reportcard">
+        <h2>Report <span id="mr-name">map</span></h2>
+        <p class="lead">Tell us what’s wrong with this map. Reports go to the developer.</p>
+        <div class="seg rp-why" id="mr-why" role="group" aria-label="Reason"><button type="button" data-why="Inappropriate content" aria-pressed="true">Inappropriate</button><button type="button" data-why="Bad name" aria-pressed="false">Bad name</button><button type="button" data-why="Broken map" aria-pressed="false">Broken</button><button type="button" data-why="Other" aria-pressed="false">Other</button></div>
+        <label class="field"><span>Details <small>(optional)</small></span><textarea id="mr-text" rows="3" maxlength="800" placeholder="What’s wrong?"></textarea></label>
+        <p class="formerr" id="mr-err" role="alert"></p>
+        <div class="btnrow"><button class="bigbtn" id="mr-send" type="button">Send report</button><button class="bigbtn ghost" id="mr-cancel" type="button">Cancel</button></div>
+      </div>
+    </div>
+
+    <!-- co-op: invite friends into the session -->
+    <div class="modal" id="m-coop-invite" hidden aria-label="Invite to co-op">
+      <div class="card plate">
+        <h2>Invite to the city</h2>
+        <p class="lead">Friends you invite see it under Co-op on their main menu and can join while the session is open.</p>
+        <div class="fradd"><input id="ci-name" type="text" maxlength="16" placeholder="Invite by username" autocomplete="off" spellcheck="false"><button class="bigbtn" id="ci-go" type="button">Invite</button></div>
+        <p class="formerr" id="ci-err" role="alert"></p>
+        <div class="ci-list" id="ci-list"></div>
+        <div class="btnrow"><button class="bigbtn ghost" id="ci-close" type="button">Done</button></div>
+      </div>
+    </div>
     <!-- tutorial: how the game works, before the first step -->
     <div class="modal" id="m-tutintro" hidden>
       <div class="card plate tutintro">
@@ -483,7 +743,7 @@
     <!-- online: account (profile, stats, security) -->
     <div class="modal" id="m-acct" hidden>
       <div class="card plate wide acctcard">
-        <div class="acct-head">
+        <div class="acct-head has-banner" id="acct-banner">
           <div class="acct-av" id="acct-av" aria-hidden="true"></div>
           <div class="acct-id"><h2 id="acct-name">Account</h2><p class="mini" id="acct-sub"></p></div>
         </div>
@@ -543,6 +803,11 @@
           <div class="acct-box" id="acct-perm-box">
             <button class="bigbtn ghost" id="acct-signout" type="button">Sign out</button>
           </div>
+          <h3>Your look</h3>
+          <p class="mini">A banner behind your name, a frame round your avatar, a title, and up to three achievements to pin. Buy more in the Store; crates can hold them too.</p>
+          <div id="acct-look"></div>
+          <h3>Blocked and muted players</h3>
+          <div id="acct-blocked"><p class="mini">Nobody. Block or mute someone from their player card or a chat.</p></div>
         </div>
 
         <div class="acct-pane" data-pane="stats" hidden>
@@ -644,7 +909,7 @@
           <canvas id="run-map" width="420" height="420" aria-label="Their city"></canvas>
           <div><div class="statgrid" id="run-stats"></div><p class="mini" id="run-note"></p></div>
         </div>
-        <div class="btnrow"><button class="bigbtn" id="run-msg" type="button">Message</button><button class="bigbtn" id="run-chal" type="button">Challenge</button><button class="bigbtn ghost" id="run-friend" type="button" hidden>Add friend</button><button class="bigbtn ghost" id="run-close" type="button">Close</button></div>
+        <div class="btnrow"><button class="bigbtn" id="run-msg" type="button">Message</button><button class="bigbtn" id="run-chal" type="button">Challenge</button><button class="bigbtn ghost" id="run-share" type="button">Share</button><button class="bigbtn ghost" id="run-friend" type="button" hidden>Add friend</button><button class="bigbtn ghost" id="run-close" type="button">Close</button></div>
       </div>
     </div>
 
@@ -658,14 +923,28 @@
     </div>
 
     <div class="modal" id="m-over" hidden>
-      <div class="card plate">
-        <h2>Gridlock</h2>
-        <p class="lead" id="over-why">A store ran out of patience.</p>
-        <div class="score-line num" id="over-score">0</div>
-        <p id="over-best" class="mini">parcels delivered</p>
+      <div class="card plate wide overcard">
+        <div class="over-head"><small class="over-kicker" id="over-kicker">Gridlock</small><h2 id="over-why">A store ran out of patience.</h2></div>
+        <div class="over-grid">
+          <canvas id="over-pic" class="over-pic" width="480" height="480" aria-label="Your final city"></canvas>
+          <div class="over-nums">
+            <div class="over-big"><b class="num" id="over-score">0</b><span>parcels delivered</span><em id="over-newbest" hidden>New best!</em></div>
+            <div class="overstats" id="over-stats"></div>
+            <p id="over-best" class="mini"></p>
+          </div>
+        </div>
         <div class="overchart" id="over-chart-wrap" hidden><canvas id="over-chart" width="520" height="130" aria-label="Parcels a minute and traffic jam level over the whole run"></canvas><small><i class="g"></i>parcels a minute <i class="r"></i>traffic jammed <i class="w"></i>week starts</small></div>
-        <div class="overstats" id="over-stats"></div>
-        <div class="btnrow"><button class="bigbtn" id="btn-again" type="button">Start a new city</button></div>
+        <div class="over-ach" id="over-ach" hidden></div>
+        <div class="btnrow over-btns"><button class="bigbtn" id="btn-share" type="button">Share</button><button class="bigbtn ghost" id="btn-replay" type="button" hidden>Watch replay</button><button class="bigbtn" id="btn-again" type="button">Play again</button><button class="bigbtn ghost" id="btn-over-home" type="button">Main menu</button></div>
+      </div>
+    </div>
+    <!-- a share card, for browsers that can't share or copy an image -->
+    <div class="modal" id="m-share" hidden>
+      <div class="card plate sharecard">
+        <h2>Your card</h2>
+        <p class="lead">Press and hold (or right-click) the picture to save or copy it.</p>
+        <img id="share-img" alt="Share card">
+        <div class="btnrow"><button class="bigbtn" id="share-save" type="button">Save image</button><button class="bigbtn ghost" id="share-close" type="button">Close</button></div>
       </div>
     </div>
 
@@ -802,7 +1081,7 @@
               <li><b>One-way a tight corridor.</b> It costs nothing and can turn a two-lane headache into one smooth flow.</li>
             </ul>
             <h3>Keys</h3>
-            <p class="keys"><kbd>1</kbd>–<kbd>9</kbd> tools · <kbd>P</kbd> pause · <kbd>E</kbd> erase · <kbd>U</kbd> upgrade a store · <kbd>Y</kbd> hire a tow truck · <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo · <kbd>Ctrl</kbd>+<kbd>Y</kbd> redo · <kbd>H</kbd> jam map · <kbd>F</kbd> follow the selected car · <kbd>G</kbd> grid · <kbd>M</kbd> hide motorways · <kbd>N</kbd> sound · <kbd>T</kbd> theme · <kbd>C</kbd> snapshot · <kbd>0</kbd> fit · <kbd>+</kbd>/<kbd>−</kbd> speed (down to 0.5×) · <kbd>Esc</kbd> close</p>
+            <p class="keys"><kbd>1</kbd>–<kbd>9</kbd> tools · <kbd>P</kbd> pause · <kbd>E</kbd> erase · <kbd>U</kbd> upgrade a store · <kbd>Y</kbd> hire a tow truck · <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo · <kbd>Ctrl</kbd>+<kbd>Y</kbd> redo · <kbd>H</kbd> jam map · <kbd>F2</kbd> traffic flow · <kbd>F</kbd> follow the selected car · <kbd>G</kbd> grid · <kbd>M</kbd> hide motorways · <kbd>N</kbd> sound · <kbd>T</kbd> theme · <kbd>C</kbd> snapshot · <kbd>0</kbd> fit · <kbd>+</kbd>/<kbd>−</kbd> speed (down to 0.5×) · <kbd>Esc</kbd> close</p>
             <h3>Colour mode</h3>
             <p>Settings has colour modes for red–green and blue–yellow colour blindness, a high-contrast set, and fully custom colours. You can also turn on a shape for each colour on houses and stores.</p>
           </div>

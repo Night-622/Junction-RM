@@ -30,7 +30,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js';
 import {
   getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs, query, orderBy, limit,
-  onSnapshot, runTransaction, serverTimestamp, deleteField, addDoc, where, Timestamp
+  onSnapshot, runTransaction, serverTimestamp, deleteField, addDoc, where, Timestamp, increment, arrayUnion
 } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js';
 
 const firebaseConfig = {
@@ -47,6 +47,20 @@ const API = window.JunctionAPI;
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 const NAME_RE = /^[A-Za-z0-9_-]{3,16}$/;
+/* Words we don't allow in names, chats or challenges. Letters can be swapped for look-alikes (4 for a, 3 for e, $ for s...)
+   and padded with dots, dashes or underscores: the text is normalised before it's checked. Refused with a friendly note. */
+const BAD_WORDS = ['fuck', 'fuk', 'shit', 'bitch', 'cunt', 'twat', 'wanker', 'dick', 'cock', 'pussy', 'asshole', 'arsehole', 'bastard', 'slut', 'whore', 'fag', 'faggot', 'nigger', 'nigga', 'retard', 'spastic', 'spaz', 'kike', 'chink', 'paki', 'tranny', 'rapist', 'rape', 'nazi', 'hitler', 'kys', 'pedo', 'paedo', 'porn', 'cum', 'jizz', 'anal', 'dildo', 'penis', 'vagina', 'boob', 'tits', 'motherfucker', 'bollocks', 'prick', 'douche', 'bugger', 'piss', 'wank', 'blowjob', 'handjob', 'nonce', 'molest'];
+const LEET = {'4': 'a', '@': 'a', '3': 'e', '1': 'i', '!': 'i', '|': 'i', '0': 'o', '5': 's', '$': 's', '7': 't', '+': 't', '9': 'g', '6': 'g', '8': 'b', '2': 'z'};
+const normText = t => String(t || '').toLowerCase().replace(/[4@31!|05$7+9682]/g, c => LEET[c] || c).replace(/[^a-z]/g, '');
+const BAD_RE = new RegExp(BAD_WORDS.map(w => w.replace(/(.)/g, '$1+')).join('|'));                 // letters may repeat (fuuuck)
+const SAFE_OK = ['assassin', 'bass', 'class', 'glass', 'grass', 'pass', 'mass', 'brass', 'cocktail', 'peacock', 'hancock', 'scunthorpe', 'dickens', 'analysis', 'analyst', 'canal', 'cumulus', 'document', 'circumstance', 'shitake', 'titan', 'title', 'cumbria'];
+function textOk(t) {
+  const n = normText(t); if (!n) return true;
+  let m = n; for (const ok of SAFE_OK) m = m.split(ok).join('');
+  return !BAD_RE.test(m);
+}
+const RUDE_NAME = 'That name has words we don\u2019t allow. Pick something friendlier.';
+const RUDE_MSG = 'That message has words we don\u2019t allow. Keep it friendly.';
 const SLOTS = ['1', '2', '3', '4', '5'];            // the old shared slots, moved into per-mode slots on sign-in
 const SAVE_MODES = ['chill', 'standard', 'frantic', 'zen', 'expert'];
 const slotIds = mode => SLOTS.map(n => mode + '-' + n);                 // five slots per game mode: "standard-1" ... "standard-5"
@@ -86,10 +100,22 @@ function ago(ts) {
   return Math.floor(s / 86400) + ' d ago';
 }
 function mmss(sec) { sec = Math.round(sec); return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0'); }
-function nameHTML(name, star, ach3) {
-  if (ach3) return esc(name) + ' <span class="star star3" title="Unlocked every achievement">\u2605\u2605\u2605</span>';
-  return esc(name) + (star ? ' <span class="star" title="Permanent account">\u2605</span>' : '');
+function nameHTML(name, star, ach3, look) {
+  const t = look && look.title ? API.titleOf(look.title) : '';
+  const tt = t ? ' <em class="ptitle">' + esc(t) + '</em>' : '';
+  if (ach3) return esc(name) + ' <span class="star star3" title="Unlocked every achievement">\u2605\u2605\u2605</span>' + tt;
+  return esc(name) + (star ? ' <span class="star" title="Permanent account">\u2605</span>' : '') + tt;
 }
+/* another player's look (banner, frame, title, pins), cached from profiles/{uid} */
+O.looks = {};
+async function lookOf(uid) {
+  if (O.looks[uid] && Date.now() - O.looks[uid].at < 300e3) return O.looks[uid];
+  try { const p = await getDoc(doc(db, 'profiles', uid)); const d = p.exists() ? p.data() : {}; O.looks[uid] = {banner: d.banner || '', frame: d.frame || '', title: d.title || '', pins: Array.isArray(d.pins) ? d.pins : [], flag: d.flag || '', at: Date.now()}; }
+  catch (e) { O.looks[uid] = {banner: '', frame: '', title: '', pins: [], at: Date.now()}; }
+  return O.looks[uid];
+}
+const avStyle = (uid, look) => 'background:' + avColour(uid) + (look && look.frame ? ';--fr:' + API.frameCSS(look.frame) : '');
+const avClass = look => 'av' + (look && look.frame ? ' f-' + look.frame : '');
 const myAch3 = () => !!(API.achAll && API.achAll());
 function friendlyAuthError(e) {
   const c = (e && e.code) || '';
@@ -159,6 +185,7 @@ function takenError(e) {
   return e;
 }
 async function saveGuestName(name) {
+  if (!textOk(name)) throw new Error(RUDE_NAME);
   const lower = name.toLowerCase(), uid = O.user.uid;
   const oldLower = O.profile && O.profile.nameLower;
   try {
@@ -194,6 +221,7 @@ async function keepGuestName() {
 }
 async function claimName(name) {
   if (!NAME_RE.test(name || '')) throw new Error('Type the username you want to keep.');
+  if (!textOk(name)) throw new Error(RUDE_NAME);
   const lower = name.toLowerCase(), uid = O.user.uid;
   const oldLower = O.profile && O.profile.nameLower;
   await O.user.getIdToken(true);                  // make sure the token already says "permanent account"
@@ -325,7 +353,7 @@ $('user-signin').addEventListener('click', () => busy(null, async () => {
 
 /* ------------------------------------------------------ account widgets */
 function renderAccount() {
-  startInbox(); startChallenges(); migrateLegacySaves();
+  startInbox(); startChallenges(); loadBlocked(); migrateLegacySaves();
   const sa = $('start-account');
   sa.hidden = false;
   sa.innerHTML = '<span>Playing as <b>' + nameHTML(myName(), isPerm(), myAch3()) + '</b>' + (isPerm() ? '' : ' <small>(guest)</small>') + '</span>' +
@@ -360,9 +388,12 @@ function openAcct(pane) {
   acctPaneOpened();
 }
 function renderAcct() {
-  const perm = isPerm(), name = myName(), pv = providers();
+  const perm = isPerm(), name = myName(), pv = providers(), look = API.prof();
   $('acct-av').textContent = name.charAt(0).toUpperCase();
-  $('acct-name').innerHTML = nameHTML(name, perm, myAch3());
+  $('acct-av').className = 'acct-av' + (look.frame ? ' f-' + look.frame : ''); $('acct-av').style.cssText = look.frame ? '--fr:' + API.frameCSS(look.frame) : '';
+  $('acct-banner').style.background = API.bannerCSS(look.banner);
+  $('acct-name').innerHTML = nameHTML(name, perm, myAch3(), look);
+  renderLookPicker();
   const since = O.user.metadata && O.user.metadata.creationTime ? new Date(O.user.metadata.creationTime).toLocaleDateString(undefined, {year: 'numeric', month: 'short', day: 'numeric'}) : '';
   $('acct-sub').textContent = perm
     ? (O.user.email || 'Permanent account') + ' \u00b7 ' + (pv.includes('google.com') ? 'Google' : 'Email') + (since ? ' \u00b7 joined ' + since : '')
@@ -410,6 +441,7 @@ function renderAch() {
 }
 $('acct-tabs').addEventListener('click', e => { const b = e.target.closest('button[data-pane]'); if (b) { acctPane = b.dataset.pane; renderAcct(); acctPaneOpened(); } });
 function acctPaneOpened() {
+  if (acctPane === 'profile') renderBlockedList();
   if (acctPane === 'saves') {
     $('acct-saves-lead').textContent = isPerm() ? 'Five cloud save slots, kept with your account on any device.' : 'Five cloud save slots for this browser. Make a permanent account to keep them everywhere.';
     renderSlots($('acct-slots'), SAVE_MODES.includes(API.startDiff) ? API.startDiff : 'standard', true);
@@ -511,7 +543,25 @@ async function loadLife() {
   } catch (e) { console.warn('Stats load failed', e); }
   O.lifeLoaded = true;
   pushLife(true);
+  loadShopCloud();
 }
+/* B1: coins, owned items, the look you wear, your streak and quests follow your account */
+const shopRef = uid => doc(db, 'users', uid, 'stats', 'shop');
+let shopPushAt = 0, shopLoaded = false;
+async function loadShopCloud() {
+  if (!O.user) return;
+  try { const s = await getDoc(shopRef(O.user.uid)); if (s.exists()) API.mergeShop(s.data()); } catch (e) { console.warn('Shop load failed', e); }
+  shopLoaded = true; pushShop(true);
+}
+async function pushShop(force) {
+  if (!shopLoaded || !O.user) return;
+  if (!force && Date.now() - shopPushAt < 30e3) return;
+  shopPushAt = Date.now();
+  try { await setDoc(shopRef(O.user.uid), Object.assign(API.shopSnapshot(), {updatedAt: serverTimestamp()})); } catch (e) { console.warn('Shop sync failed', e); }
+}
+API.events.on('shop', () => pushShop(false));
+API.events.on('prof', () => { pushShop(true); pushProfile(); if (!$('m-acct').hidden) renderAcct(); });
+window.addEventListener('pagehide', () => { pushShop(true); });
 let lifePushAt = 0;
 async function pushLife(force) {
   if (!O.lifeLoaded || !O.user) return;
@@ -614,12 +664,12 @@ async function slotAction(id, n, act, d, mode) {
     O.slot = id; O.lastSaveAt = Date.now(); O.lastSaveStr = d.data;
     API.toast(API.diffLabel(mode) + ' slot ' + n + ' loaded \u2014 week ' + d.week, 'good');
   } else if (act === 'new') {
-    if (d && d.data && !d.over && !confirm('Replace the city in ' + API.diffLabel(mode) + ' slot ' + n + ' (week ' + d.week + ', ' + d.score + ' parcels) with a new one?')) return;
+    if (d && d.data && !d.over && !(await API.ask({title: 'Replace this city?', text: API.diffLabel(mode) + ' slot ' + n + ' holds a week ' + d.week + ' city with ' + d.score + ' parcels. A new one will take its place.', ok: 'Replace', danger: true}))) return;
     O.slot = id; O.lastSaveStr = '';
     API.startCity(mode);
     setTimeout(() => cloudSave(true), 400);
   } else if (act === 'del') {
-    if (!confirm('Delete ' + API.diffLabel(mode) + ' slot ' + n + '? This can\u2019t be undone.')) return;
+    if (!(await API.ask({title: 'Delete this save?', text: API.diffLabel(mode) + ' slot ' + n + ' will be emptied. This can\u2019t be undone.', ok: 'Delete', danger: true}))) return;
     await deleteDoc(slotRef(id)).catch(e => API.toast('Couldn\u2019t delete: ' + e.message, 'warn'));
     if (O.slot === id) O.slot = null;
     if (slotsBox) renderSlots(slotsBox, slotsMode, slotsTabs);
@@ -728,7 +778,7 @@ async function submitBest(mode, vals, quiet) {
   if (!Object.keys(up).length) return;
   Object.assign(best, up);
   try {
-    await setDoc(boardRef(mode, O.user.uid), Object.assign({name: myName(), star: isPerm(), ach3: myAch3(), updatedAt: serverTimestamp()}, up), {merge: true});
+    await setDoc(boardRef(mode, O.user.uid), Object.assign({name: myName(), star: isPerm(), ach3: myAch3(), title: API.prof().title || '', frame: API.prof().frame || '', updatedAt: serverTimestamp()}, up), {merge: true});
     if (up.goalsSec && !quiet) API.toast('New ' + API.diffLabel(mode) + ' best: every goal in ' + mmss(up.goalsSec), 'good');
   } catch (e) { console.warn('Leaderboard update failed', e); }
 }
@@ -775,7 +825,7 @@ async function openBoard(tab, mode) {
     snap.forEach(s => {
       const d = s.data(); if (!(d[boardTab] > 0)) return;
       const me = O.user && s.id === O.user.uid; if (me) meIn = true;
-      rows.push('<li class="click' + (me ? ' me' : '') + '" data-player="' + esc(s.id) + '" data-name="' + esc(d.name || '') + '" tabindex="0"><span class="rank">' + (rows.length + 1) + '</span><span class="who">' + nameHTML(d.name || '?', d.star, d.ach3) +
+      rows.push('<li class="click' + (me ? ' me' : '') + '" data-player="' + esc(s.id) + '" data-name="' + esc(d.name || '') + '" tabindex="0"><span class="rank">' + (rows.length + 1) + '</span><span class="who">' + nameHTML(d.name || '?', d.star, d.ach3, d) +
         '</span><b class="num">' + B.fmt(d[boardTab]) + '</b></li>');
     });
     $('board-list').innerHTML = rows.join('') || '<li class="mini">No entries yet \u2014 be the first.</li>';
@@ -807,7 +857,7 @@ async function submitExpert(st) {
   const best = O.expertBest[wk];
   if (!(st.score > (best.parcels || 0) || (st.score === (best.parcels || 0) && st.week > (best.weeks || 0)))) return;
   const sd = seedOfWeek(wk);
-  const data = {name: myName(), star: isPerm(), ach3: myAch3(), parcels: Math.floor(st.score || 0), weeks: Math.floor(st.week || 0), earned: Math.floor(st.earned || 0),
+  const data = {name: myName(), star: isPerm(), ach3: myAch3(), title: API.prof().title || '', frame: API.prof().frame || '', parcels: Math.floor(st.score || 0), weeks: Math.floor(st.week || 0), earned: Math.floor(st.earned || 0),
     trips: Math.floor(st.trips || 0), tows: Math.floor(st.tows || 0), cars: Math.floor(st.cars || 0), roads: Math.floor(st.roads || 0), playSec: Math.floor(st.clock || 0),
     seedName: sd.name, seedCode: sd.code, weekLabel: sd.label, city: API.citySnap(), updatedAt: serverTimestamp()};
   if (data.city.length > 300000) data.city = '';
@@ -832,7 +882,7 @@ async function openExpert(ago) {
     snap.forEach(x => {
       const d = x.data(), me = O.user && x.id === O.user.uid; if (me) meIn = true;
       expertRows[x.id] = d;
-      rows.push('<li class="click' + (me ? ' me' : '') + '" data-run="' + x.id + '" tabindex="0"><span class="rank">' + (rows.length + 1) + '</span><span class="who">' + nameHTML(d.name || '?', d.star, d.ach3) +
+      rows.push('<li class="click' + (me ? ' me' : '') + '" data-run="' + x.id + '" tabindex="0"><span class="rank">' + (rows.length + 1) + '</span><span class="who">' + nameHTML(d.name || '?', d.star, d.ach3, d) +
         ' <span class="dk">week ' + (d.weeks || 0) + '</span></span><b class="num">' + (d.parcels || 0).toLocaleString() + ' parcels</b></li>');
     });
     $('board-list').innerHTML = rows.join('') || '<li class="mini">No runs on this seed yet \u2014 be the first.</li>';
@@ -873,6 +923,14 @@ function openRun(wk, uid) {
   openM('m-run');
 }
 $('run-close').addEventListener('click', () => closeM('m-run'));
+$('run-share').addEventListener('click', () => {
+  if (!runOf) return;
+  const d = expertRows[runOf.uid] || {}, pic = $('run-map'), mine = O.user && runOf.uid === O.user.uid;
+  const c = API.makeShareCard({pic: d.city ? pic : null, kicker: 'Expert Survival · seed ' + (d.seedName || ''), big: (d.parcels || 0).toLocaleString(), bigLabel: 'parcels delivered',
+    title: (mine ? 'My run' : (d.name || 'A player') + '’s run') + ' · week ' + (d.weeks || 0),
+    stats: [['Weeks', d.weeks || 0], ['Earned', money(d.earned || 0)], ['Trips', d.trips || 0], ['Cars', d.cars || 0], ['Roads', d.roads || 0], ['Played', hm(d.playSec || 0)]], line: 'Same seed, same map. Can you beat it?'});
+  API.shareCanvas(c, 'junction-weekly-' + (d.seedCode || 'run'), (mine ? 'My' : (d.name || 'A player') + '’s') + ' Expert Survival run on Junction: ' + (d.parcels || 0) + ' parcels on seed ' + (d.seedName || '') + '.');
+});
 $('run-chal').addEventListener('click', () => { if (runOf) openChallenge(runOf.uid, runOf.name); });
 $('run-friend').addEventListener('click', async () => { if (!runOf) return; const err = await addFriend(runOf.uid, runOf.name); API.toast(err || runOf.name + ' is now your friend \u2014 find them under Chats on the main menu.', err ? 'warn' : 'good'); renderRunFriend(); });
 function renderRunFriend() { const b = $('run-friend'); if (!b || !runOf) return; const f = isFriend(runOf.uid); b.hidden = !O.user || runOf.uid === O.user.uid || f; }
@@ -904,14 +962,14 @@ async function loadSent() {
   catch (e) { console.warn('Sent messages unavailable', e); }
 }
 function updateMsgBadge() {
-  const n = O.inbox.filter(m => !m.read).length, t = n > 99 ? '99+' : String(n);
+  const n = O.inbox.filter(m => !m.read && !isHushed(m.from)).length, t = n > 99 ? '99+' : String(n);
   for (const id of ['msg-badge', 'msg-tabbadge']) { const el = $(id); if (el) { el.textContent = t; el.hidden = !n; } }
   document.querySelectorAll('.mm-chat-badge').forEach(el => { el.textContent = t; el.hidden = !n; });
 }
 function threadsList() {
   const by = {};
-  for (const m of O.inbox) { const t = by[m.from] || (by[m.from] = {uid: m.from, name: m.fromName, last: null, unread: 0}); if (!m.read) t.unread++; if (!t.last || msAt(m) > msAt(t.last)) t.last = m; }
-  for (const m of O.sent) { const t = by[m.to] || (by[m.to] = {uid: m.to, name: m.toName, last: null, unread: 0}); if (!t.last || msAt(m) > msAt(t.last)) t.last = m; }
+  for (const m of O.inbox) { if (isBlocked(m.from)) continue; const t = by[m.from] || (by[m.from] = {uid: m.from, name: m.fromName, last: null, unread: 0}); if (!m.read) t.unread++; if (!t.last || msAt(m) > msAt(t.last)) t.last = m; }
+  for (const m of O.sent) { if (isBlocked(m.to)) continue; const t = by[m.to] || (by[m.to] = {uid: m.to, name: m.toName, last: null, unread: 0}); if (!t.last || msAt(m) > msAt(t.last)) t.last = m; }
   return Object.values(by).sort((a, b) => msAt(b.last) - msAt(a.last));
 }
 const ago2 = t => { const s2 = (Date.now() - t) / 1000; return s2 < 60 ? 'now' : s2 < 3600 ? Math.floor(s2 / 60) + 'm' : s2 < 86400 ? Math.floor(s2 / 3600) + 'h' : Math.floor(s2 / 86400) + 'd'; };
@@ -952,6 +1010,8 @@ async function sendTo(uid, name, t) {
   if (!t) return 'Write something first.';
   if (!O.profile || !O.profile.name) return 'Pick a username first (Account \u2192 Profile).';
   if (t.length > 500) return 'Messages can be up to 500 characters.';
+  if (!textOk(t)) return RUDE_MSG;
+  if (isBlocked(uid)) return 'You’ve blocked ' + (name || 'them') + '. Unblock them in Account → Profile to message.';
   if (Date.now() - lastSend < 600) return 'Slow down a little.';
   lastSend = Date.now();
   const m = {from: O.user.uid, fromName: myName(), to: uid, toName: (name || 'Player').slice(0, 16), text: t, at: serverTimestamp(), read: false};
@@ -968,6 +1028,100 @@ async function sendMsg() {
 }
 $('msg-send').addEventListener('click', sendMsg);
 $('msg-text').addEventListener('keydown', e => { if (e.key === 'Enter') sendMsg(); });
+/* ============================================================ ERROR REPORTS
+   Errors in players' games are saved to logs/{id} (rate limited on the server) so bugs show up before players report
+   them. Only a message, where it happened and the game version; no city data. */
+let errSeen = new Set();
+function reportError(kind, msg, where) {
+  try {
+    const key = kind + '|' + String(msg).slice(0, 120); if (errSeen.has(key) || errSeen.size > 12) return; errSeen.add(key);
+    if (!O.user) return;
+    addDoc(collection(db, 'logs'), {kind: 'error', uid: O.user.uid, msg: String(msg).slice(0, 500), where: String(where || '').slice(0, 300), ver: API.version || '', ua: navigator.userAgent.slice(0, 160), at: serverTimestamp()}).catch(() => {});
+  } catch (e) {}
+}
+window.addEventListener('error', e => reportError('error', e.message, (e.filename || '') + ':' + (e.lineno || 0)));
+window.addEventListener('unhandledrejection', e => reportError('promise', e.reason && e.reason.message || String(e.reason), ''));
+
+/* ============================================================ BLOCK, MUTE, REPORT
+   users/{uid}/blocked/{bid}: {name, mute, at}. Blocked players' messages, challenges and friend adds are hidden;
+   muted ones still show but never notify. Reports go to feedback/other with the player's id and their last messages. */
+O.blocked = {};
+const blockRef = bid => doc(db, 'users', O.user.uid, 'blocked', bid);
+const isBlocked = uid => !!(O.blocked[uid] && !O.blocked[uid].mute);
+const isMuted = uid => !!(O.blocked[uid] && O.blocked[uid].mute);
+const isHushed = uid => !!O.blocked[uid];                                 // blocked or muted: no notifications
+async function loadBlocked() {
+  if (!O.ready || !O.user) return;
+  try { const sn = await getDocs(collection(db, 'users', O.user.uid, 'blocked')); O.blocked = {}; sn.forEach(x => { O.blocked[x.id] = Object.assign({name: '?', mute: false}, x.data()); }); }
+  catch (e) { console.warn('Blocked list unavailable', e); }
+  updateMsgBadge();
+}
+async function setHush(uid, name, mode) {                                  // mode: 'block' | 'mute' | 'off'
+  if (!O.ready || !O.user || uid === O.user.uid) return 'That\u2019s you.';
+  try {
+    if (mode === 'off') { await deleteDoc(blockRef(uid)); delete O.blocked[uid]; }
+    else { await setDoc(blockRef(uid), {name: String(name || 'Player').slice(0, 16), mute: mode === 'mute', at: serverTimestamp()}); O.blocked[uid] = {name, mute: mode === 'mute'}; }
+  } catch (e) { return 'Couldn\u2019t save that: ' + e.message; }
+  if (mode === 'block') { try { await deleteDoc(friendRef(uid)); await loadFriends(true); } catch (e) {} }
+  updateMsgBadge(); if (chatBox) renderChats(); if (frBox) renderFriends(); if (isoBox) renderIso();
+  if (!$('m-acct').hidden && acctPane === 'profile') renderBlockedList();
+  return '';
+}
+function renderLookPicker() {
+  const box = $('acct-look'); if (!box) return;
+  const look = API.prof(), o = API.profOptions(), pins = API.pinnable(), names = Object.fromEntries(API.achList().map(a => [a.id, a.name]));
+  const sel = (label, key, items, none) => '<div class="look-row"><span>' + label + '</span><select data-look="' + key + '"><option value="">' + none + '</option>' + items.filter(it => it.id.split(':')[1]).map(it => '<option value="' + esc(it.id.split(':')[1]) + '"' + (look[key] === it.id.split(':')[1] ? ' selected' : '') + '>' + esc(it.name) + '</option>').join('') + '</select></div>';
+  box.innerHTML = sel('Banner', 'banner', o.banners, 'No banner') + sel('Frame', 'frame', o.frames, 'No frame') + sel('Title', 'title', o.titles, 'No title') +
+    '<div class="look-pins"><span>Pinned achievements <small>(' + look.pins.length + '/3)</small></span>' + (pins.length ? '<div class="pin-list">' + pins.map(a => '<label class="pin' + (look.pins.includes(a.id) ? ' on' : '') + '"><input type="checkbox" data-pin="' + esc(a.id) + '"' + (look.pins.includes(a.id) ? ' checked' : '') + '><span>\u2605 ' + esc(a.name) + '</span></label>').join('') + '</div>' : '<p class="mini">Unlock achievements to pin them here.</p>') + '</div>';
+  box.querySelectorAll('[data-look]').forEach(s2 => s2.onchange = () => API.setProf({[s2.dataset.look]: s2.value}));
+  box.querySelectorAll('[data-pin]').forEach(c => c.onchange = () => { let p = API.prof().pins.slice(); if (c.checked) { if (p.length >= 3) { c.checked = false; API.toast('Three pins at most \u2014 unpin one first', 'warn'); return; } p.push(c.dataset.pin); } else p = p.filter(x => x !== c.dataset.pin); API.setProf({pins: p}); });
+}
+function renderBlockedList() {
+  const box = $('acct-blocked'); if (!box) return;
+  const ids = Object.keys(O.blocked);
+  box.innerHTML = ids.length ? ids.map(uid => { const b = O.blocked[uid]; return '<div class="blk-row"><span class="av" style="background:' + avColour(uid) + '">' + esc(String(b.name || '?').charAt(0).toUpperCase()) + '</span><span class="blk-t"><b>' + esc(b.name || 'Player') + '</b><small>' + (b.mute ? 'Muted \u00b7 no notifications' : 'Blocked \u00b7 hidden everywhere') + '</small></span><button class="act small" type="button" data-unhush="' + esc(uid) + '">' + (b.mute ? 'Unmute' : 'Unblock') + '</button></div>'; }).join('')
+    : '<p class="mini">Nobody. Block or mute someone from their player card or a chat.</p>';
+  box.querySelectorAll('[data-unhush]').forEach(b => b.onclick = async () => { const err = await setHush(b.dataset.unhush, '', 'off'); if (err) API.toast(err, 'warn'); renderBlockedList(); });
+}
+let reportOf = null, reportWhy = 'Harassment';
+function openReport(uid, name) {
+  if (!O.ready || !O.user || uid === O.user.uid) return;
+  reportOf = {uid, name}; $('rp-name').textContent = name || 'player'; $('rp-text').value = ''; $('rp-err').textContent = ''; $('rp-block').checked = !isBlocked(uid);
+  reportWhy = 'Harassment'; document.querySelectorAll('#rp-why button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.why === reportWhy)));
+  openM('m-report');
+}
+document.querySelectorAll('#rp-why button').forEach(b => b.addEventListener('click', () => { reportWhy = b.dataset.why; document.querySelectorAll('#rp-why button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); }));
+$('rp-cancel').addEventListener('click', () => closeM('m-report'));
+$('rp-send').addEventListener('click', async () => {
+  if (!reportOf) return;
+  const btn = $('rp-send'); btn.disabled = true; $('rp-err').textContent = '';
+  try {
+    const theirs = O.inbox.filter(m => m.from === reportOf.uid).sort((a, b) => msAt(b) - msAt(a)).slice(0, 5).map(m => new Date(msAt(m)).toISOString().slice(0, 16) + ' ' + (m.text || '')).join('\n');
+    const data = {uid: O.user.uid, message: 'Report: ' + reportWhy + ' \u2014 ' + (reportOf.name || 'player'), details: ($('rp-text').value.trim() + (theirs ? '\n\nTheir last messages:\n' + theirs : '')).slice(0, 1900),
+      about: reportOf.uid, aboutName: String(reportOf.name || '').slice(0, 16), createdAt: serverTimestamp()};
+    if (O.profile && O.profile.name) data.name = O.profile.name;
+    await addDoc(collection(db, 'feedback', 'other', 'entries'), data);
+    if ($('rp-block').checked) await setHush(reportOf.uid, reportOf.name, 'block');
+    closeM('m-report'); API.toast('Report sent. Thank you.', 'good');
+  } catch (e) { $('rp-err').textContent = 'Couldn\u2019t send the report: ' + e.message; }
+  btn.disabled = false;
+});
+/* the buttons a player card or chat shows for mute, block and report */
+function hushButtonsHTML(uid) {
+  return '<button class="act small" type="button" data-hush="' + (isMuted(uid) ? 'off' : 'mute') + '">' + (isMuted(uid) ? 'Unmute' : 'Mute') + '</button>' +
+    '<button class="act small" type="button" data-hush="' + (isBlocked(uid) ? 'off' : 'block') + '">' + (isBlocked(uid) ? 'Unblock' : 'Block') + '</button>' +
+    '<button class="act small" type="button" data-hush="report">Report</button>';
+}
+function bindHush(box, uid, name, after) {
+  box.querySelectorAll('[data-hush]').forEach(b => b.onclick = async () => {
+    const m = b.dataset.hush;
+    if (m === 'report') { openReport(uid, name); return; }
+    if (m === 'block' && !(await API.ask({title: 'Block ' + name + '?', text: 'Their messages, challenges and friend adds are hidden. You can unblock them in Account \u2192 Profile.', ok: 'Block', danger: true}))) return;
+    const err = await setHush(uid, name, m); if (err) API.toast(err, 'warn'); else API.toast(m === 'off' ? name + ' is back' : m === 'mute' ? name + ' is muted' : name + ' is blocked', 'good');
+    if (after) after();
+  });
+}
+
 /* ============================================================ FRIENDS
    users/{uid}/friends/{fuid}: the players you've added. The Friends section of the main menu lists them with
    their records (best on every mode, and on this week's Expert seed) and a chat with each. */
@@ -984,7 +1138,8 @@ async function loadFriends(force) {
 async function addFriend(fuid, name) {
   if (!O.ready || !O.user) return 'Online features are still connecting.';
   if (!O.profile || !O.profile.name) return 'Pick a username first.';
-  if (fuid === O.user.uid) return 'That\u2019s you.';
+  if (fuid === O.user.uid) return 'That’s you.';
+  if (isBlocked(fuid)) return 'You’ve blocked ' + (name || 'them') + '. Unblock them in Account → Profile first.';
   try { await setDoc(friendRef(fuid), {name: String(name || 'Player').slice(0, 16), at: serverTimestamp()}); await loadFriends(true); return ''; }
   catch (e) { return 'Couldn\u2019t add that friend: ' + e.message; }
 }
@@ -1021,7 +1176,7 @@ async function renderFriends(box) {
   if (!O.ready || !O.user) { frBox.innerHTML = '<p class="mini">Friends need the online service — it’s still connecting, or unavailable right now.</p>'; return; }
   if (!O.profile || !O.profile.name) { frBox.innerHTML = '<p class="mini">Pick a username first, then you can add friends.</p><button class="bigbtn" type="button" id="fr-pick">Pick a username</button>'; $('fr-pick').onclick = () => openUserModal(); return; }
   frBox.innerHTML = '<p class="mini">Loading friends…</p>';
-  const list = await loadFriends();
+  const list = (await loadFriends()).filter(f => !isBlocked(f.uid));
   if (!frBox) return;
   if (!frSel && list.length) frSel = {uid: list[0].uid, name: list[0].name};
   frBox.innerHTML = '<div class="frwrap"><div class="frcol">' +
@@ -1062,8 +1217,9 @@ async function liveOf(uid) {
 async function renderFriendMain() {
   const main = $('fr-main'); if (!main || !frSel) return;
   const sel = frSel, h = h2hWith(sel.uid);
-  main.innerHTML = '<div class="frhead"><span class="av big" style="background:' + avColour(sel.uid) + '">' + esc(String(sel.name).charAt(0).toUpperCase()) + '</span><div class="frhead-t"><b>' + esc(sel.name) + '</b><small id="fr-live">Checking…</small></div></div>' +
-    '<div class="btnrow fr-acts"><button class="bigbtn" type="button" id="fr-chal">Challenge</button><button class="bigbtn ghost" type="button" id="fr-msg">Message</button><button class="bigbtn ghost" type="button" id="fr-view">Profile</button><button class="linkbtn" type="button" id="fr-remove">Remove friend</button></div>' +
+  const lk = O.looks[sel.uid]; if (!lk) lookOf(sel.uid).then(() => { if (frSel === sel) renderFriendMain(); });
+  main.innerHTML = '<div class="frhead" style="background:' + API.bannerCSS(lk && lk.banner) + '"><span class="' + avClass(lk) + ' big" style="' + avStyle(sel.uid, lk) + '">' + esc(String(sel.name).charAt(0).toUpperCase()) + '</span><div class="frhead-t"><b>' + nameHTML(sel.name, false, false, lk) + '</b><small id="fr-live">Checking…</small></div></div>' +
+    '<div class="btnrow fr-acts"><button class="bigbtn" type="button" id="fr-chal">Challenge</button><button class="bigbtn ghost" type="button" id="fr-msg">Message</button><button class="bigbtn ghost" type="button" id="fr-coop">Co-op</button><button class="bigbtn ghost" type="button" id="fr-view">Profile</button><button class="linkbtn" type="button" id="fr-remove">Remove friend</button></div>' +
     '<h4 class="frh">ISO 1v1 against ' + esc(sel.name) + '</h4>' +
     '<div class="fr-h2h"><div><b class="num">' + h.w + '</b><span>won</span></div><div><b class="num">' + h.l + '</b><span>lost</span></div><div><b class="num">' + h.d + '</b><span>drawn</span></div><div><b class="num">' + h.open + '</b><span>open</span></div></div>' +
     (h.last.length ? '<div class="fr-last">' + h.last.slice(0, 5).map(d => { const w = d.winner === O.user.uid ? 'won' : d.winner === sel.uid ? 'lost' : 'draw';
@@ -1072,12 +1228,14 @@ async function renderFriendMain() {
   $('fr-chal').onclick = () => openChallenge(sel.uid, sel.name);
   $('fr-msg').onclick = () => openChat(sel.uid, sel.name);
   $('fr-view').onclick = () => openPlayer(sel.uid, sel.name);
-  $('fr-remove').onclick = async () => { if (!confirm('Remove ' + sel.name + ' from your friends?')) return; try { await deleteDoc(friendRef(sel.uid)); } catch (e) {} frSel = null; await loadFriends(true); renderFriends(); };
+  $('fr-coop').onclick = () => coopInvite(sel.uid, sel.name);
+  $('fr-remove').onclick = async () => { if (!(await API.ask({title: 'Remove ' + sel.name + '?', text: 'They come off your friends list. Your chat stays.', ok: 'Remove', danger: true}))) return; try { await deleteDoc(friendRef(sel.uid)); } catch (e) {} frSel = null; await loadFriends(true); renderFriends(); };
   friendRecordsOf(sel.uid).then(r => { if (frSel === sel && $('fr-rec')) $('fr-rec').innerHTML = recordsHTML(r); });
   liveOf(sel.uid).then(L => {
     if (frSel !== sel || !$('fr-live')) return;
-    $('fr-live').innerHTML = L.playing ? '<i class="dot on"></i>Playing now · <button class="linkbtn inl" type="button" id="fr-watch">Watch live</button>' : L.fresh ? '<i class="dot"></i>Online, on the menu' : 'Not playing right now';
-    const w = $('fr-watch'); if (w) w.onclick = () => startWatching(L.code, L.d);
+    const inMatch = Object.values(O.chals).some(d => d.status === 'accepted' && d.kind === 'live' && (d.from === sel.uid || d.to === sel.uid) && d.startAt);
+    $('fr-live').innerHTML = L.playing ? '<i class="dot on"></i>Playing now · <button class="linkbtn inl" type="button" id="fr-watch">' + (inMatch ? 'Watch their match' : 'Watch live') + '</button>' : L.fresh ? '<i class="dot"></i>Online, on the menu' : 'Not playing right now';
+    const w = $('fr-watch'); if (w) w.onclick = () => inMatch ? spectateMatch(sel.uid, sel.name) : startWatching(L.code, L.d);
   });
 }
 
@@ -1105,6 +1263,7 @@ async function renderChats(box) {
   if (!O.ready || !O.user) { chatBox.innerHTML = '<p class="mini">Chats need the online service — it’s still connecting, or unavailable right now.</p>'; return; }
   if (!O.profile || !O.profile.name) { chatBox.innerHTML = '<p class="mini">Pick a username first, then you can chat.</p>'; return; }
   const keep = $('wa-text'), draft = keep ? keep.value : '', focused = keep && document.activeElement === keep, qFocus = document.activeElement && document.activeElement.id === 'wa-q';
+  if (chatSel && isBlocked(chatSel.uid)) chatSel = null;               // a blocked player's chat closes
   const threads = threadsList(), q = chatQ.trim().toLowerCase();
   if (chatSel && !threads.some(t => t.uid === chatSel.uid)) threads.unshift({uid: chatSel.uid, name: chatSel.name, last: null, unread: 0});
   const shown = threads.filter(t => !q || String(t.name || '').toLowerCase().includes(q));
@@ -1130,8 +1289,9 @@ async function renderChats(box) {
       body += '<div class="wa-msg' + (mine ? ' me' : '') + '"><span class="wa-txt">' + esc(m.text || '') + '</span><span class="wa-meta">' + hhmm(t) + (mine ? ' ' + ticks(m) : '') + '</span></div>';
     }
     main = '<header class="wa-head"><button type="button" class="wa-back" id="wa-back" aria-label="Back to chats">←</button>' +
-      '<button type="button" class="wa-who" id="wa-who" title="See their profile"><span class="av" style="background:' + avColour(chatSel.uid) + '">' + esc(String(chatSel.name || '?').charAt(0).toUpperCase()) + '</span><span class="wa-who-t"><b>' + esc(chatSel.name || 'Player') + '</b><small>Tap for their profile</small></span></button>' +
-      '<button type="button" class="act small" id="wa-chal">Challenge</button></header>' +
+      '<button type="button" class="wa-who" id="wa-who" title="See their profile"><span class="' + avClass(O.looks[chatSel.uid]) + '" style="' + avStyle(chatSel.uid, O.looks[chatSel.uid]) + '">' + esc(String(chatSel.name || '?').charAt(0).toUpperCase()) + '</span><span class="wa-who-t"><b>' + nameHTML(chatSel.name || 'Player', false, false, O.looks[chatSel.uid]) + '</b><small>Tap for their profile</small></span></button>' +
+      '<button type="button" class="act small" id="wa-chal">Challenge</button><button type="button" class="wa-more" id="wa-more" aria-label="More" aria-expanded="false">⋯</button>' +
+      '<div class="wa-menu" id="wa-menu" hidden><button type="button" data-wm="profile">Their profile</button>' + hushButtonsHTML(chatSel.uid).replace(/class="act small"/g, 'data-wm="hush"') + '</div></header>' +
       '<div class="wa-body" id="wa-body">' + (body || '<p class="wa-empty">Say hello to ' + esc(chatSel.name || 'them') + '.</p>') + '</div>' +
       '<div class="wa-input"><input id="wa-text" type="text" maxlength="500" placeholder="Message" autocomplete="off"><button type="button" class="wa-send" id="wa-send" aria-label="Send"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M3 20l18-8L3 4l2.5 8L3 20zm2.5-8h7"/></svg></button></div><p class="formerr" id="wa-err" role="alert"></p>';
     for (const m of ms) if (m.to === O.user.uid && !m.read) { m.read = true; updateDoc(doc(db, 'messages', m.id), {read: true}).catch(() => {}); }
@@ -1160,8 +1320,14 @@ async function renderChats(box) {
     ng.onclick = go; $('wa-newname').onkeydown = e => { if (e.key === 'Enter') go(); };
   }
   const bk = $('wa-back'); if (bk) bk.onclick = () => { chatSel = null; renderChats(); };
+  if (chatSel && !O.looks[chatSel.uid]) lookOf(chatSel.uid).then(() => { if (chatBox && chatSel) renderChats(); });
   const who = $('wa-who'); if (who) who.onclick = () => openPlayer(chatSel.uid, chatSel.name);
   const ch = $('wa-chal'); if (ch) ch.onclick = () => openChallenge(chatSel.uid, chatSel.name);
+  const more = $('wa-more'); if (more) {
+    more.onclick = () => { const m = $('wa-menu'); m.hidden = !m.hidden; more.setAttribute('aria-expanded', String(!m.hidden)); };
+    $('wa-menu').querySelector('[data-wm="profile"]').onclick = () => openPlayer(chatSel.uid, chatSel.name);
+    bindHush($('wa-menu'), chatSel.uid, chatSel.name, () => renderChats());
+  }
   const sb = $('wa-send'); if (sb) {
     const send = async () => { const el = $('wa-text'), t = el.value; $('wa-err').textContent = ''; if (!t.trim()) return; el.value = '';
       const err = await sendTo(chatSel.uid, chatSel.name, t); if (err) { $('wa-err').textContent = err; el.value = t; return; } renderChats(); $('wa-text').focus(); };
@@ -1212,7 +1378,8 @@ async function setupLive(forceNew) {
 /* profiles/{uid}: the little that anyone can see about a player — their name and live code */
 async function pushProfile() {
   if (!O.user || !O.profile || !O.profile.name) return;
-  await setDoc(doc(db, 'profiles', O.user.uid), {name: myName(), star: isPerm(), ach3: myAch3(), live: O.liveCode || null, updatedAt: serverTimestamp()}).catch(e => console.warn('Profile not shared', e));
+  const p = API.prof();
+  await setDoc(doc(db, 'profiles', O.user.uid), {name: myName(), star: isPerm(), ach3: myAch3(), live: O.liveCode || null, banner: p.banner || '', frame: p.frame || '', title: p.title || '', pins: p.pins || [], updatedAt: serverTimestamp()}).catch(e => console.warn('Profile not shared', e));
 }
 async function dropLive(remove) {
   if (O.liveUnsub) { O.liveUnsub(); O.liveUnsub = null; }
@@ -1256,7 +1423,7 @@ $('live-copy').addEventListener('click', async () => {
   try { await navigator.clipboard.writeText(O.liveCode); API.toast('Live code copied', 'good'); } catch (e) { API.toast('Your code is ' + O.liveCode); }
 });
 $('live-refresh').addEventListener('click', async () => {
-  if (!isPerm() || !confirm('Make a new live code? Anyone using your old one won\u2019t be able to watch any more.')) return;
+  if (!isPerm() || !(await API.ask({title: 'Make a new live code?', text: 'Anyone using your old one won\u2019t be able to watch any more.', ok: 'New code'}))) return;
   const old = O.liveCode;
   if (O.liveUnsub) { O.liveUnsub(); O.liveUnsub = null; }
   O.liveCode = null;
@@ -1330,6 +1497,7 @@ function startWatching(code, first) {
 }
 function setSpecText(html) { $('spec-text').innerHTML = html; }
 function stopWatching(silent) {
+  if (O.specMatchUnsub) { O.specMatchUnsub(); O.specMatchUnsub = null; if (API.isoSpectate) API.isoSpectate(null); }
   const S = O.spec; if (!S) return;
   if (S.unsub) S.unsub(); if (S.ping) clearInterval(S.ping);
   O.spec = null; $('spec-bar').hidden = true;
@@ -1344,16 +1512,29 @@ $('spec-exit').addEventListener('click', () => stopWatching(false));
 async function openPlayer(uid, name) {
   if (!O.ready || !O.user) return;
   $('pl-name').innerHTML = esc(name || 'Player'); $('pl-av').textContent = String(name || '?').charAt(0).toUpperCase();
+  $('pl-av').className = 'acct-av'; $('pl-av').style.cssText = 'background:' + avColour(uid); $('pl-banner').style.background = API.bannerCSS(''); $('pl-pins').hidden = true;
+  lookOf(uid).then(l => {
+    if ($('m-player').hidden) return;
+    $('pl-name').innerHTML = nameHTML(name || 'Player', false, false, l); $('pl-banner').style.background = API.bannerCSS(l.banner);
+    getDoc(doc(db, 'rankedPlayers', uid)).then(r => { if (r.exists() && !$('m-player').hidden) $('pl-name').insertAdjacentHTML('beforeend', ' ' + rankedBadge(r.data())); }).catch(() => {});
+    if (l.flag) $('pl-sub').textContent = 'Some of this player’s scores are under review.';
+    $('pl-av').className = 'acct-av' + (l.frame ? ' f-' + l.frame : ''); if (l.frame) $('pl-av').style.setProperty('--fr', API.frameCSS(l.frame));
+    const names = Object.fromEntries(API.achList().map(a => [a.id, a]));
+    $('pl-pins').hidden = !l.pins.length; $('pl-pins').innerHTML = l.pins.filter(id => names[id]).map(id => '<span class="achchip" title="' + esc(names[id].hint) + '"><i>★</i>' + esc(names[id].name) + '</span>').join('');
+  });
   $('pl-sub').textContent = uid === O.user.uid ? 'This is you.' : '';
   $('pl-live').innerHTML = '<p class="mini">Checking whether they\u2019re playing\u2026</p>';
   $('pl-rec').innerHTML = '<p class="mini">Loading\u2026</p>';
   const me = uid === O.user.uid;
   const btns = () => {
-    $('pl-btns').innerHTML = me ? '' : '<button class="bigbtn" type="button" id="pl-chal">Challenge</button><button class="bigbtn ghost" type="button" id="pl-msg">Message</button>' +
-      (isFriend(uid) ? '<span class="mini pl-fr">\u2713 Friends</span>' : '<button class="bigbtn ghost" type="button" id="pl-add">Add friend</button>');
+    $('pl-btns').innerHTML = me ? '' : '<button class="bigbtn" type="button" id="pl-chal">Challenge</button><button class="bigbtn ghost" type="button" id="pl-msg">Message</button><button class="bigbtn ghost" type="button" id="pl-coop">Co-op</button>' +
+      (isFriend(uid) ? '<span class="mini pl-fr">✓ Friends</span>' : '<button class="bigbtn ghost" type="button" id="pl-add">Add friend</button>') +
+      '<span class="pl-hush">' + hushButtonsHTML(uid) + '</span>';
     if (me) return;
+    bindHush($('pl-btns'), uid, name, btns);
     $('pl-chal').onclick = () => { closeM('m-player'); openChallenge(uid, name); };
     $('pl-msg').onclick = () => { closeM('m-player'); closeM('m-board'); openThread(uid, name); };
+    $('pl-coop').onclick = () => coopInvite(uid, name);
     const add = $('pl-add'); if (add) add.onclick = async () => { const err = await addFriend(uid, name); API.toast(err || name + ' is now your friend', err ? 'warn' : 'good'); btns(); };
   };
   btns();
@@ -1394,13 +1575,17 @@ function startChallenges() {
       if (ch.type === 'removed') { delete O.chals[d.id]; return; }
       O.chals[d.id] = d; onChal(d, old);
     });
-    API.setIsoPending(Object.values(O.chals).filter(d => d.to === O.user.uid && d.status === 'pending' && tms(d.expiresAt) > Date.now()).length);
+    API.setIsoPending(Object.values(O.chals).filter(d => d.to === O.user.uid && d.status === 'pending' && tms(d.expiresAt) > Date.now() && !isBlocked(d.from)).length);
     if (isoBox) renderIso();
   }, e => console.warn('Challenges unavailable', e)));
 }
 /* react to a challenge changing: new ones, answers, the live start, asks, and the result */
 function onChal(d, old) {
   const me = O.user.uid, opp = oppOf(d), kind = d.kind === 'live' ? 'live' : 'daily';
+  if (d.ranked && !old && d.status === 'accepted') { O.queued = null; renderRankedQueue(); API.toast((d.tournament ? 'Tournament match' : 'Ranked match') + ' found: ' + opp.name + ' — ' + (kind === 'live' ? 'press Ready in Play → ISO 1v1' : 'play your run from Play → ISO 1v1'), 'good'); }
+  if (d.ranked && d.rated && (!old || !old.rated) && d.delta && d.delta[me] !== undefined) { const dl = d.delta[me]; API.toast('Rating ' + (dl >= 0 ? '+' : '') + dl + (d.tournament ? ' · tournament' : ''), dl >= 0 ? 'good' : 'warn'); loadRanked(true); }
+  if (isBlocked(opp.uid)) { if (d.to === me && d.status === 'pending') updateDoc(chalRef(d.id), {status: 'declined'}).catch(() => {}); return; }
+  if (isMuted(opp.uid) && d.status === 'pending' && !old) return;
   if (!old && d.to === me && d.status === 'pending' && tms(d.createdAt) > Date.now() - 6e5) API.toast(d.fromName + ' challenged you to a ' + kind + ' ISO match \u2014 open Play \u2192 ISO 1v1', 'good');
   if (old && old.status === 'pending' && d.status === 'accepted' && d.from === me) API.toast(d.toName + ' accepted your ' + kind + ' challenge' + (kind === 'live' ? ' \u2014 press Ready in Play \u2192 ISO 1v1' : ''), 'good');
   if (old && old.status === 'pending' && d.status === 'declined' && d.from === me) API.toast(d.toName + ' declined your challenge', 'warn');
@@ -1526,6 +1711,124 @@ API.events.on('isoReply', e => {
   c.v = (c.v || 0) + 1;
   updateDoc(chalRef(d.id), {prop: null, ctl: c}).catch(err => API.toast('Couldn\u2019t answer: ' + err.message, 'warn'));
 });
+/* p65 ranked */
+/* ============================================================ RANKED ISO, SEASONS, TOURNAMENTS
+   rankedPlayers/{uid} {rating, division, games, wins, losses, draws, season, lastSeason} is written only by the
+   Cloud Functions; the client queues in rankedQueue/{uid} and the function pairs players into a ranked challenge. */
+const DIV_LABEL = {bronze: 'Bronze', silver: 'Silver', gold: 'Gold', platinum: 'Platinum', diamond: 'Diamond'};
+const DIV_MIN = {bronze: 0, silver: 1100, gold: 1250, platinum: 1400, diamond: 1550};
+O.ranked = null; O.queued = null; let rankedAt = 0, queueUnsub = null;
+async function loadRanked(force) {
+  if (!O.user) return null;
+  if (O.ranked && !force && Date.now() - rankedAt < 60e3) return O.ranked;
+  try { const s = await getDoc(doc(db, 'rankedPlayers', O.user.uid)); O.ranked = s.exists() ? s.data() : {rating: 1000, division: 'bronze', games: 0, wins: 0, losses: 0, draws: 0}; }
+  catch (e) { O.ranked = O.ranked || {rating: 1000, division: 'bronze', games: 0, wins: 0, losses: 0, draws: 0}; }
+  rankedAt = Date.now();
+  mergeGrants();
+  return O.ranked;
+}
+/* designs the server granted (season rewards) are merged into what you own */
+async function mergeGrants() {
+  try { const g = await getDoc(doc(db, 'users', O.user.uid, 'stats', 'grants')); if (!g.exists()) return; const items = g.data().items || []; let n = 0; for (const id of items) if (API.grantItem && API.grantItem(id)) n++; if (n) API.toast('Season reward unlocked: ' + n + ' new design' + (n > 1 ? 's' : ''), 'good'); } catch (e) {}
+}
+const rankedBadge = r => { const d = (r && r.division) || 'bronze'; return '<span class="div-badge d-' + d + '" title="' + DIV_LABEL[d] + ' \u00b7 ' + Math.round((r && r.rating) || 1000) + '">' + DIV_LABEL[d] + '</span>'; };
+function rankedHTML(rk) {
+  const r = rk || {rating: 1000, division: 'bronze', games: 0, wins: 0, losses: 0, draws: 0};
+  const next = Object.keys(DIV_MIN).find(k => DIV_MIN[k] > r.rating), toNext = next ? DIV_MIN[next] - r.rating : 0;
+  const q = O.queued;
+  return '<div class="rk-card d-' + (r.division || 'bronze') + '"><div class="rk-l"><small>Ranked ISO \u00b7 season ' + seasonLabel() + '</small><b>' + DIV_LABEL[r.division || 'bronze'] + ' <span class="num">' + Math.round(r.rating) + '</span></b>' +
+    '<span>' + (r.games ? r.wins + 'W \u00b7 ' + r.losses + 'L \u00b7 ' + r.draws + 'D this season' : 'No ranked games yet') + (next ? ' \u00b7 ' + toNext + ' to ' + DIV_LABEL[next] : ' \u00b7 top division') + '</span></div>' +
+    '<div class="rk-r">' + (q ? '<button class="bigbtn" type="button" id="rk-cancel">In queue (' + (q.kind === 'live' ? 'live' : 'daily') + ')\u2026 cancel</button>' : '<button class="bigbtn" type="button" id="rk-live">Quick match \u00b7 live</button><button class="act" type="button" id="rk-daily">Quick match \u00b7 daily</button>') +
+    '<button class="act small" type="button" id="rk-board">Ranked board</button><button class="act small" type="button" id="rk-tour">Tournaments</button></div></div>';
+}
+const seasonLabel = () => new Date().toLocaleDateString('en-US', {month: 'long', year: 'numeric'});
+function bindRanked(box) {
+  const live = box.querySelector('#rk-live'), daily = box.querySelector('#rk-daily'), cancel = box.querySelector('#rk-cancel');
+  if (live) live.onclick = () => joinQueue('live'); if (daily) daily.onclick = () => joinQueue('daily'); if (cancel) cancel.onclick = leaveQueue;
+  const b = box.querySelector('#rk-board'); if (b) b.onclick = openRankedBoard;
+  const t = box.querySelector('#rk-tour'); if (t) t.onclick = openTournaments;
+}
+function renderRankedQueue() { if (isoBox && isoBox.isConnected) renderIso(); }
+async function joinQueue(kind) {
+  if (!O.ready || !O.profile || !O.profile.name) { openUserModal(); return; }
+  if (O.queued) return;
+  const r = await loadRanked();
+  try {
+    await setDoc(doc(db, 'rankedQueue', O.user.uid), {name: myName(), rating: Math.round(r.rating || 1000), kind, at: serverTimestamp()});
+    O.queued = {kind, at: Date.now()}; renderRankedQueue();
+    API.toast('Looking for a ' + kind + ' opponent near ' + Math.round(r.rating || 1000) + '\u2026', 'tip');
+    if (queueUnsub) queueUnsub();
+    queueUnsub = onSnapshot(doc(db, 'rankedQueue', O.user.uid), s => { if (!s.exists() && O.queued) { O.queued = null; renderRankedQueue(); } });
+    setTimeout(() => { if (O.queued && Date.now() - O.queued.at > 9.5 * 60e3) leaveQueue('No one near your rating turned up. Try again later, or challenge a friend.'); }, 9.6 * 60e3);
+  } catch (e) { API.toast('Couldn\u2019t join the queue: ' + e.message, 'warn'); }
+}
+async function leaveQueue(why) {
+  if (queueUnsub) { queueUnsub(); queueUnsub = null; }
+  await deleteDoc(doc(db, 'rankedQueue', O.user.uid)).catch(() => {});
+  if (O.queued) { O.queued = null; renderRankedQueue(); API.toast(why || 'Left the queue', why ? 'warn' : 'tip'); }
+}
+window.addEventListener('pagehide', () => { if (O.queued && O.user) { try { navigator.sendBeacon && deleteDoc(doc(db, 'rankedQueue', O.user.uid)); } catch (e) {} } });
+/* the ranked board: top 25 by rating, your row highlighted */
+async function openRankedBoard() {
+  $('menu').hidden = true;
+  $('board-modes').innerHTML = '<span class="mini">Ranked ISO \u00b7 season ' + seasonLabel() + '</span>'; $('board-tabs').innerHTML = '';
+  $('board-note').textContent = 'Ratings start at 1000 and move with every ranked match. Divisions: Bronze, Silver 1100, Gold 1250, Platinum 1400, Diamond 1550. Seasons reset a third of the way to 1000 each month, and your division earns a design.';
+  $('board-list').innerHTML = '<li class="mini">Loading\u2026</li>'; $('board-me').textContent = '';
+  boardMode = 'ranked'; openM('m-board');
+  try {
+    const snap = await getDocs(query(collection(db, 'rankedPlayers'), orderBy('rating', 'desc'), limit(25)));
+    const rows = []; let meIn = false;
+    snap.forEach(x => { const d = x.data(), me = O.user && x.id === O.user.uid; if (me) meIn = true;
+      rows.push('<li class="click' + (me ? ' me' : '') + '" data-player="' + esc(x.id) + '" data-name="' + esc(d.name || '') + '" tabindex="0"><span class="rank">' + (rows.length + 1) + '</span><span class="who">' + esc(d.name || '?') + ' ' + rankedBadge(d) + ' <span class="dk">' + (d.wins || 0) + 'W ' + (d.losses || 0) + 'L</span></span><b class="num">' + Math.round(d.rating) + '</b></li>'); });
+    $('board-list').innerHTML = rows.join('') || '<li class="mini">No ranked games yet. Press Quick match to be the first.</li>';
+    const r = await loadRanked(); $('board-me').innerHTML = 'You: <b>' + Math.round(r.rating || 1000) + '</b> \u00b7 ' + DIV_LABEL[r.division || 'bronze'] + (meIn ? '' : ' (outside the top 25)');
+  } catch (e) { $('board-list').innerHTML = '<li class="mini">Couldn\u2019t load the ranked board: ' + esc(e.message) + '</li>'; }
+}
+/* tournaments: weekend brackets. tournaments/{id} {name, size, kind, startsAt, status, rounds, winner, host} */
+async function openTournaments() {
+  $('tour-list').innerHTML = '<p class="mini">Loading\u2026</p>'; openM('m-tour');
+  try {
+    const snap = await getDocs(query(collection(db, 'tournaments'), orderBy('startsAt', 'desc'), limit(12)));
+    const me = O.user.uid, out = [];
+    for (const x of snap.docs) {
+      const t = x.data(), when = tms(t.startsAt) ? new Date(tms(t.startsAt)).toLocaleString(undefined, {weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'}) : '';
+      let body = '';
+      if (t.status === 'signup') {
+        const su = await getDoc(doc(db, 'tournaments', x.id, 'signups', me));
+        body = '<p class="mini">Starts ' + esc(when) + ' \u00b7 ' + (t.kind === 'live' ? 'live' : 'daily') + ' matches \u00b7 up to ' + t.size + ' players</p>' + (su.exists() ? '<button class="act small" type="button" data-tour-out="' + x.id + '">Leave</button>' : '<button class="bigbtn" type="button" data-tour-in="' + x.id + '">Sign up</button>');
+      } else {
+        const rounds = t.rounds || [];
+        body = '<div class="bracket">' + rounds.map((r, i) => '<div class="br-round"><small>' + (rounds.length - i === 1 && t.status === 'done' ? 'Final' : 'Round ' + (i + 1)) + '</small>' + r.map(m => '<div class="br-m' + (m.winner ? ' done' : '') + '"><span' + (m.winner === m.a ? ' class="w"' : '') + '>' + esc(m.an) + '</span><span' + (m.winner === m.b ? ' class="w"' : '') + '>' + esc(m.bn) + '</span></div>').join('') + '</div>').join('') + '</div>' + (t.status === 'done' ? '<p class="mini">Winner: <b>' + esc((t.rounds.slice(-1)[0] || [])[0] && ((t.rounds.slice(-1)[0][0].winner === t.rounds.slice(-1)[0][0].a) ? t.rounds.slice(-1)[0][0].an : t.rounds.slice(-1)[0][0].bn) || '\u2014') + '</b></p>' : '<p class="mini">In progress \u00b7 your matches appear under ISO 1v1</p>');
+      }
+      out.push('<div class="tour"><h3>' + esc(t.name || 'Weekend cup') + ' <em class="iso-kind k-ranked">' + esc(t.status) + '</em></h3>' + body + '</div>');
+    }
+    $('tour-list').innerHTML = out.join('') || '<p class="mini">No tournaments yet. Weekend cups open for sign-ups on Fridays.</p>';
+    if (isPerm()) $('tour-list').insertAdjacentHTML('beforeend', '<div class="tour new"><h3>Host a weekend cup</h3><p class="mini">An 8 or 16 player bracket. Sign-ups close and round 1 starts at the time you pick; the Cloud Functions run the bracket.</p><div class="fradd"><input id="tour-name" type="text" maxlength="32" placeholder="Cup name"><select id="tour-size"><option value="8">8 players</option><option value="16">16 players</option></select><select id="tour-kind"><option value="daily">Daily matches</option><option value="live">Live matches</option></select><input id="tour-when" type="datetime-local"><button class="bigbtn" id="tour-create" type="button">Create</button></div><p class="formerr" id="tour-err" role="alert"></p></div>');
+    $('tour-list').querySelectorAll('[data-tour-in]').forEach(b => b.onclick = async () => { const r = await loadRanked(); await setDoc(doc(db, 'tournaments', b.dataset.tourIn, 'signups', me), {name: myName(), rating: Math.round(r.rating || 1000), at: serverTimestamp()}).then(() => { API.toast('Signed up', 'good'); openTournaments(); }).catch(e => API.toast(e.message, 'warn')); });
+    $('tour-list').querySelectorAll('[data-tour-out]').forEach(b => b.onclick = async () => { await deleteDoc(doc(db, 'tournaments', b.dataset.tourOut, 'signups', me)).catch(() => {}); openTournaments(); });
+    const cr = $('tour-create'); if (cr) cr.onclick = async () => {
+      const name = $('tour-name').value.trim(), when = new Date($('tour-when').value).getTime();
+      if (name.length < 3 || !textOk(name)) { $('tour-err').textContent = 'Give the cup a name (3+ letters, nothing rude).'; return; }
+      if (!(when > Date.now() + 10 * 60e3)) { $('tour-err').textContent = 'Pick a start at least 10 minutes from now.'; return; }
+      try { await addDoc(collection(db, 'tournaments'), {name, size: +$('tour-size').value, kind: $('tour-kind').value, host: me, hostName: myName(), status: 'signup', rounds: [], startsAt: Timestamp.fromMillis(when), createdAt: serverTimestamp()}); API.toast('Cup created. Share it: sign-ups are open.', 'good'); openTournaments(); }
+      catch (e) { $('tour-err').textContent = e.message; }
+    };
+  } catch (e) { $('tour-list').innerHTML = '<p class="mini">Couldn\u2019t load tournaments: ' + esc(e.message) + '</p>'; }
+}
+$('tour-close').addEventListener('click', () => closeM('m-tour'));
+/* spectating a friend's live match: their live/{code} snapshot carries the match id; we watch both cities side by side
+   by watching the friend normally and drawing the opponent's city snapshot in the match panel */
+async function spectateMatch(uid, name) {
+  const L = await liveOf(uid);
+  if (!L.playing) { API.toast(name + ' isn\u2019t playing right now', 'warn'); return; }
+  startWatching(L.code, L.d);
+  const open = Object.values(O.chals).find(d => d.status === 'accepted' && d.kind === 'live' && (d.from === uid || d.to === uid));
+  if (open) {
+    const opp = open.from === uid ? {uid: open.to, name: open.toName} : {uid: open.from, name: open.fromName};
+    const un = onSnapshot(doc(db, 'challenges', open.id, 'live', opp.uid), x => { const v = x.data(); if (v && API.isoSpectate) API.isoSpectate({name: name, opp: opp.name, city: v.city, sec: v.sec, parcels: v.parcels, week: v.week, earned: v.earned, over: v.over}); }, () => {});
+    O.specMatchUnsub = un;
+  }
+}
 /* sending and answering */
 function openChallenge(uid, name) {
   if (!O.ready || !O.user) { API.toast('Online features are still connecting \u2014 try again in a moment.', 'warn'); return; }
@@ -1543,6 +1846,7 @@ document.querySelectorAll('#m-chal .chal-opt').forEach(b => b.addEventListener('
 $('ch-cancel').addEventListener('click', () => closeM('m-chal'));
 $('ir-close').addEventListener('click', () => closeM('m-iso-res'));
 async function sendChallenge(uid, name, kind) {
+  if (isBlocked(uid)) return 'You’ve blocked ' + name + '. Unblock them in Account → Profile first.';
   if (Object.values(O.chals).some(d => d.from === O.user.uid && d.to === uid && (d.status === 'pending' || d.status === 'accepted') && tms(d.expiresAt) > Date.now()))
     return 'You already have a challenge open with ' + name + '.';
   try {
@@ -1571,7 +1875,7 @@ async function renderIso(box) {
   if (slotsBox === isoBox) slotsBox = null;            // and not save slots, which may still be loading
   if (!O.profile || !O.profile.name) { isoBox.innerHTML = '<p class="mini">Pick a username first, then you can challenge players.</p>'; return; }
   const me = O.user.uid, now = Date.now();
-  const list = Object.values(O.chals).sort((a, b) => tms(b.createdAt) - tms(a.createdAt));
+  const list = Object.values(O.chals).filter(d => !isBlocked(oppOf(d).uid)).sort((a, b) => tms(b.createdAt) - tms(a.createdAt));
   const line = d => {
     const opp = oppOf(d), mine = d.from === me, kind = d.kind === 'live' ? 'Live' : 'Daily', exp = tms(d.expiresAt), rd = d.ready || {};
     let st = '', acts = [];
@@ -1594,17 +1898,19 @@ async function renderIso(box) {
       const w = d.winner === me ? 'Won' : d.winner === 'draw' || d.winner === 'none' ? 'Draw' : 'Lost';
       st = '<b class="iso-' + w.toLowerCase() + '">' + w + '</b>' + (d.reason ? ' \u00b7 ' + esc(d.reason) : ''); acts = [['result', 'Result'], ['remove', 'Clear']];
     } else { st = d.status === 'declined' ? 'Declined' : 'Cancelled'; acts = [['remove', 'Clear']]; }
-    return '<div class="iso-row"><span class="av">' + esc(String(opp.name || '?').charAt(0).toUpperCase()) + '</span><span class="iso-who"><b>' + esc(opp.name) + '</b><em class="iso-kind k-' + d.kind + '">' + kind + '</em><small>' + st + '</small></span>' +
+    return '<div class="iso-row"><span class="av">' + esc(String(opp.name || '?').charAt(0).toUpperCase()) + '</span><span class="iso-who"><b>' + esc(opp.name) + '</b><em class="iso-kind k-' + d.kind + '">' + kind + '</em>' + (d.ranked ? '<em class="iso-kind k-ranked">' + (d.tournament ? 'Tournament' : 'Ranked') + '</em>' : '') + '<small>' + st + '</small></span>' +
       '<span class="iso-acts">' + acts.map(([a, l]) => '<button type="button" class="' + (a === 'accept' || a === 'ready' || a === 'play' ? 'bigbtn' : 'act') + ' small" data-ch="' + esc(d.id) + '" data-act="' + a + '">' + l + '</button>').join('') + '</span></div>';
   };
   const friends = await loadFriends();
   if (!isoBox) return;
-  isoBox.innerHTML = '<div class="iso-intro"><p><b>Live</b> \u2014 play side by side, right now. Same speed for both of you; pausing or speeding up needs you both to agree. The last city standing wins.</p>' +
+  const rk = await loadRanked(); if (!isoBox) return;
+  isoBox.innerHTML = rankedHTML(rk) + '<div class="iso-intro"><p><b>Live</b> \u2014 play side by side, right now. Same speed for both of you; pausing or speeding up needs you both to agree. The last city standing wins.</p>' +
       '<p><b>Daily</b> \u2014 each of you plays the same map within 24 hours, pausing and speeding up as you like. A point for each category you win: time survived, parcels, money, trips and fewest tow trucks.</p></div>' +
     '<h3>Your challenges</h3>' + (list.length ? list.map(line).join('') : '<p class="mini">None yet. Challenge a friend below, or tap a player on any leaderboard.</p>') +
     '<h3>Challenge someone</h3><div class="fradd"><input id="iso-name" type="text" maxlength="16" placeholder="Their username" autocomplete="off" spellcheck="false"><button class="bigbtn" id="iso-go" type="button">Challenge</button></div><p class="formerr" id="iso-err" role="alert"></p>' +
     (friends.length ? '<div class="iso-friends">' + friends.map(f => '<button type="button" class="act" data-chf="' + esc(f.uid) + '" data-name="' + esc(f.name) + '">' + esc(f.name) + '</button>').join('') + '</div>' : '');
   isoBox.querySelectorAll('[data-ch]').forEach(b => b.onclick = () => { const d = O.chals[b.dataset.ch]; if (d) answerChal(d, b.dataset.act); });
+  bindRanked(isoBox);
   isoBox.querySelectorAll('[data-chf]').forEach(b => b.onclick = () => openChallenge(b.dataset.chf, b.dataset.name));
   const go = async () => {
     const n = $('iso-name').value.trim(); $('iso-err').textContent = '';
@@ -1663,7 +1969,542 @@ window.JunctionOnline = {
   renderFriends(box) { renderFriends(box); }, renderChats(box) { renderChats(box); }, openChat(uid, name) { openChat(uid, name); },
   expertTop(ago, n) { return expertTop(ago, n); },
   openRun(ago, uid) { openRun(API.expertSeed(ago || 0).key, uid); },
-  renderIso(box) { if (!O.ready) return false; renderIso(box); return true; },
-  openPlayer(uid, name) { openPlayer(uid, name); }, openChallenge(uid, name) { openChallenge(uid, name); },
+  renderIso(box) { if (!O.ready) return false; renderIso(box); return true; }, openRankedBoard, openTournaments, joinQueue, spectateMatch,
+  openPlayer(uid, name) { openPlayer(uid, name); }, textOk, openChallenge(uid, name) { openChallenge(uid, name); },
   openExpert(ago) { if (!O.ready) { API.toast('Online features are still connecting \u2014 try again in a moment.', 'warn'); return; } openExpert(ago); }
 };
+
+
+/* ============================================================ COMMUNITY MAPS
+   maps/{code}             a published map: code, name, desc, data (the map as JSON), author, authorName, mode, goalText,
+                           likes, plays, createdAt, updatedAt, thumb (a small PNG data URL)
+   maps/{code}/likes/{uid} {at} while uid likes it; the liker keeps the map's counter with increment(+-1)
+   maps/{code}/runs/{uid}  a player's best run on it: name, star, ach3, title, frame, parcels, weeks, earned, playSec, goal, city
+   The game emits 'mapweek' and 'mapover' (never 'week', 'over' or 'autosave') while a map city is played, and tells us
+   which map through API.mapId, so a map run is never cloud-saved or put on a mode's leaderboard. */
+import { increment as fsIncrement } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js';
+const MAP_CODE_RE = /^[A-HJ-NP-Z2-9]{6}$/;
+const mapRef = id => doc(db, 'maps', id), mapLikeRef = (id, uid) => doc(db, 'maps', id, 'likes', uid), mapRunRef = (id, uid) => doc(db, 'maps', id, 'runs', uid);
+O.mapLikes = {}; O.mapBest = {}; O.mapRows = {};
+function needOnline() { if (!O.ready || !O.user || !(O.profile && O.profile.name)) throw new Error('Online features are still connecting — try again in a moment.'); }
+function mapCode() { const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', a = new Uint32Array(6); crypto.getRandomValues(a); let s = ''; for (let i = 0; i < 6; i++) s += A[a[i] % A.length]; return s; }
+function mapRow(x) { const d = x.data(); return Object.assign({id: x.id}, d, {liked: !!O.mapLikes[x.id], mine: !!(O.user && d.author === O.user.uid)}); }
+async function fillLikes(rows) {
+  if (!O.user) return rows;
+  await Promise.all(rows.map(async r => {
+    if (O.mapLikes[r.id] === undefined) { try { O.mapLikes[r.id] = (await getDoc(mapLikeRef(r.id, O.user.uid))).exists(); } catch (e) { O.mapLikes[r.id] = false; } }
+    r.liked = O.mapLikes[r.id];
+  }));
+  return rows;
+}
+/* the newest, most liked or most played maps (a single-field order, so no composite index) */
+async function loadMaps(sort) {
+  needOnline();
+  const field = sort === 'plays' ? 'plays' : sort === 'new' ? 'createdAt' : 'likes';
+  const snap = await getDocs(query(collection(db, 'maps'), orderBy(field, 'desc'), limit(24)));
+  const rows = []; snap.forEach(x => { const r = mapRow(x); O.mapRows[r.id] = r; rows.push(r); });
+  return fillLikes(rows);
+}
+async function myMaps() {
+  needOnline();
+  const snap = await getDocs(query(collection(db, 'maps'), where('author', '==', O.user.uid), limit(50)));
+  const rows = []; snap.forEach(x => { const r = mapRow(x); O.mapRows[r.id] = r; rows.push(r); });
+  const at = r => r.createdAt && r.createdAt.toMillis ? r.createdAt.toMillis() : 0;
+  rows.sort((a, b) => at(b) - at(a));
+  return fillLikes(rows);
+}
+async function getMap(id) {
+  needOnline(); id = String(id || '').toUpperCase();
+  if (!MAP_CODE_RE.test(id)) throw new Error('A map code is 6 letters or digits.');
+  const x = await getDoc(mapRef(id)); if (!x.exists()) throw new Error('No map has the code ' + id + '.');
+  const r = mapRow(x); O.mapRows[id] = r; await fillLikes([r]); return r;
+}
+/* publish a map under a fresh 6-letter code, or update one of yours */
+async function publishMap(m) {
+  needOnline();
+  const name = String(m.name || '').trim(), desc = String(m.desc || '').trim();
+  if (name.length < 3 || name.length > 32) throw new Error('Map names are 3–32 characters.');
+  if (desc.length > 140) throw new Error('Descriptions are up to 140 characters.');
+  if (!textOk(name) || !textOk(desc)) throw new Error('Please choose a friendlier name or description.');
+  if (!API.validMap || !API.validMap(m.data)) throw new Error('That map isn’t valid.');
+  const data = JSON.stringify(m.data); if (data.length > 40000) throw new Error('This map is too big to publish.');
+  const thumb = typeof m.thumb === 'string' && m.thumb.length <= 8192 ? m.thumb : '';
+  const base = {name, desc, data, mode: m.data.mode, goalText: String(m.goalText || '').slice(0, 80), authorName: myName(), thumb, updatedAt: serverTimestamp()};
+  if (m.code) {
+    const cur = await getDoc(mapRef(m.code));
+    if (!cur.exists() || cur.data().author !== O.user.uid) throw new Error('That map isn’t yours to change.');
+    await updateDoc(mapRef(m.code), base);
+    delete O.mapRows[m.code];
+    return {code: m.code, updated: true};
+  }
+  for (let t = 0; t < 8; t++) {
+    const code = mapCode();
+    try {
+      await runTransaction(db, async tx => {
+        const s = await tx.get(mapRef(code));
+        if (s.exists()) throw Object.assign(new Error('taken'), {taken: true});
+        tx.set(mapRef(code), Object.assign({code, author: O.user.uid, likes: 0, plays: 0, createdAt: serverTimestamp()}, base));
+      });
+      return {code};
+    } catch (e) { if (!e.taken) throw e; }
+  }
+  throw new Error('Couldn’t find a free code — try again.');
+}
+async function likeMap(id) {
+  needOnline();
+  const liked = !!O.mapLikes[id];
+  if (liked) { await deleteDoc(mapLikeRef(id, O.user.uid)); await updateDoc(mapRef(id), {likes: fsIncrement(-1)}); }
+  else { await setDoc(mapLikeRef(id, O.user.uid), {at: serverTimestamp()}); await updateDoc(mapRef(id), {likes: fsIncrement(1)}); }
+  O.mapLikes[id] = !liked;
+  const r = O.mapRows[id]; if (r) { r.liked = !liked; r.likes = Math.max(0, (r.likes || 0) + (liked ? -1 : 1)); }
+  return {liked: !liked, likes: r ? r.likes : 0};
+}
+/* start a city on a published map (and count the play) */
+async function playMap(id) {
+  needOnline();
+  const r = O.mapRows[id] || await getMap(id);
+  let d; try { d = JSON.parse(r.data); } catch (e) { throw new Error('That map can’t be opened.'); }
+  if (!API.validMap(d)) throw new Error('That map can’t be opened.');
+  updateDoc(mapRef(r.id), {plays: fsIncrement(1)}).then(() => { r.plays = (r.plays || 0) + 1; }).catch(() => {});
+  return API.startMapCity(d, {id: r.id, code: r.id, name: r.name, author: r.author, authorName: r.authorName});
+}
+async function submitMapRun(st, id) {
+  if (!O.ready || !O.profile || !O.profile.name || !id || !st || st.tutorialMode || st.spectating) return;
+  if (!O.mapBest[id]) O.mapBest[id] = await getDoc(mapRunRef(id, O.user.uid)).then(x => x.exists() ? x.data() : {}).catch(() => ({}));
+  const best = O.mapBest[id], goal = !!API.mapGoalDone;
+  if (!(st.score > (best.parcels || 0) || (st.score === (best.parcels || 0) && st.week > (best.weeks || 0)) || (goal && !best.goal))) return;
+  const data = {name: myName(), star: isPerm(), ach3: myAch3(), title: API.prof().title || '', frame: API.prof().frame || '', parcels: Math.floor(st.score || 0), weeks: Math.floor(st.week || 0),
+    earned: Math.floor(st.earned || 0), playSec: Math.floor(st.clock || 0), goal, city: API.citySnap(), updatedAt: serverTimestamp()};
+  if (data.city.length > 300000) data.city = '';
+  try { await setDoc(mapRunRef(id, O.user.uid), data); O.mapBest[id] = data; }
+  catch (e) { console.warn('Map leaderboard update failed', e); }
+}
+API.events.on('mapweek', () => { if (API.mapId) submitMapRun(API.state(), API.mapId); });
+API.events.on('mapover', () => { if (API.mapId) submitMapRun(API.state(), API.mapId); });
+let mbRows = {};
+async function openMapBoard(id) {
+  needOnline();
+  const r = O.mapRows[id] || await getMap(id);
+  $('mb-name').textContent = r.name || 'Map'; $('mb-sub').textContent = 'by ' + (r.authorName || '?') + ' · code ' + r.id + ' · ' + (r.goalText || '');
+  $('mb-list').innerHTML = '<li class="mini">Loading…</li>'; $('mb-note').textContent = 'Most parcels first. Tap a player to see their city.';
+  const cv = $('mb-map'), g = cv.getContext('2d'); g.clearRect(0, 0, cv.width, cv.height);
+  try { g.drawImage(API.mapCanvas(JSON.parse(r.data), cv.width), 0, 0); } catch (e) {}
+  $('mb-play').onclick = () => { closeM('m-mapboard'); playMap(r.id).catch(e => API.toast(e.message, 'warn')); };
+  openM('m-mapboard');
+  try {
+    const snap = await getDocs(query(collection(db, 'maps', r.id, 'runs'), orderBy('parcels', 'desc'), limit(25)));
+    const rows = []; mbRows = {};
+    snap.forEach(x => {
+      const d = x.data(), me = O.user && x.id === O.user.uid; mbRows[x.id] = d;
+      rows.push('<li class="click' + (me ? ' me' : '') + '" data-mbrun="' + x.id + '" tabindex="0"><span class="rank">' + (rows.length + 1) + '</span><span class="who">' + nameHTML(d.name || '?', d.star, d.ach3, d) +
+        ' <span class="dk">week ' + (d.weeks || 0) + (d.goal ? ' · goal ✓' : '') + '</span></span><b class="num">' + (d.parcels || 0).toLocaleString() + ' parcels</b></li>');
+    });
+    $('mb-list').innerHTML = rows.join('') || '<li class="mini">No runs yet — be the first.</li>';
+  } catch (e) { $('mb-list').innerHTML = '<li class="mini">Couldn’t load the leaderboard: ' + esc(e.message) + '</li>'; }
+}
+if ($('mb-list')) {
+  $('mb-list').addEventListener('click', e => {
+    const li = e.target.closest('[data-mbrun]'); if (!li) return;
+    const d = mbRows[li.dataset.mbrun];
+    if (d && d.city && API.drawCitySnap($('mb-map'), d.city)) $('mb-note').textContent = (d.name || 'Their') + '’s city at their best here: ' + (d.parcels || 0) + ' parcels, week ' + (d.weeks || 0) + '.';
+    $('mb-list').querySelectorAll('li').forEach(x => x.classList.toggle('sel', x === li));
+  });
+  $('mb-close').addEventListener('click', () => closeM('m-mapboard'));
+}
+let mapReportOf = null, mapReportWhy = 'Inappropriate content';
+function reportMap(id, name) {
+  if (!O.ready || !O.user) { API.toast('Online features are still connecting — try again in a moment.', 'warn'); return; }
+  mapReportOf = {id, name}; $('mr-name').textContent = name || id; $('mr-text').value = ''; $('mr-err').textContent = '';
+  mapReportWhy = 'Inappropriate content'; document.querySelectorAll('#mr-why button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.why === mapReportWhy)));
+  openM('m-mapreport');
+}
+if ($('mr-send')) {
+  document.querySelectorAll('#mr-why button').forEach(b => b.addEventListener('click', () => { mapReportWhy = b.dataset.why; document.querySelectorAll('#mr-why button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); }));
+  $('mr-cancel').addEventListener('click', () => closeM('m-mapreport'));
+  $('mr-send').addEventListener('click', async () => {
+    if (!mapReportOf) return;
+    const btn = $('mr-send'); btn.disabled = true; $('mr-err').textContent = '';
+    try {
+      const data = {uid: O.user.uid, message: 'Report: map ' + mapReportOf.id + ' — ' + mapReportWhy, details: $('mr-text').value.trim().slice(0, 1900),
+        about: mapReportOf.id, aboutName: String(mapReportOf.name || '').slice(0, 16), createdAt: serverTimestamp()};
+      if (O.profile && O.profile.name) data.name = O.profile.name;
+      await addDoc(collection(db, 'feedback', 'other', 'entries'), data);
+      closeM('m-mapreport'); API.toast('Report sent. Thank you.', 'good');
+    } catch (e) { $('mr-err').textContent = 'Couldn’t send the report: ' + e.message; }
+    btn.disabled = false;
+  });
+}
+async function deleteMap(id) { needOnline(); await deleteDoc(mapRef(id)); delete O.mapRows[id]; }
+Object.assign(window.JunctionOnline, {
+  publishMap, loadMaps, myMaps, getMap, likeMap, submitMapRun, reportMap, deleteMap, myName,
+  playMap(id) { return playMap(id); }, openMapBoard(id) { return openMapBoard(id); }
+});
+
+/* ============================================================ CO-OP
+   coop/{id}: {host, hostName, members: {uid: {name, colour, at}}, invited: [uid], status 'open'|'playing'|'ended',
+               seed, mode, createdAt, updatedAt, state (the host's serialized city, every few seconds), stateAt, meta, expireAt}
+   coop/{id}/actions/{id}: {by, name, t, seq, act, k, k2, kind, payload, at} — a guest's tool action (or anyone's emote);
+               the host marks it {done, ok, note} once applied, which is how the guest learns it was refused
+   coop/{id}/cursors/{uid}: {x, y, name, colour, at} — where each player's pointer is, in world space
+   The host plays a normal city (so it saves as usual) and pushes a snapshot every few seconds while others are in;
+   guests show it through the spectate path and send their taps as actions. */
+const COOP_PUSH = 3e3, COOP_BEAT = 15e3, COOP_CURSOR = 300, COOP_MEMBER_BEAT = 20e3, COOP_MEMBER_STALE = 90e3, COOP_HOST_QUIET = 40e3, COOP_LIVE = 3 * 60e3;
+const COOP_MODES = ['chill', 'standard', 'frantic', 'zen'];
+const COOP_NOTES = {chill: 'Slower parcels, more patience, extra road to start.', standard: 'The intended pace.', frantic: 'Parcels arrive fast and stores lose patience sooner.', zen: 'Nothing you build can lose the game.'};
+const COOP_INV_KEEP = 2 * 864e5;
+O.coop = null; O.coopInv = {}; O.coopMine = {};
+let coopBox = null, coopPick = null, coopUnsubs = [], coopUid = null, coopSig = '';
+const coopRef = id => doc(db, 'coop', id);
+const coopMeta = () => { const st = API.state(), ci = API.coopCityInfo ? API.coopCityInfo() : {}; return {running: !!st.running, speed: st.speed, week: st.week | 0, score: st.score | 0, over: !!st.over, money: ci.money | 0}; };
+const coopCompact = () => !!(window.matchMedia && window.matchMedia('(max-width:700px),(max-height:520px)').matches);
+const coopColour = uid => { const C = O.coop, mem = (C && C.d && C.d.members) || {}; if (mem[uid] && mem[uid].colour) return mem[uid].colour; const used = Object.values(mem).map(m => m.colour); return AV_COLS.find(c => !used.includes(c)) || avColour(uid); };
+const coopFreeColour = (members, uid) => { const used = Object.values(members || {}).map(m => m.colour); return AV_COLS.find(c => !used.includes(c)) || avColour(uid); };
+/* invitations and my own sessions, kept up to date */
+function startCoopListeners() {
+  if (!O.user || coopUid === O.user.uid) return;
+  coopUid = O.user.uid; coopUnsubs.forEach(u => u()); coopUnsubs = []; O.coopInv = {}; O.coopMine = {};
+  const me = O.user.uid;
+  coopUnsubs.push(onSnapshot(query(collection(db, 'coop'), where('invited', 'array-contains', me), limit(25)), snap => {
+    snap.docChanges().forEach(ch => {
+      const d = Object.assign({id: ch.doc.id}, ch.doc.data()), old = O.coopInv[d.id];
+      if (ch.type === 'removed') { delete O.coopInv[d.id]; return; }
+      O.coopInv[d.id] = d;
+      if (!old && d.host !== me && d.status !== 'ended' && !isBlocked(d.host) && !isMuted(d.host) && !(d.members && d.members[me])
+          && tms(d.updatedAt) > Date.now() - COOP_LIVE && !(O.coop && O.coop.id === d.id))
+        API.toast(d.hostName + ' invited you to build a city together \u2014 open Co-op on the main menu', 'good');
+    });
+    coopBadge(); coopPaneRefresh();
+  }, e => console.warn('Co-op invites unavailable', e)));
+  coopUnsubs.push(onSnapshot(query(collection(db, 'coop'), where('host', '==', me), limit(12)), snap => {
+    O.coopMine = {}; snap.forEach(x => { O.coopMine[x.id] = Object.assign({id: x.id}, x.data()); });
+    // old finished sessions of mine are cleared away
+    for (const d of Object.values(O.coopMine)) if (d.status === 'ended' && tms(d.updatedAt) && tms(d.updatedAt) < Date.now() - COOP_INV_KEEP) deleteDoc(coopRef(d.id)).catch(() => {});
+    coopPaneRefresh();
+  }, e => console.warn('Co-op sessions unavailable', e)));
+}
+setInterval(() => { if (O.ready && O.user) startCoopListeners(); }, 2000);
+function coopOpenInvites() {
+  const me = O.user ? O.user.uid : '', now = Date.now();
+  return Object.values(O.coopInv).filter(d => d.host !== me && d.status !== 'ended' && tms(d.updatedAt) > now - COOP_LIVE && !isBlocked(d.host) && !isMuted(d.host) && !(O.coop && O.coop.id === d.id)).sort((a, b) => tms(b.updatedAt) - tms(a.updatedAt));
+}
+/* the pane only redraws when what it lists has changed (the host's snapshots would otherwise redraw it every few seconds) */
+const coopPaneSig = () => JSON.stringify(Object.values(O.coopInv).concat(Object.values(O.coopMine)).map(d => [d.id, d.status, d.hostName, d.mode, Object.keys(d.members || {}).length, (d.meta || {}).week, tms(d.updatedAt) > Date.now() - COOP_LIVE]));
+function coopPaneRefresh() { if (coopBox && coopBox.isConnected && coopPaneSig() !== coopSig) renderCoop(); }
+function coopBadge() { const n = O.user ? coopOpenInvites().length : 0; document.querySelectorAll('.coop-badge').forEach(b => { b.textContent = n; b.hidden = !n; }); }
+setInterval(coopBadge, 30e3);
+
+/* ---- starting, joining, leaving */
+async function coopCreate(mode, invite) {
+  if (!O.ready || !O.user) { API.toast('Online features are still connecting \u2014 try again in a moment.', 'warn'); return; }
+  if (!O.profile || !O.profile.name) { openUserModal(); return; }
+  if (!COOP_MODES.includes(mode)) mode = 'standard';
+  const me = O.user.uid;
+  await coopLeave(true, true);
+  for (const d of Object.values(O.coopMine)) if (d.status !== 'ended') await updateDoc(coopRef(d.id), {status: 'ended', updatedAt: serverTimestamp()}).catch(() => {});
+  closeM('m-coop-invite'); stopWatching(true);
+  O.slot = null; O.lastSaveStr = '';
+  API.startCity(mode);
+  const state = JSON.stringify(API.serialize());
+  const data = {host: me, hostName: myName(), members: {[me]: {name: myName(), colour: AV_COLS[0], at: Date.now()}}, invited: invite && invite.uid ? [invite.uid] : [], status: 'open', seed: 0, mode,
+    createdAt: serverTimestamp(), updatedAt: serverTimestamp(), state, stateAt: serverTimestamp(), meta: coopMeta(), expireAt: new Date(Date.now() + COOP_INV_KEEP)};
+  let ref;
+  try { ref = await addDoc(collection(db, 'coop'), data); }
+  catch (e) { API.toast('Couldn\u2019t start a co-op session: ' + e.message, 'warn'); return; }
+  coopPick = null;
+  coopEnter(ref.id, true, Object.assign({id: ref.id}, data));
+  API.toast(invite && invite.name ? invite.name + ' has been invited \u2014 they join from Co-op on their menu' : 'Co-op session started \u2014 invite friends from the Co-op panel', 'good');
+}
+async function coopJoin(id) {
+  if (!O.ready || !O.user) { API.toast('Online features are still connecting \u2014 try again in a moment.', 'warn'); return; }
+  if (!O.profile || !O.profile.name) { openUserModal(); return; }
+  const me = O.user.uid;
+  let snap; try { snap = await getDoc(coopRef(id)); } catch (e) { API.toast('Couldn\u2019t open that session: ' + e.message, 'warn'); return; }
+  if (!snap.exists() || snap.data().status === 'ended') { API.toast('That session has ended.', 'warn'); renderCoop(); return; }
+  const d = Object.assign({id}, snap.data());
+  if (d.host === me) { coopResume(d); return; }
+  if (tms(d.updatedAt) < Date.now() - COOP_LIVE) { API.toast(d.hostName + ' doesn\u2019t seem to be online right now.', 'warn'); return; }
+  const st = API.state();
+  if (st.started && !st.atMenu && !st.over && !st.spectating && !st.tutorialMode) { API.saveNow(); cloudSave(true); API.toast('Your city is saved' + (O.slot ? ' in slot ' + O.slot : '') + ' \u2014 open it again from Save files.', 'tip'); }
+  await coopLeave(true, true);
+  const mine = {name: myName(), colour: coopFreeColour(d.members, me), at: Date.now()};
+  try { await updateDoc(coopRef(id), {['members.' + me]: mine, updatedAt: serverTimestamp()}); }
+  catch (e) { API.toast('Couldn\u2019t join: ' + e.message, 'warn'); return; }
+  stopWatching(true); closeM('m-player'); closeM('m-board');
+  d.members = Object.assign({}, d.members, {[me]: mine});
+  const C = coopEnter(id, false, d);
+  coopShowState(C, d);
+  API.toast('You\u2019re in ' + d.hostName + '\u2019s city \u2014 pick a tool and build', 'good');
+}
+/* the host coming back to a session of theirs (after a reload, say): the last snapshot becomes their city again */
+function coopResume(d) {
+  let city = null; try { city = d.state ? JSON.parse(d.state) : null; } catch (e) {}
+  if (!city || !API.loadCity(city)) { API.toast('That session\u2019s city couldn\u2019t be opened.', 'warn'); return; }
+  O.slot = null; O.lastSaveStr = '';
+  coopEnter(d.id, true, d);
+  updateDoc(coopRef(d.id), {status: 'playing', updatedAt: serverTimestamp()}).catch(() => {});
+}
+function coopEnter(id, host, first) {
+  const me = O.user.uid;
+  const C = O.coop = {id, host, uid: me, d: first || null, key: '', loaded: false, stateStr: '', city: null, seq: 0, applied: new Set(), cursors: {}, curList: [], lastCur: 0, curQ: null, curT: null,
+    lastPush: 0, lastState: '', lastBeat: Date.now(), lastMemberBeat: Date.now(), pending: {}, unsubs: [], ending: false, dirty: false, quiet: false};
+  API.coopSet({id, host, uid: me, send: a => coopSend(a), cursor: (x, y) => coopCursor(x, y), end: why => coopEnd(why)});
+  C.unsubs.push(onSnapshot(coopRef(id), snap => {
+    if (O.coop !== C) return;
+    if (!snap.exists()) { coopGone(C, 'The session was closed.'); return; }
+    const d = Object.assign({id}, snap.data()); C.d = d;
+    if (d.status === 'ended') { coopGone(C, null, d); return; }
+    if (!host) {
+      if (!d.members || !d.members[me]) { coopGone(C, 'You were taken out of the session.'); return; }
+      coopShowState(C, d);
+    }
+    renderCoopHud();
+  }, e => { console.warn('co-op', e); if (O.coop === C) coopNote('Lost connection: ' + e.message); }));
+  C.unsubs.push(onSnapshot(query(collection(coopRef(id), 'actions'), where('t', '>', Date.now() - 60e3)), snap => {
+    if (O.coop !== C) return;
+    const adds = [];
+    snap.docChanges().forEach(ch => {
+      if (ch.type === 'removed') return;
+      const a = Object.assign({id: ch.doc.id}, ch.doc.data());
+      if (ch.type === 'added') adds.push(a);
+      if (!host && a.by === me && a.done && C.pending[a.id]) { delete C.pending[a.id]; if (!a.ok) API.coopHint(a.note || 'The city couldn\u2019t do that.'); }
+    });
+    adds.sort((x, y) => (x.t - y.t) || (x.seq - y.seq));
+    for (const a of adds) {
+      if (C.applied.has(a.id)) continue; C.applied.add(a.id);
+      if (a.act === 'emote') { if (a.by !== me && !isBlocked(a.by) && !isMuted(a.by)) API.coopEmote({uid: a.by, name: a.name, colour: coopColour(a.by), kind: String(a.kind || '').slice(0, 4)}); continue; }
+      if (!host || a.by === me || a.done) continue;
+      if (!(C.d && C.d.members && C.d.members[a.by])) continue;
+      const r = API.coopApply(a);
+      updateDoc(doc(coopRef(id), 'actions', a.id), {done: true, ok: !!r.ok, note: String(r.note || '').slice(0, 160)}).catch(() => {});
+      if (r.ok) C.dirty = true;
+    }
+    if (host && C.dirty) coopPush(true);
+  }, e => console.warn('co-op actions', e)));
+  C.unsubs.push(onSnapshot(collection(coopRef(id), 'cursors'), snap => {
+    if (O.coop !== C) return;
+    snap.docChanges().forEach(ch => {
+      if (ch.type === 'removed') { delete C.cursors[ch.doc.id]; return; }
+      if (ch.doc.metadata.hasPendingWrites) return;
+      const v = ch.doc.data(), o = C.cursors[ch.doc.id] || (C.cursors[ch.doc.id] = {uid: ch.doc.id});
+      Object.assign(o, {x: +v.x || 0, y: +v.y || 0, name: String(v.name || 'Player'), colour: String(v.colour || coopColour(ch.doc.id)), at: Date.now()});   // arrival time, not the sender's clock
+    });
+    C.curList = Object.values(C.cursors).filter(c => C.d && C.d.members && C.d.members[c.uid]); API.coopCursors(C.curList);
+  }, () => {}));
+  C.timer = setInterval(() => coopTick(C), 1000);
+  const hud = $('coop-hud'); hud.hidden = false; hud.classList.toggle('min', coopCompact());
+  renderCoopHud();
+  return C;
+}
+/* a guest showing the host's city: a new layout reloads it, otherwise only the numbers are patched */
+function coopShowState(C, d) {
+  if (!d.state) return;
+  if (C.stateStr === d.state) { if (C.city && C.loaded) API.spectate.patch(C.city, d.meta); return; }
+  let city = null; try { city = JSON.parse(d.state); } catch (e) { return; }
+  C.stateStr = d.state; C.city = city;
+  const key = layoutKey(city);
+  if (!C.loaded || key !== C.key) {
+    if (!API.spectate.enter(city, d.meta, C.loaded)) { coopNote('Couldn\u2019t show the city.'); return; }
+    C.loaded = true; C.key = key;
+  } else API.spectate.patch(city, d.meta);
+}
+function coopTick(C) {
+  if (O.coop !== C) return;
+  const now = Date.now(), st = API.state();
+  if (C.host) {
+    if (st.atMenu || !st.started || st.spectating || st.tutorialMode) { coopEnd('home'); return; }
+    if (st.over) { coopEnd('over'); return; }
+    const mem = (C.d && C.d.members) || {};
+    const others = Object.keys(mem).filter(u => u !== C.uid);
+    // members who stopped answering are taken out
+    const gone = others.filter(u => mem[u] && +mem[u].at && now - mem[u].at > COOP_MEMBER_STALE);
+    if (gone.length) { const up = {updatedAt: serverTimestamp()}; gone.forEach(u => { up['members.' + u] = deleteField(); }); updateDoc(coopRef(C.id), up).catch(() => {}); }
+    if (C.dirty || (others.length && now - C.lastPush >= COOP_PUSH)) coopPush(C.dirty);
+    else if (now - C.lastBeat >= COOP_BEAT) coopBeat(C);
+  } else {
+    if (now - C.lastMemberBeat >= COOP_MEMBER_BEAT) { C.lastMemberBeat = now; updateDoc(coopRef(C.id), {['members.' + C.uid + '.at']: now, updatedAt: serverTimestamp()}).catch(() => {}); }
+    const quiet = C.d && tms(C.d.updatedAt) && now - tms(C.d.updatedAt) > COOP_HOST_QUIET;
+    if (quiet !== C.quiet) { C.quiet = quiet; coopNote(quiet ? (C.d.hostName || 'The host') + ' seems to have lost connection\u2026' : ''); }
+    for (const id in C.pending) if (now - C.pending[id] > 6000) { delete C.pending[id]; if (!C.waitedHint) { C.waitedHint = true; API.coopHint('Waiting for the host\u2019s city to answer\u2026'); } }
+  }
+}
+async function coopPush(force) {
+  const C = O.coop; if (!C || !C.host || C.ending) return;
+  const now = Date.now();
+  if (!force && now - C.lastPush < COOP_PUSH) return;
+  if (force && now - C.lastPush < 500) { C.dirty = true; return; }
+  C.dirty = false;
+  let state; try { state = JSON.stringify(API.serialize()); } catch (e) { return; }
+  if (state.length > MAX_STATE) { coopNote('The city is too big to share now.'); return; }
+  const same = state === C.lastState; C.lastPush = now; C.lastBeat = now;
+  const up = {meta: coopMeta(), updatedAt: serverTimestamp(), expireAt: new Date(now + COOP_INV_KEEP), status: 'playing'};
+  if (!same) { up.state = state; up.stateAt = serverTimestamp(); C.lastState = state; }
+  await updateDoc(coopRef(C.id), up).catch(e => console.warn('co-op push', e));
+  renderCoopHud();
+}
+function coopBeat(C) { C.lastBeat = Date.now(); updateDoc(coopRef(C.id), {meta: coopMeta(), updatedAt: serverTimestamp(), expireAt: new Date(Date.now() + COOP_INV_KEEP)}).catch(() => {}); }
+function coopNote(t) { const n = $('ch-note'); if (!n) return; n.textContent = t || ''; n.hidden = !t; }
+/* a guest's action on its way to the host */
+function coopSend(a) {
+  const C = O.coop; if (!C || !a) return;
+  const ref = doc(collection(coopRef(C.id), 'actions'));
+  const data = {by: C.uid, name: myName(), t: Date.now(), seq: ++C.seq, act: String(a.act), k: Number.isFinite(+a.k) ? a.k | 0 : -1, k2: Number.isFinite(+a.k2) ? a.k2 | 0 : -1,
+    kind: a.kind ? String(a.kind).slice(0, 16) : '', payload: a.payload === undefined || a.payload === null ? null : String(a.payload).slice(0, 32), at: serverTimestamp()};
+  if (a.act !== 'emote') C.pending[ref.id] = Date.now();
+  setDoc(ref, data).catch(e => { delete C.pending[ref.id]; API.coopHint('Couldn\u2019t send that: ' + e.message); });
+}
+function coopEmote(kind) {
+  const C = O.coop; if (!C) return;
+  API.coopEmote({uid: C.uid, name: myName(), colour: coopColour(C.uid), kind});
+  coopSend({act: 'emote', k: -1, kind});
+}
+/* my pointer, at most a few times a second */
+function coopCursor(x, y) {
+  const C = O.coop; if (!C) return;
+  C.curQ = [x, y];
+  if (C.curT) return;
+  const wait = Math.max(0, COOP_CURSOR - (Date.now() - C.lastCur));
+  C.curT = setTimeout(() => {
+    C.curT = null; if (O.coop !== C || !C.curQ) return;
+    const [qx, qy] = C.curQ; C.curQ = null; C.lastCur = Date.now();
+    setDoc(doc(coopRef(C.id), 'cursors', C.uid), {x: Math.round(qx), y: Math.round(qy), name: myName(), colour: coopColour(C.uid), at: serverTimestamp()}).catch(() => {});
+  }, wait);
+}
+function coopTeardown(C) {
+  C.unsubs.forEach(u => u()); clearInterval(C.timer); if (C.curT) clearTimeout(C.curT);
+  if (O.coop === C) O.coop = null;
+  API.coopSet(null); $('coop-hud').hidden = true; coopNote(''); closeM('m-coop-invite');
+  deleteDoc(doc(coopRef(C.id), 'cursors', C.uid)).catch(() => {});
+}
+/* the session ended under a guest (or the doc vanished): keep a copy of the city, back to the menu */
+function coopGone(C, msg, d) {
+  if (O.coop !== C) return;
+  const host = C.host;
+  coopTeardown(C);
+  if (host) { API.toast(msg || 'The co-op session has ended.'); return; }
+  let saved = '';
+  if (d && d.state) { try { const city = JSON.parse(d.state); saved = API.coopSaveCopy(d.mode || 'standard', city, (d.meta && d.meta.score) || city.score || 0, (d.meta && d.meta.week) || city.week || 1); } catch (e) {} }
+  API.toast(msg || ((d && d.hostName) || 'The host') + ' ended the session' + (saved ? ' \u2014 a copy of the city is in your ' + API.diffLabel(saved) + ' slot 5' : ''), 'tip');
+  if (API.state().spectating) API.spectate.exit(); else API.showStart();
+}
+async function coopLeave(silent, noExit) {
+  const C = O.coop; if (!C) return;
+  if (C.host) { await coopEnd(silent ? 'quiet' : 'leave'); return; }
+  coopTeardown(C);
+  await updateDoc(coopRef(C.id), {['members.' + C.uid]: deleteField(), updatedAt: serverTimestamp()}).catch(() => {});
+  if (!silent) API.toast('You left ' + ((C.d && C.d.hostName) || 'the') + '\u2019s city.');
+  if (!noExit && API.state().spectating) API.spectate.exit();
+}
+/* the host closes the session: the last snapshot goes out with status 'ended' so every guest keeps a copy */
+async function coopEnd(why) {
+  const C = O.coop; if (!C || !C.host || C.ending) return; C.ending = true;
+  let state = null; try { const st = API.state(); if (st.started && !st.atMenu) state = JSON.stringify(API.serialize()); } catch (e) {}
+  const up = {status: 'ended', updatedAt: serverTimestamp(), meta: coopMeta()};
+  if (state && state.length <= MAX_STATE) { up.state = state; up.stateAt = serverTimestamp(); }
+  coopTeardown(C);
+  await updateDoc(coopRef(C.id), up).catch(() => {});
+  if (why !== 'quiet') API.toast('Co-op session ended' + (why === 'over' ? '.' : ' \u2014 everyone keeps a copy of the city.'), 'tip');
+}
+API.events.on('over', () => { if (O.coop && O.coop.host) coopEnd('over'); });
+/* leaving the view (Main menu while a guest) leaves the session */
+{
+  const _specExit0 = API.spectate.exit;
+  API.spectate.exit = function () { const C = O.coop; if (C && !C.host) coopLeave(false, true); return _specExit0.call(API.spectate); };
+}
+window.addEventListener('pagehide', () => { const C = O.coop; if (!C) return; if (C.host) updateDoc(coopRef(C.id), {status: 'ended', updatedAt: serverTimestamp()}).catch(() => {}); else updateDoc(coopRef(C.id), {['members.' + C.uid]: deleteField(), updatedAt: serverTimestamp()}).catch(() => {}); });
+
+/* ---- invitations */
+async function coopInvite(uid, name) {
+  if (!O.ready || !O.user) { API.toast('Online features are still connecting \u2014 try again in a moment.', 'warn'); return; }
+  if (uid === O.user.uid) { API.toast('That\u2019s you.', 'warn'); return; }
+  if (isBlocked(uid)) { API.toast('You\u2019ve blocked ' + name + '.', 'warn'); return; }
+  const C = O.coop;
+  if (C && C.host) {
+    if (C.d && C.d.members && C.d.members[uid]) { API.toast(name + ' is already in the city.'); return; }
+    try {
+      await runTransaction(db, async tx => { const x = await tx.get(coopRef(C.id)); if (!x.exists()) throw new Error('The session has ended.'); const inv = (x.data().invited || []).filter(u => u !== uid).concat([uid]).slice(-40); tx.update(coopRef(C.id), {invited: inv, updatedAt: serverTimestamp()}); });
+      API.toast(name + ' invited \u2014 they join from Co-op on their menu', 'good');
+    }
+    catch (e) { API.toast('Couldn\u2019t invite: ' + e.message, 'warn'); }
+    return;
+  }
+  if (C) { API.toast('Only the host can invite players.', 'warn'); return; }
+  coopPick = {uid, name}; closeM('m-player'); closeM('m-board'); closeM('m-run');
+  if (API.showMenuPane) API.showMenuPane('coop');
+}
+async function openCoopInvite() {
+  const C = O.coop; if (!C || !C.host) return;
+  $('ci-err').textContent = ''; $('ci-name').value = '';
+  $('ci-list').innerHTML = '<p class="mini">Loading friends\u2026</p>';
+  openM('m-coop-invite');
+  const list = (await loadFriends()).filter(f => !isBlocked(f.uid));
+  if ($('m-coop-invite').hidden) return;
+  const d = C.d || {}, inv = d.invited || [], mem = d.members || {};
+  $('ci-list').innerHTML = list.length ? list.map(f => '<div class="ci-row"><span class="av" style="background:' + avColour(f.uid) + '">' + esc(String(f.name).charAt(0).toUpperCase()) + '</span><b>' + esc(f.name) + '</b>' +
+    (mem[f.uid] ? '<span class="mini">In the city</span>' : inv.includes(f.uid) ? '<span class="mini">\u2713 Invited</span>' : '<button type="button" class="act small" data-ci="' + esc(f.uid) + '" data-name="' + esc(f.name) + '">Invite</button>') + '</div>').join('')
+    : '<p class="mini">No friends yet \u2014 invite someone by their username above, or add friends from the Friends page.</p>';
+  $('ci-list').querySelectorAll('[data-ci]').forEach(b => b.onclick = async () => { b.disabled = true; await coopInvite(b.dataset.ci, b.dataset.name); openCoopInvite(); });
+}
+$('ci-close').addEventListener('click', () => closeM('m-coop-invite'));
+$('ci-go').addEventListener('click', async () => {
+  const n = $('ci-name').value.trim(); $('ci-err').textContent = '';
+  if (!NAME_RE.test(n)) { $('ci-err').textContent = 'Usernames are 3\u201316 letters, numbers, _ or -.'; return; }
+  try {
+    const u = await getDoc(nameRef(n.toLowerCase()));
+    if (!u.exists() || !u.data().uid) { $('ci-err').textContent = 'No player called ' + n + '.'; return; }
+    await coopInvite(u.data().uid, n); openCoopInvite();
+  } catch (e) { $('ci-err').textContent = e.message; }
+});
+$('ci-name').addEventListener('keydown', e => { if (e.key === 'Enter') $('ci-go').click(); });
+
+/* ---- the panel beside the city */
+function renderCoopHud() {
+  const C = O.coop, box = $('coop-hud'); if (!box) return;
+  if (!C) { box.hidden = true; return; }
+  box.hidden = false;
+  const d = C.d || {}, mem = d.members || {}, me = C.uid;
+  $('ch-sub').textContent = (d.hostName || myName()) + '\u2019s city';
+  $('ch-members').innerHTML = Object.entries(mem).sort((a, b) => (+a[1].at || 0) - (+b[1].at || 0)).map(([u, m]) =>
+    '<span class="ch-m' + (u === me ? ' me' : '') + '" title="' + esc(m.name || '') + '"><i style="background:' + esc(m.colour || coopColour(u)) + '"></i>' + esc(m.name || 'Player') + (u === d.host ? '<em>host</em>' : '') + '</span>').join('');
+  const ci = API.coopCityInfo ? API.coopCityInfo() : {};
+  $('ch-stats').innerHTML = '<span><b>' + money(ci.money || 0) + '</b> shared cash</span><span><b>Week ' + (ci.week || 1) + '</b></span><span><b>' + (ci.score || 0).toLocaleString() + '</b> parcels</span>';
+  $('ch-invite').hidden = !C.host; $('ch-end').hidden = !C.host; $('ch-leave').hidden = C.host;
+}
+setInterval(() => { if (O.coop) renderCoopHud(); }, 1000);
+$('coop-hud').addEventListener('click', e => {
+  const em = e.target.closest('[data-emote]'); if (em) { coopEmote(em.dataset.emote); return; }
+  if (e.target.closest('.ch-head')) $('coop-hud').classList.toggle('min');
+});
+$('ch-invite').addEventListener('click', openCoopInvite);
+$('ch-leave').addEventListener('click', async () => { if (await API.ask({title: 'Leave the city?', text: 'You can come back while the session is open.', ok: 'Leave'})) coopLeave(false); });
+$('ch-end').addEventListener('click', async () => { if (await API.ask({title: 'End the session?', text: 'Everyone keeps a copy of the city; yours is saved as usual and you carry on alone.', ok: 'End session', danger: true})) coopEnd('end'); });
+
+/* ---- the Co-op section of the main menu */
+function renderCoop(box) {
+  coopBox = box || coopBox; if (!coopBox || !coopBox.isConnected) { coopBox = null; return; }
+  if (!O.ready || !O.user) { coopBox.innerHTML = '<p class="mini">Co-op needs the online service \u2014 it\u2019s still connecting, or unavailable right now.</p>'; return; }
+  if (!O.profile || !O.profile.name) { coopBox.innerHTML = '<p class="mini">Pick a username first, then you can build with friends.</p><button class="bigbtn" type="button" id="coop-pick-name">Pick a username</button>'; $('coop-pick-name').onclick = () => openUserModal(); return; }
+  startCoopListeners();
+  const me = O.user.uid, now = Date.now();
+  const invs = coopOpenInvites();
+  const mine = Object.values(O.coopMine).filter(d => d.status !== 'ended' && tms(d.updatedAt) > now - COOP_LIVE * 4).sort((a, b) => tms(b.updatedAt) - tms(a.updatedAt))[0];
+  const row = (d, own) => { const n = Object.keys(d.members || {}).length, m = d.meta || {};
+    return '<div class="iso-row"><span class="av" style="background:' + coopColour(d.host) + '">' + esc(String(d.hostName || '?').charAt(0).toUpperCase()) + '</span><span class="iso-who"><b>' + (own ? 'Your city' : esc(d.hostName) + '\u2019s city') + '</b><small>' +
+      esc(API.diffLabel(d.mode || 'standard')) + ' \u00b7 week ' + (m.week || 1) + ' \u00b7 ' + n + (n === 1 ? ' player' : ' players') + ' \u00b7 ' + (d.status === 'playing' ? 'playing' : 'open') + ' \u00b7 ' + ago(d.updatedAt) + '</small></span>' +
+      '<span class="iso-acts">' + (own ? '<button type="button" class="bigbtn small" data-cjoin="' + esc(d.id) + '">Resume</button><button type="button" class="act small" data-cend="' + esc(d.id) + '">End</button>'
+        : '<button type="button" class="bigbtn small" data-cjoin="' + esc(d.id) + '">Join</button>') + '</span></div>'; };
+  let h = '<div class="coop-intro"><p><b>Build one city together.</b> The host\u2019s city runs on their screen; everyone they invite can lay roads, place lights, lots and bays, upgrade stores and hire trucks from the shared budget. You see each other\u2019s cursors and reactions as you go. When the host leaves, everyone keeps a copy of the city.</p></div>';
+  if (coopPick) h += '<div class="coop-pick"><span>Start a city with <b>' + esc(coopPick.name) + '</b> \u2014 pick a mode below and they\u2019re invited.</span><button type="button" class="linkbtn" id="coop-pick-x">Not now</button></div>';
+  h += '<h3>Invitations</h3>' + (invs.length ? invs.map(d => row(d, false)).join('') : '<p class="mini">Nobody has invited you yet. A friend can invite you from their Co-op panel, or from your name on their Friends page.</p>');
+  if (mine) h += '<h3>Your session</h3>' + row(mine, true);
+  h += '<h3>' + (coopPick ? 'Start a city with ' + esc(coopPick.name) : 'New session') + '</h3><div class="coop-modes">' + COOP_MODES.map(m => '<button type="button" class="coop-mode" data-cmode="' + m + '"><b>' + esc(API.diffLabel(m)) + '</b><small>' + esc(COOP_NOTES[m]) + '</small></button>').join('') + '</div>';
+  coopBox.innerHTML = h; coopSig = coopPaneSig();
+  coopBox.querySelectorAll('[data-cmode]').forEach(b => b.onclick = () => { b.disabled = true; coopCreate(b.dataset.cmode, coopPick); });
+  coopBox.querySelectorAll('[data-cjoin]').forEach(b => b.onclick = () => { b.disabled = true; coopJoin(b.dataset.cjoin); });
+  coopBox.querySelectorAll('[data-cend]').forEach(b => b.onclick = async () => { b.disabled = true; await updateDoc(coopRef(b.dataset.cend), {status: 'ended', updatedAt: serverTimestamp()}).catch(() => {}); renderCoop(); });
+  const px = $('coop-pick-x'); if (px) px.onclick = () => { coopPick = null; renderCoop(); };
+}
+Object.assign(window.JunctionOnline, {
+  coopCreate(mode, invite) { return coopCreate(mode, invite); }, coopJoin(id) { return coopJoin(id); }, coopInvite(uid, name) { return coopInvite(uid, name); },
+  coopLeave(silent) { return coopLeave(silent); }, renderCoop(box) { renderCoop(box); },
+  coopInfo() { const C = O.coop; return C ? {id: C.id, host: C.host, members: (C.d && C.d.members) || {}, status: C.d && C.d.status} : null; }
+});

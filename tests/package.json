@@ -1,0 +1,11 @@
+{
+  "name": "junction-tests",
+  "private": true,
+  "description": "Browser tests for Junction: serve the game, drive it in headless Chrome, fail on page errors or broken flows.",
+  "scripts": {
+    "test": "node run.js"
+  },
+  "dependencies": {
+    "puppeteer": "^23.6.0"
+  }
+}

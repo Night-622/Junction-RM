@@ -270,6 +270,43 @@ function expertSeed(weeksAgo) {
   const fmt = d => d.toLocaleDateString('en-US', {day: 'numeric', month: 'short', timeZone: 'UTC'});
   return {key: w.key, num: h, name: SEED_NAMES[h % SEED_NAMES.length], code, label: fmt(w.mon) + ' \u2013 ' + fmt(w.sun) + ', ' + w.sun.getUTCFullYear()};
 }
+const VERSION = '2.3';
+const CHANGELOG = [
+  {v: '2.3', date: 'October 6, 2026', items: [
+    'Campaign: 30 handcrafted levels in three chapters, each with a goal and 1–3 stars. Stars open the next chapter and unlock the Mayor house, Medal roundabout and Trophy car.',
+    'New transport: railways (trains shuttle 6 parcels between stations, with level crossings), bus routes (a bus loops up to 4 houses from a store) and delivery drones (a perk, 50 drone designs in the Store).',
+    'Ranked ISO: a rating and divisions from Bronze to Diamond, quick-match against players near your rating, monthly seasons with an exclusive car for each division, spectating, and weekend tournaments.',
+    'Co-op: build one city with up to four friends, with coloured cursors and shared cash.',
+    'Time-lapse replays: every city is recorded day by day. Watch it back with a cinematic camera or export a video.',
+    'Map editor: paint water, place stores and houses, set rules and a goal, then publish with a code. Browse, like and play community maps, each with its own leaderboard.',
+    'Living cities: houses grow into blocks and towers, stores into malls, named districts, pedestrians, weather that affects traffic, and streetlights at night.',
+    'Behind the scenes: automated browser tests on every push, server checks on leaderboard scores and match results, error reporting, and rules deployed from GitHub.']},
+  {v: '2.2.1', date: 'October 5, 2026', items: [
+    'A pause menu on Esc: stats so far, restart, settings, how to play, and save & quit. You can keep building while paused.',
+    'The game-over screen shows your city, the big numbers, the run chart and what you unlocked. Share a card of any run, ISO match or weekly run.',
+    'A splash screen, and smooth fades between the menu and your city.',
+    'Quality presets (High, Balanced, Battery saver): shadows, decorations, smooth motion and a frame cap.',
+    'Vibration on phones, soft button clicks, and separate sliders for music, traffic and effects.',
+    'Accessibility: interface size, high contrast, reduce motion, and labels on every icon button.',
+    'A daily reward with a 7-day streak. Day 7 opens a free Object crate.',
+    'Block, mute and report players. Names and chats are checked for bad language.',
+    'Install Junction as an app; single player works offline.',
+    'At least 50 of everything in the Store.',
+    'Questions pop up in the game\u2019s own style instead of browser boxes.',
+    'Your coins, items, look, streak and quests follow your account to any device.',
+    'Quests: three a day and three a week, with coins, stars and crates. One free reroll a day.',
+    'Traffic flow view (F2): roads tinted by how busy they are, junctions ringed by wait, the worst spots listed, and a five-minute chart on every junction.',
+    'Profile looks: banners, avatar frames and titles, and three pinned achievements, shown on leaderboards, chats and player cards.',
+    'Seasonal events, starting with Halloween in the last two weeks of October: ghost cars, bat-wing stores, ghost lights and event quests.',
+    'Short guides the first time you open ISO 1v1, Weeklys, the Store, Chats or Friends.']},
+  {v: '2.1', date: 'October 2026', items: ['Chats in a messaging layout, and Friends with head-to-head records.', 'ISO 1v1: live and daily duels on the same map.', 'Player cards from any leaderboard, with Watch live.', 'Cars drive round roundabouts and reverse into their parking.', 'Smoother motion at 1\u00d7.', 'Credits reset: \u25ce coins (2 per 3 parcels) and \u2726 stars from Frantic cities.']},
+  {v: '2.0', date: 'September 2026', items: ['An hourly Store, mystery crates and the Collection.', 'Weekly Expert Survival seeds, with a map of the seed.', 'Hundreds of designs, themes, maps and panel styles.', 'A new main menu with a live city behind it.']}
+];
+function openWhatsNew() {
+  $('wn-ver').textContent = VERSION;
+  $('wn-list').innerHTML = CHANGELOG.map((c, i) => '<section class="wn-sec' + (i ? '' : ' now') + '"><h3>v' + c.v + ' <small>' + c.date + '</small></h3><ul>' + c.items.map(t => '<li>' + t + '</li>').join('') + '</ul></section>').join('');
+  openModal('m-whatsnew');
+}
 let demoMode = false, demoT = 0;                      // the main menu's background city
 let iso = null;                                        // the ISO 1v1 match being played: {id, kind, seed, opp, ctl, prop, oppSt}
 let expWeek = '', prevDiff = 'standard';             // prevDiff: the ordinary difficulty to go back to after an Expert start                                      // the seed week of the Expert city being played ('' otherwise)
@@ -418,6 +455,15 @@ let span = CFG.startSpan, org = 0, camSpan = span, camOrg = 0;
 let diffKey = 'standard', DIFF = DIFFS.standard;
 let keepLeft = true, laneSign = -1;
 let rush = {t: 0}, rain = {t: 0, amt: 0}, breakdownTimer = 30;
+/* p62: weather beyond rain, the per-day replay frames and the pedestrian pool (functions live at the end of the file) */
+let weather = {kind: 'clear', t: 0, amt: 0}, weatherTimer = 300, weatherSeen = {};
+let replayFrames = [], replayDay = -1;
+const PED_MAX = 40, peds = []; for (let i = 0; i < PED_MAX; i++) peds.push({on: false, e: null, s: 0, side: 1, dir: 1, spd: 0, life: 0, col: 0, x: 0, y: 0});
+let pedN = 0, pedSpawnT = 0, lampSprite = null, distKey = -1, distNames = null, distOff = false;
+const PED_COLS = ['#e86a5a', '#4f8fd6', '#f0c24a', '#6fc27a', '#b07ad6', '#f4f1ea'];
+const DISTRICT_NAMES = ['Oakwood', 'Harbour Row', 'The Narrows', 'Maple Heights', 'Fernhill', 'Old Quay', 'Brightside', 'Elm Park', 'Stonebridge', 'The Meadows', 'Larkspur', 'Ironside', 'Willow End', 'Copperfield', 'Northgate', 'Kingsmead'];
+const WEATHER_START = {snow: 'Snow \u2014 roads are slower', fog: 'Fog \u2014 traffic lights can\u2019t see as far', heat: 'Heatwave \u2014 the stores are busier'};
+const WEATHER_END = {snow: 'The snow has stopped', fog: 'The fog has lifted', heat: 'The heatwave has broken'};
 let solveBudget = 0, dispatchTimer = 0, carSeq = 0;
 let closed = new Map(), closureTimer = 60, rerouteN = 0;       // closed road tile -> seconds left
 let ambs = [], ambTimer = 60;
@@ -456,7 +502,8 @@ function incomePerMin() {
   return sum * 60 / Math.max(20, Math.min(60, clock));
 }
 function spend(n) { money -= n; stats.spent += n; }
-const canTake = kind => inv[kind] > 0 || money >= PRICE[kind];
+const bannedTools = new Set();                        // p60: tools a campaign level forbids (inventory kinds)
+const canTake = kind => !bannedTools.has(kind) && (inv[kind] > 0 || money >= PRICE[kind]);
 function take(kind) {
   if (inv[kind] > 0) { inv[kind]--; return true; }
   if (money >= PRICE[kind]) { spend(PRICE[kind]); return true; }
@@ -937,6 +984,7 @@ function carVmax(c, e) {
   if (!c.isTruck) v *= (1 + 0.12 * carUp(c, 'spd')) * Math.pow(0.9, carUp(c, 'cap'));
   if (rain.amt > 0.05 && !perks.grip) v *= 1 - (1 - CFG.rainSlow) * rain.amt;
   if (e && e.fast) v *= CFG.motorwayScale;
+  if (weather.kind === 'snow' && weather.amt > 0.05 && !perks.plough) v *= 1 - 0.25 * weather.amt;   // p62: snow, unless the ploughs are out
   return v;
 }
 function angDiff(a, b) { let d = (b - a) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; if (d < -Math.PI) d += Math.PI * 2; return d; }
@@ -988,6 +1036,7 @@ function stableSlot(c, list, n, key) {
 }
 function parkedPose(c) {
   const L = c.loc;
+  if (c.isBus && L.t === 'home') return busStopPose(c);
   if (L.t === 'yard') {
     const s = buildings[L.i];
     if (c.isTruck && !c.isAmb) {                     // tow trucks wait inside their store, side by side
@@ -1134,10 +1183,11 @@ function lightWants(c, i) {
 }
 function lightDemand(nd, g) {
   let n = 0;
+  const look = weather.kind === 'fog' && weather.amt > 0.3 ? 0.5 : 1;                             // p62: in fog the sensor sees half as far
   for (const e of nd.ins) {
     if (e.dead || groupOf(e) !== g) continue;
-    for (const c of e.cars) if (lightWants(c, c.ri)) n++;
-    for (const c of e.inb) if (lightWants(c, c.state === 'crossing' ? c.ri + 1 : c.ri)) n++;
+    for (const c of e.cars) if (lightWants(c, c.ri) && (look === 1 || e.stop - c.s <= e.L * look)) n++;
+    if (look === 1) for (const c of e.inb) if (lightWants(c, c.state === 'crossing' ? c.ri + 1 : c.ri)) n++;
   }
   return n;
 }
@@ -1176,6 +1226,7 @@ function destOk(c) {
 /* could this lead car roll through its stop line right now, without stopping? */
 function leaderPass(e, c, nd) {
   if (!c.route || c.broken > 0 || c.hook) return false;
+  if (xingN && xingT[e.b] > clock) return false;
   if (c.ri >= c.route.length - 1) return destOk(c) === 1;
   if (!nd) return false;
   const f = validNext(c, e, nd);
@@ -1311,6 +1362,7 @@ function stepCross(nd, dt) {
 function canGo(nd, c, dt) {
   const e = c.edge;
   const f = validNext(c, e, nd);
+  if (f && xingN && xingT[nd.k] > clock) return null;                 // a train is at the level crossing ahead
   if (!f) {
     if (c.replanCool <= 0 && solveBudget > 0) {
       c.replanCool = 1;
@@ -1451,7 +1503,7 @@ function startEnter(c) {
     const d = depots[c.bay]; d.res = Math.max(0, d.res - 1); d.slots.push(c); c.loc = {t: 'bay', i: c.bay}; pose = parkedPose(c);
   }
   c.state = 'entering'; c.v = 0;
-  c.xf = parkPath(c, pose);
+  c.xf = c.isBus ? busPath(c, pose) : parkPath(c, pose);
 }
 /* A drive into a parking spot. Spots face the road (cars leave nose first), so a car drives in past its spot,
    stops broadside to it, then reverses in. Each leg is a curve whose ends match the car's heading. */
@@ -1496,6 +1548,7 @@ function stepXf(c, dt) {
 }
 function arrive(c) {
   c.xf = null; c.v = 0; c.blockedT = 0; c.stopT = 0;
+  if (c.isBus) { busArrive(c); return; }
   if (c.loc.t === 'store') {
     const s = buildings[c.store];
     c.state = 'loading'; c.taken = false;
@@ -1504,6 +1557,7 @@ function arrive(c) {
     const n = c.load, cash = c.cash || 0;
     if (n > 0) {
       score += n; stats.delivered += n; stats.lastDeliveries.push(clock);
+      const hh = buildings[c.home]; if (hh) hh.delivered = (hh.delivered || 0) + n;                  // p62: houses grow with what they receive
       if (!spectating && !demoMode) earnBucks(n, buildings[c.home]);
       earn(cash);
       onDeliver(c, n, cash);
@@ -1517,6 +1571,7 @@ function arrive(c) {
 }
 function finishLoading(c) {
   const s = buildings[c.store];
+  if (c.isBus) { busLoaded(c); return; }
   if (!c.taken) {
     const n = Math.min(c.want, s.pins);
     s.pins -= n; s.claimed = Math.max(0, s.claimed - c.want);
@@ -1619,6 +1674,7 @@ function stepTraffic(dt) {
     }
   }
   for (const t of trucks) truckStep(t, dt);
+  stepPeds(dt); weatherTick(dt);                                                               // p62
   for (const a of ambs.slice()) ambStep(a, dt);
   // heat: a slow-moving record of where traffic stands still
   let worst = 0, stopped = 0, moving = 0;
@@ -1634,8 +1690,9 @@ function stepTraffic(dt) {
 let undoStack = [], redoStack = [], undoGroup = 0, replaying = false, tool = 'select', motoPick = -1, sel = null, follow = false, hoverCell = -1;
 let goalsDone = new Set(), autosaveT = CFG.autosaveSeconds, statT = 0;
 
+let runT0 = 0, lastRun = {newBest: false, prevBest: 0};
 function resetGame(dk) {
-  demoMode = false; curSlot = pendingSlot; pendingSlot = '';
+  demoMode = false; curSlot = pendingSlot; pendingSlot = ''; runT0 = Date.now(); cityQ = {round: 0, light: 0, moto: 0};
   lifeNewCity = true; lifeSnap = null;
   tutorialMode = false;
   setTutorialUI(false);
@@ -1649,7 +1706,7 @@ function resetGame(dk) {
   sign = new Array(N).fill(null); special = new Array(N).fill(null);
   bAt = new Int32Array(N).fill(-1); parkAt = new Int32Array(N).fill(-1); depotAt = new Int32Array(N).fill(-1);
   onewayDir = new Int8Array(N).fill(-1);
-  nodes = []; nodeList = []; edges = []; edgeMap = new Map(); buildings = []; cars = []; motorways = []; parks = []; depots = [];
+  nodes = []; nodeList = []; edges = []; edgeMap = new Map(); buildings = []; cars = []; motorways = []; parks = []; depots = []; transportReset();
   motoSeq = 0; carSeq = 0;
   inv = {road: Math.max(6, CFG.startRoads + DIFF.roads), bridge: CFG.startBridges, moto: CFG.startMotorways,
          light: CFG.startLights, round: CFG.startRoundabouts, sign: CFG.startSigns, park: CFG.startParking, depot: CFG.startDepots};
@@ -2040,7 +2097,10 @@ function tutStatus() {
 const TUT_LESSONS = [
   {id: 'van', name: 'Grow a car into a pickup', hint: 'Tap one car and buy Carry size twice: hatchback \u2192 estate \u2192 pickup. Each size carries one more parcel per trip but drives 10% slower.', hit: () => cars.some(c => bodyOf(c) >= 2)},
   {id: 'shop', name: 'Open the Shop tab', hint: 'In the side panel, the Shop tab sells tow trucks, motorway pieces, extra cars and delivery vans for cash, any time you can afford them.', hit: () => tutShopOpened},
-  {id: 'event', name: 'Trigger a live event', hint: 'In a real city these happen by themselves. Use the buttons below to try rush hour, rain, a breakdown, a road closure, an ambulance or a contract, and see how your roads cope.', hit: () => tutEventTried}
+  {id: 'event', name: 'Trigger a live event', hint: 'In a real city these happen by themselves. Use the buttons below to try rush hour, rain, a breakdown, a road closure, an ambulance or a contract, and see how your roads cope.', hit: () => tutEventTried},
+  {id: 'rail', name: 'Lay a railway', hint: 'Pick the Rail tool and drag a line from beside a store to beside a house of the same colour. A train appears and shuttles six parcels a trip on its own line, waiting for nobody.', hit: () => trains.length > 0},
+  {id: 'bus', name: 'Start a bus route', hint: 'Pick the Bus tool, tap a store, then up to four houses of its colour, then the store again. The bus carries three parcels round the loop and drops some at every stop.', hit: () => busRoutes.length > 0},
+  {id: 'drone', name: 'Get a delivery drone', hint: 'Buy Delivery drones in the Perks tab (in a real city it is also a weekly reward from week 6). Each level adds a drone that flies one parcel straight to a house, over everything.', hit: () => perks.drone > 0}
 ];
 /* the guided steps; TUT_STEPS[tutStage] is always the active one.
    t: the title, active: one line on what this step is, how: what to do, click by click, tip: what's worth knowing,
@@ -2504,9 +2564,9 @@ function startTutorial() {
   sign = new Array(N).fill(null); special = new Array(N).fill(null);
   bAt = new Int32Array(N).fill(-1); parkAt = new Int32Array(N).fill(-1); depotAt = new Int32Array(N).fill(-1);
   onewayDir = new Int8Array(N).fill(-1);
-  nodes = []; nodeList = []; edges = []; edgeMap = new Map(); buildings = []; cars = []; motorways = []; parks = []; depots = [];
+  nodes = []; nodeList = []; edges = []; edgeMap = new Map(); buildings = []; cars = []; motorways = []; parks = []; depots = []; transportReset();
   motoSeq = 0; carSeq = 0;
-  inv = {road: 60, bridge: 10, moto: 6, light: 6, round: 6, sign: 12, park: 10, depot: 6};
+  inv = {road: 60, bridge: 10, moto: 6, light: 6, round: 6, sign: 12, park: 10, depot: 6, rail: 24, bus: 2}; TR.railOn = true; TR.busOn = true;
   perks = Object.assign({}, PERK_DEFAULTS);
   carCapacity = CFG.carCapacityStart; carsBought = 0;
   money = 900; trucks = [];
@@ -2780,6 +2840,7 @@ function placeSpecial(k, kind) {
   if (!canTake(kind)) { hint('That costs ' + fmt$(PRICE[kind]) + '. ' + shortBy(PRICE[kind])); return false; }
   if (!nodes[k] || nodes[k].deg < 3) hint('It only works where three or more roads meet.');
   special[k] = kind; take(kind); pushUndo({t: 'special', k, kind});
+  if (questsActive()) { cityQ[kind] = (cityQ[kind] || 0) + 1; questEvent(kind === 'round' ? 'build_round' : 'build_light', cityQ[kind]); }
   if (kind === 'light') lightQ.set(k, [CFG.lightBatch, CFG.lightBatch]);
   rebuildNet(); refreshUI(); sfx('place');
   return true;
@@ -2798,6 +2859,7 @@ function placeMoto(a, b) {
   if (len < 4) { hint('Motorways need at least 4 tiles between ends.'); return false; }
   const m = {id: ++motoSeq, a, b, len};
   motorways.push(m); take('moto'); rebuildNet(); refreshUI(); sfx('place');
+  if (questsActive()) { cityQ.moto = (cityQ.moto || 0) + 1; questEvent('build_moto', cityQ.moto); }
   pushUndo({t: 'moto', id: m.id, a, b});
   return true;
 }
@@ -2817,6 +2879,8 @@ function applyTool(k, dragging) {
     }
     case 'upgrade': if (!dragging) upgradeStore(k >= 0 && bAt[k] >= 0 ? bAt[k] : -1); break;
     case 'tow': if (!dragging) hireTruck(k >= 0 && bAt[k] >= 0 ? bAt[k] : -1); break;
+    case 'rail': railTool(k, dragging); break;
+    case 'bus': busTool(k, dragging); break;
     case 'moto': {
       if (dragging || !isRoad(k) || !canTake('moto')) {
         if (!dragging && !isRoad(k)) hint('Motorways start and end on road tiles.');
@@ -2862,6 +2926,7 @@ function stepRoad(from, to) {
 function stepTo(from, to) {
   if (from < 0) { applyTool(to, true); return; }
   if (tool === 'road') { stepRoad(from, to); return; }
+  if (tool === 'rail') { stepRail(from, to); return; }
   let c = cx(from), r = cy(from);
   const tc = cx(to), tr = cy(to);
   let guard = 0;
@@ -2875,7 +2940,7 @@ function stepTo(from, to) {
 /* ------------------------------------------------------- dispatch */
 function idleCarsOf(color) {
   const out = [];
-  for (const c of cars) if (c.state === 'parked' && !c.job && c.color === color && nodeOfParked(c) >= 0) out.push(c);
+  for (const c of cars) if (c.state === 'parked' && !c.job && !c.isBus && c.color === color && nodeOfParked(c) >= 0) out.push(c);
   return out;
 }
 function dispatch() {
@@ -2951,7 +3016,7 @@ function repositionIdle() {
 }
 
 /* ------------------------------------------------------------ perks (bought with cash) */
-const PERK_DEFAULTS = {boots: 0, tyres: 0, marshal: 0, quick: 0, loading: 0, patience: 0, tow: 0, grip: 0, winch: 0, contracts: 0};
+const PERK_DEFAULTS = {boots: 0, tyres: 0, marshal: 0, quick: 0, loading: 0, patience: 0, tow: 0, grip: 0, winch: 0, contracts: 0, drone: 0}; /* p61 */
 const PERKS = {
   boots:     {name: 'Bigger boots',      max: 3, cost: [70, 130, 210],      icon: 'box',   desc: l => 'Every car carries ' + Math.min(CFG.carCapacityMax, CFG.carCapacityStart + l) + ' parcels a trip.'},
   tyres:     {name: 'Engine tuning',     max: 4, cost: [60, 100, 160, 240], icon: 'bolt',  desc: l => 'Every car cruises ' + (l * 10) + '% faster.'},
@@ -2962,7 +3027,8 @@ const PERKS = {
   patience:  {name: 'Loyal customers',   max: 3, cost: [60, 110, 170],      icon: 'heart', desc: l => 'Stores wait ' + (l * 4) + ' seconds longer before giving up.'},
   tow:       {name: 'Recovery crew',     max: 2, cost: [50, 100],           icon: 'hook',  desc: l => 'Breakdowns clear ' + Math.round((1 - Math.pow(0.6, l)) * 100) + '% faster.'},
   winch:     {name: 'Tow winches',       max: 2, cost: [60, 120],           icon: 'truck', desc: l => 'Your tow trucks hook on ' + Math.round((1 - Math.pow(0.65, l)) * 100) + '% faster and drive ' + (l * 15) + '% quicker.'},
-  grip:      {name: 'All-weather tyres', max: 1, cost: [90],                icon: 'drop',  desc: () => 'Rain no longer slows the cars.'}
+  grip:      {name: 'All-weather tyres', max: 1, cost: [90],                icon: 'drop',  desc: () => 'Rain no longer slows the cars.'},
+  drone:     {name: 'Delivery drones',   max: 3, cost: [180, 300, 450],     icon: 'drone', desc: l => l + (l === 1 ? ' drone flies' : ' drones fly') + ' one parcel at a time straight to a house, over everything, at a gentle pace.'}
 };
 const perkCost = id => perks[id] < PERKS[id].max ? PERKS[id].cost[perks[id]] : null;
 function buyPerk(id) {
@@ -2990,8 +3056,16 @@ const UPGRADES = [
    avail: () => cars.some(c => !c.van), apply: () => { const p = cars.filter(c => !c.van); if (p.length) makeVan(pick(p)); }},
   {id: 'cars',  kind: 'item', name: 'Two extra cars',  icon: 'car',   desc: () => 'For two houses that have a spare bay.',
    avail: () => buildings.some(b => b.type === 'house' && b.carsN < houseCap(b)),
-   apply: () => { shuffle(buildings.map((b, i) => ({b, i})).filter(o => o.b.type === 'house' && o.b.carsN < houseCap(o.b))).slice(0, 2).forEach(o => addCar(o.i)); }}
+   apply: () => { shuffle(buildings.map((b, i) => ({b, i})).filter(o => o.b.type === 'house' && o.b.carsN < houseCap(o.b))).slice(0, 2).forEach(o => addCar(o.i)); }},
+  /* p62: offered once snow has fallen on this city */
+  {id: 'plough', kind: 'item', name: 'Snow ploughs', icon: 'truck', desc: () => 'The roads are cleared as the snow falls: no slowdown in a snowstorm, for good.',
+   avail: () => !!weatherSeen.snow && !perks.plough, apply: () => { perks.plough = 1; }}
 ];
+UPGRADES.push(   /* p61: the railway and the bus depot, offered as weekly rewards */
+  {id: 'rail',  kind: 'item', name: 'Railway',         icon: 'rail',  desc: () => '20 rail tiles and a train. Lay rail from beside a store to beside a house of its colour: the train shuttles 6 parcels a trip on its own line.',
+   avail: () => week >= 4, apply: () => { inv.rail = (inv.rail | 0) + 20; TR.railOn = true; syncTransportTools(); }},
+  {id: 'bus',   kind: 'item', name: 'Bus depot',       icon: 'bus',   desc: () => 'Two bus routes. Tap a store, then up to 4 houses of its colour: a bus loops them with 3 parcels at a time.',
+   avail: () => week >= 3, apply: () => { inv.bus = (inv.bus | 0) + 2; TR.busOn = true; syncTransportTools(); }});
 for (const id in PERKS) {
   const P = PERKS[id];
   UPGRADES.push({id: 'perk-' + id, kind: 'perk', perk: id, name: P.name, icon: P.icon,
@@ -2999,6 +3073,7 @@ for (const id in PERKS) {
     apply: () => { perks[id]++; if (id === 'boots') carCapacity = Math.min(CFG.carCapacityMax, CFG.carCapacityStart + perks.boots); }});
 }
 
+{ const u = UPGRADES.find(x => x.id === 'perk-drone'); if (u) u.avail = () => week >= 6 && perks.drone < PERKS.drone.max; }   /* p61: a late-game offer */
 /* ------------------------------------------------------------ the shop: things that are not tools */
 const spareHouses = () => buildings.map((b, i) => ({b, i})).filter(o => o.b.type === 'house' && o.b.carsN < houseCap(o.b));
 const SHOP = [
@@ -3539,7 +3614,7 @@ function checkGoals() {
 function pinCount(s) { return s.pins; }
 function update(dt) {
   solveBudget = CFG.maxSolvesPerFrame;
-  clock += dt; lightClock += dt;
+  clock += dt; lightClock += dt; flowTick();
   rain.amt += ((rain.t > 0 ? 1 : 0) - rain.amt) * Math.min(1, dt * 0.5);
   if (rain.t > 0) { rain.t -= dt; if (rain.t <= 0) toast('The rain has cleared'); }
   if (rush.t > 0) { rush.t -= dt; if (rush.t <= 0) toast('Rush hour is over'); }
@@ -3563,7 +3638,7 @@ function update(dt) {
     s.pinTimer -= dt;
     if (s.pinTimer <= 0) {
       const base = ramp(CFG.pinIntervalBase, CFG.pinIntervalRamp, CFG.pinIntervalMin) * DIFF.pin;
-      s.pinTimer = base * Math.pow(CFG.storeEvolvePinStep, s.tier) / (rush.t > 0 ? CFG.rushRate : 1) + rand() * CFG.pinJitter;
+      s.pinTimer = base * Math.pow(CFG.storeEvolvePinStep, s.tier) / (rush.t > 0 ? CFG.rushRate : 1) * (weather.kind === 'heat' && weather.amt > 0.5 ? 0.8 : 1) + rand() * CFG.pinJitter;   // p62: heat
       if (s.pins < storeCap(s) + 8) { s.pins++; }
     }
     // a full store (8/8, 10/10...) brings one house of its colour now and one more a little later
@@ -3705,6 +3780,7 @@ function sampleRun() {
 /* a new week: the map grows and the council pays a small grant */
 function weekStart(grew) {
   if (!tutorialMode) JEvents.emit('week', {week, score, diffKey});
+  if (questsActive()) { questEvent('survive', week); questEvent('earn', Math.floor(stats.earned || 0)); }
   stats.weekMarks.push(clock);
   const grant = Math.round((CFG.weeklyGrant + CFG.weeklyGrantRamp * week) * DIFF.grant);
   money += grant;
@@ -3722,7 +3798,7 @@ function weekStart(grew) {
   if (upkeep) bits.push('road upkeep −' + fmt$(upkeep));
   bits.push('prices up ' + Math.round((priceScale() - 1) * 100) + '% from week 1');
   toast('Week ' + week + ' — ' + bits.join(' · '), 'good');
-  sfx('upgrade'); refreshUI();
+  sfx('upgrade'); haptic('week'); refreshUI();
   offerUpgrade(grew);
 }
 
@@ -3753,11 +3829,12 @@ function endGame(why) {
   lifeTick(0);
   if (!tutorialMode && life[diffKey]) { life[diffKey].ended++; saveLife(); }
   running = false; over = true;
+  lastRun = {newBest: score > best && best > 0, prevBest: best, first: !best};
   best = Math.max(best, score);
   sampleRun();
   try { localStorage.setItem(bestKey(diffKey), String(best)); localStorage.removeItem(SAVE_KEY); } catch (e) {}
   showGameOver(why);
-  sfx('over');
+  sfx('over'); haptic('over');
   if (!tutorialMode) JEvents.emit('over', {score, week, diffKey, clock});
 }
 
@@ -3919,10 +3996,10 @@ function serialize() {
     sign: sign.map((s, k) => s ? [k, s] : null).filter(Boolean),
     special: special.map((s, k) => s ? [k, s] : null).filter(Boolean),
     lights: [...lightQ].filter(([k]) => special[k] === 'light').map(([k, q]) => [k, q[0], q[1]]),
-    buildings: buildings.map(b => ({pref: b.pref, k: b.k, sd: isBig(b) ? b.sd : undefined, se: isBig(b) ? b.ends || 0 : undefined, type: b.type, color: b.color, pins: b.pins, tier: b.tier, timer: b.timer, lvl: b.lvl, trucks: b.trucks, vans: b.cars.map(c => c.van ? 1 : 0), extra: b.extra || 0, ov: b.overSpent ? 1 : 0, ovT: +(b.followT || 0).toFixed(1), ups: b.cars.map(c => [carUp(c, 'cap'), carUp(c, 'spd'), carUp(c, 'load'), carUp(c, 'fuel')])})), carsBought, fuelV: 1,
+    buildings: buildings.map(b => ({pref: b.pref, k: b.k, sd: isBig(b) ? b.sd : undefined, se: isBig(b) ? b.ends || 0 : undefined, type: b.type, color: b.color, pins: b.pins, tier: b.tier, timer: b.timer, lvl: b.lvl, trucks: b.trucks, vans: b.cars.map(c => c.van ? 1 : 0), extra: b.extra || 0, dl: b.delivered | 0, sr: b.served | 0, ov: b.overSpent ? 1 : 0, ovT: +(b.followT || 0).toFixed(1), ups: b.cars.map(c => [carUp(c, 'cap'), carUp(c, 'spd'), carUp(c, 'load'), carUp(c, 'fuel')])})), carsBought, fuelV: 1,
     parks: parks.map(p => ({k: p.k, b: p.b})), depots: depots.map(d => d.k), dprefs: depots.map(d => d.pref),
     juncLvl: nodeList.filter(nd => nd.lvl > 0).map(nd => [nd.k, nd.lvl, nd.spent]),
-    motorways: motorways.map(m => ({a: m.a, b: m.b, len: m.len})), goals: [...goalsDone],
+    motorways: motorways.map(m => ({a: m.a, b: m.b, len: m.len})), goals: [...goalsDone], tr: transportSave(),
     stats: {delivered: stats.delivered, trips: stats.trips, tows: stats.tows, breakdowns: stats.breakdowns, earned: stats.earned, spent: stats.spent, hauls: stats.hauls,
             ambOk: stats.ambOk, ambLate: stats.ambLate, ambFail: stats.ambFail},
     // live events, so reloading mid-storm doesn't clear it
@@ -3932,7 +4009,9 @@ function serialize() {
     runHist: stats.runHist.map(p => [Math.round(p.t), +p.jam.toFixed(3), +p.rate.toFixed(1)]), runStep: stats.runStep, weekMarks: stats.weekMarks.map(Math.round),
     oneway: (() => { const o = []; if (onewayDir) for (let k = 0; k < N; k++) if (onewayDir[k] >= 0) o.push([k, onewayDir[k]]); return o; })(),
     // the colours this city was played in, so each save file keeps its own
-    pal: {mode: colorMode, hex: customHex.slice()}
+    pal: {mode: colorMode, hex: customHex.slice()},
+    // p62: the time-lapse so far (≤ 120 frames, ≤ 300 KB) and the weather, so a reload keeps both
+    replay: replayStore(), wx: weather.t > 0 ? {kind: weather.kind, t: +weather.t.toFixed(1)} : null
   };
 }
 const SLOT_KEY = 'junction-slot-v1:', SLOT_MODES = ['chill', 'standard', 'frantic', 'zen', 'expert'];
@@ -3953,11 +4032,11 @@ function renderLocalSlots(box, mode) {
     else if (d && d.over) { desc = '<b>Finished</b> \u00b7 week ' + d.week + ', ' + d.score + ' parcels<small>' + agoLocal(d.at) + '</small>'; btns = '<button class="bigbtn" data-act="new">New city here</button><button class="act danger" data-act="del">Clear</button>'; }
     else { desc = '<b>Empty slot</b><small>' + DIFFS[mode].label + ' \u00b7 nothing saved yet</small>'; btns = '<button class="bigbtn" data-act="new">New city here</button>'; }
     el.innerHTML = '<div class="slotnum">' + n + '</div><div class="slotinfo">' + desc + '</div><div class="slotbtns">' + btns + '</div>';
-    el.querySelectorAll('[data-act]').forEach(b => { b.type = 'button'; b.onclick = () => {
+    el.querySelectorAll('[data-act]').forEach(b => { b.type = 'button'; b.onclick = async () => {
       const act = b.dataset.act;
       if (act === 'load') { if (!loadGame(d.data)) { toast('That save couldn\u2019t be opened.', 'warn'); return; } curSlot = id; closeModal('m-start'); running = true; refreshHud(); layout(); }
-      else if (act === 'new') { if (d && d.data && !confirm('Replace the city in ' + DIFFS[mode].label + ' slot ' + n + ' (week ' + d.week + ') with a new one?')) return; pendingSlot = id; closeModal('m-start'); resetGame(mode); running = true; refreshHud(); layout(); writeSlot(); }
-      else if (act === 'del') { if (!confirm('Delete ' + DIFFS[mode].label + ' slot ' + n + '? This can\u2019t be undone.')) return; try { localStorage.removeItem(SLOT_KEY + id); } catch (e) {} if (curSlot === id) curSlot = ''; renderLocalSlots(box, mode); }
+      else if (act === 'new') { if (d && d.data && !(await ask({title: 'Replace this city?', text: DIFFS[mode].label + ' slot ' + n + ' holds a week ' + d.week + ' city. A new one will take its place.', ok: 'Replace', danger: true}))) return; pendingSlot = id; closeModal('m-start'); resetGame(mode); running = true; refreshHud(); layout(); writeSlot(); }
+      else if (act === 'del') { if (!(await ask({title: 'Delete this save?', text: DIFFS[mode].label + ' slot ' + n + ' will be emptied. This can\u2019t be undone.', ok: 'Delete', danger: true}))) return; try { localStorage.removeItem(SLOT_KEY + id); } catch (e) {} if (curSlot === id) curSlot = ''; renderLocalSlots(box, mode); }
     }; });
     box.append(el);
   }
@@ -4038,12 +4117,12 @@ function loadGameCore(data) {
     if (DIFF.expert) { expWeek = typeof d.expWeek === 'string' ? d.expWeek : expertSeed().key; rand = seededRand(strHash(expWeek) ^ Math.floor(d.clock || 0)); }
     score = d.score; week = d.week; weekTimer = d.weekTimer; span = d.span; org = Math.floor((MAXD - span) / 2); camSpan = span; camOrg = org;
     houseTimer = d.houseTimer; storeTimer = d.storeTimer; clock = d.clock; keepLeft = d.keepLeft; laneSign = keepLeft ? -1 : 1;
-    inv = d.inv; perks = Object.assign({}, PERK_DEFAULTS, d.perks); carCapacity = d.carCapacity;
+    inv = d.inv; perks = Object.assign({}, PERK_DEFAULTS, d.perks); carCapacity = d.carCapacity; inv.rail = inv.rail | 0; inv.bus = inv.bus | 0;
     money = d.money !== undefined ? d.money : Math.max(0, CFG.startMoney + DIFF.cash);
     d.buildings.forEach(o => {
       const b = {k: o.k, type: o.type, color: o.color, pins: o.pins, claimed: 0, timer: o.timer || 0,
                  tier: o.tier !== undefined ? o.tier : (o.big ? 1 : 0), cars: [], carsN: 0, park: 0, contract: null,
-                 docks: [], served: 0, acc: -1, face: 0, pref: o.pref === undefined ? -1 : o.pref, unreach: 0, born: 0, pinTimer: rnd(3, 9), lvl: o.lvl || 0, trucks: 0,
+                 docks: [], served: o.sr | 0, acc: -1, face: 0, pref: o.pref === undefined ? -1 : o.pref, unreach: 0, born: 0, pinTimer: rnd(3, 9), lvl: o.lvl || 0, trucks: 0,
                  overSpent: o.ov === undefined ? true : !!o.ov, followT: +o.ovT || 0,
                  evolveTimer: rnd(CFG.storeEvolveCheckMin, CFG.storeEvolveCheckMax)};
       if (b.type === 'store' && ORTH.includes(o.sd)) { b.sd = o.sd; b.ends = [0, 1, 2].includes(o.se) ? o.se : 0; }
@@ -4052,12 +4131,13 @@ function loadGameCore(data) {
     d.parks.forEach(p => { parks.push({k: p.k, b: p.b, face: 0}); parkAt[p.k] = parks.length - 1; buildings[p.b].park++; });
     d.depots.forEach((k, i) => { depots.push({k, cap: CFG.depotCapacity, slots: [], res: 0, acc: -1, face: 0, pref: d.dprefs && d.dprefs[i] !== undefined ? d.dprefs[i] : -1}); depotAt[k] = depots.length - 1; });
     d.motorways.forEach(m => motorways.push({id: ++motoSeq, a: m.a, b: m.b, len: m.len}));
+    transportLoad(d.tr);
     if (!view && !(d.sv >= 3)) refitStores(d.sv >= 2 ? 2 : 4);
     linkBuildings();
     carsBought = d.carsBought | 0;
     d.buildings.forEach((o, i) => {
       if (o.type !== 'house') return;
-      buildings[i].extra = clamp(o.extra | 0, 0, CFG.carBuyExtraMax);
+      buildings[i].extra = clamp(o.extra | 0, 0, CFG.carBuyExtraMax); buildings[i].delivered = o.dl | 0;
       o.vans.forEach((v, j) => {
         const c = addCar(i); c.van = !!v;
         const u = o.ups && o.ups[j];
@@ -4081,6 +4161,9 @@ function loadGameCore(data) {
     stats.weekMarks = d.weekMarks || [];
     camReset(true); closeInspector(); setTool('select'); refreshUI(); renderGoals();
     if (!view) applyCityPalette(d.pal);
+    replayFrames = Array.isArray(d.replay) ? d.replay.filter(f => f && typeof f.snap === 'string') : []; replayDay = Math.floor(clock / CFG.dayLengthSeconds);   // p62
+    weather = {kind: 'clear', t: 0, amt: 0}; weatherTimer = 240 + Math.random() * 180; weatherSeen = {};
+    if (d.wx && ['snow', 'fog', 'heat'].includes(d.wx.kind) && +d.wx.t > 0) { weather = {kind: d.wx.kind, t: +d.wx.t, amt: 1}; weatherSeen[d.wx.kind] = true; }
     return true;
   } catch (e) { return false; }
 }
@@ -4095,13 +4178,584 @@ function resetGameBlank(dk) {
   sign = new Array(N).fill(null); special = new Array(N).fill(null);
   bAt = new Int32Array(N).fill(-1); parkAt = new Int32Array(N).fill(-1); depotAt = new Int32Array(N).fill(-1);
   onewayDir = new Int8Array(N).fill(-1);
-  nodes = []; nodeList = []; edges = []; edgeMap = new Map(); buildings = []; cars = []; motorways = []; parks = []; depots = [];
+  nodes = []; nodeList = []; edges = []; edgeMap = new Map(); buildings = []; cars = []; motorways = []; parks = []; depots = []; transportReset();
   motoSeq = 0; carSeq = 0; running = true; speed = 1; over = false; started = true; money = 0; trucks = [];
   rush = {t: 0}; rain = {t: 0, amt: 0}; breakdownTimer = 30; undoStack = []; redoStack = [];
   closed = new Map(); closureTimer = 60; rerouteN = 0; ambs = []; ambTimer = 60; sel = null; follow = false; motoPick = -1;
   contractTimer = CFG.contractSeconds; cityStressClock = 0;
   stats = freshStats(); fx.length = 0; lightClock = 0; lightQ.clear();
 }
+
+/* p61 */
+/* ---------------------------------------------------------------------
+   4b. NEW TRANSPORT (p61). Three late unlocks that help without taking over:
+     trains  - a rail layer of its own. Rail beside a store or a house is a station; every rail
+               network with two stations gets one train that shuttles 6 parcels a trip at 1.3x car
+               speed. Where rail crosses road, cars wait at the level crossing while a train is near.
+     buses   - a store plus up to 4 houses of its colour. The bus is a car with a fixed loop: it
+               loads 3 at the store and drops some at every stop, never parking.
+     drones  - a perk (3 levels). Each level is one drone at a store that flies one parcel straight
+               to the nearest house of its colour, slowly, over everything.
+   --------------------------------------------------------------------- */
+CFG.prices.rail = 8; CFG.prices.bus = 120;
+const TRC = {trainSpeed: 1.3, trainCap: 6, trainStop: 1.6, busCap: 3, busMax: 4, busLen: 20, droneSpeed: 0.4, droneLoad: 1.2, xingHold: 1.2, xingRange: 2};
+let rail = new Uint8Array(N), rlnk = new Uint8Array(N), railComp = new Int32Array(N), railN = 0, trains = [], busRoutes = [], drones = [], stations = [], stationAt = new Map();
+let xingT = null, xingN = 0, railVer = 0, railCache = {ver: -1}, trainSeq = 0, busSeq = 0, droneSeq = 0, busPick = null, trPending = null, trSyncT = 0;
+let bfsQ = new Int32Array(N), bfsPrev = new Int32Array(N), bfsSeen = new Int32Array(N), bfsStamp = 0, trainQ = null;
+const TR = {railOn: false, busOn: false, stats: {train: 0, bus: 0, drone: 0}};
+const _tp = {x: 0, y: 0, a: 0};
+function transportReset() {
+  rail = new Uint8Array(N); rlnk = new Uint8Array(N); railComp.fill(-1); railN = 0; trains = []; busRoutes = []; drones = []; stations = []; stationAt.clear();
+  xingT = null; xingN = 0; railVer++; railCache.ver = -1; trainSeq = 0; busSeq = 0; droneSeq = 0; busPick = null; trPending = null; trSyncT = 0;
+  TR.railOn = false; TR.busOn = false; TR.stats = {train: 0, bus: 0, drone: 0};
+}
+function ensureTr() { if (inv && inv.rail === undefined) inv.rail = 0; if (inv && inv.bus === undefined) inv.bus = 0; if (perks && perks.drone === undefined) perks.drone = 0; }
+const railUnlocked = () => TR.railOn || (inv && inv.rail > 0) || railN > 0;
+const busUnlocked = () => TR.busOn || (inv && inv.bus > 0) || busRoutes.length > 0;
+/* the Rail and Bus tools only show once the player has them */
+function syncTransportTools() {
+  const show = (id, on) => { const b = document.querySelector('.tool[data-id="' + id + '"]'); if (b && b.hidden === on) b.hidden = !on; };
+  show('rail', railUnlocked()); show('bus', busUnlocked());
+}
+/* a parcel reaching a house by any new transport scores and pays exactly like a car delivery */
+function creditDelivery(hi, n, cash, col) {
+  const h = buildings[hi]; if (!h || n <= 0) return;
+  score += n; stats.delivered += n; stats.lastDeliveries.push(clock);
+  if (!spectating && !demoMode) earnBucks(n, h);
+  earn(cash); onDeliver({home: hi, color: col}, n, cash);
+}
+
+/* ------------------------------------------------------------ rail */
+const railFits = k => k >= 0 && inPlay(k) && !water[k] && !rail[k] && bAt[k] < 0 && parkAt[k] < 0 && depotAt[k] < 0 && !special[k] && !(nodes[k] && nodes[k].junction);
+function placeRail(k, silent) {
+  if (!railFits(k)) { if (!silent && k >= 0 && inPlay(k) && (bAt[k] >= 0 || (nodes[k] && nodes[k].junction) || special[k])) hint('Rail runs beside buildings and across plain road, not through them.'); return false; }
+  if (!canTake('rail')) { if (!silent) hint('Rail costs ' + fmt$(PRICE.rail) + ' a tile. ' + shortBy(PRICE.rail)); return false; }
+  take('rail'); rail[k] = 1; rlnk[k] = 0; rebuildRail(); refreshUI(); if (!silent) sfx('place');
+  return true;
+}
+/* the pen moves from rail tile a onto neighbouring b: lay b if needed and join the two */
+function linkRail(a, b) {
+  const d = dirBetween(a, b); if (d < 0) return false;
+  if (!rail[a]) { if (!rail[b]) placeRail(b, false); return false; }
+  if (!rail[b] && !placeRail(b, true)) return false;
+  if ((rlnk[a] >> d) & 1) return true;
+  rlnk[a] |= 1 << d; rlnk[b] |= 1 << ((d + 4) % 8); rebuildRail(); refreshUI(); sfx('place');
+  return true;
+}
+function stepRail(from, to) {
+  let c = cx(from), r = cy(from); const tc = cx(to), tr = cy(to); let guard = 0;
+  while ((c !== tc || r !== tr) && guard++ < 90) {
+    const a = idx(c, r); if (c !== tc) c += Math.sign(tc - c); if (r !== tr) r += Math.sign(tr - r);
+    linkRail(a, idx(c, r));
+  }
+}
+function railTool(k, dragging) { placeRail(k, !!dragging); }
+function eraseRail(k) {
+  if (!rail[k]) return false;
+  for (const t of trains) if (t.k === k || t.nk === k) { hint('A train is on that rail.'); return false; }
+  for (let d = 0; d < 8; d++) if ((rlnk[k] >> d) & 1) { const n = nbr(k, d); if (n >= 0) rlnk[n] &= ~(1 << ((d + 4) % 8)); }
+  rail[k] = 0; rlnk[k] = 0; inv.rail = (inv.rail | 0) + 1; rebuildRail(); refreshUI(); sfx('erase');
+  return true;
+}
+/* networks, stations and trains follow from the rail tiles; called after every change */
+function rebuildRail() {
+  railVer++; railCache.ver = -1; stations = []; stationAt.clear(); railComp.fill(-1); railN = 0;
+  let nc = 0; const q = bfsQ;
+  for (let k = 0; k < N; k++) {
+    if (!rail[k]) continue; railN++;
+    if (railComp[k] >= 0) continue;
+    let h = 0, t = 0; q[t++] = k; railComp[k] = nc;
+    while (h < t) { const a = q[h++]; for (let d = 0; d < 8; d++) if ((rlnk[a] >> d) & 1) { const n = nbr(a, d); if (n >= 0 && rail[n] && railComp[n] < 0) { railComp[n] = nc; q[t++] = n; } } }
+    nc++;
+  }
+  const seen = new Set();                                 // a station: a rail tile beside a house or store (one per building, never on a level crossing)
+  for (let k = 0; k < N; k++) {
+    if (!rail[k] || road[k]) continue;
+    for (const d of ORTH) { const n = nbr(k, d); if (n < 0 || bAt[n] < 0 || seen.has(bAt[n])) continue; const st = {k, b: bAt[n], d, comp: railComp[k]}; stations.push(st); stationAt.set(k, st); seen.add(bAt[n]); break; }
+  }
+  const want = new Map(); for (const st of stations) want.set(st.comp, (want.get(st.comp) || 0) + 1);
+  for (let i = trains.length - 1; i >= 0; i--) {       // trains whose line is gone are scrapped; the rest look for work again
+    const t = trains[i], c = rail[t.k] ? railComp[t.k] : -1;
+    if (c < 0 || (want.get(c) || 0) < 2) { trains.splice(i, 1); continue; }
+    t.comp = c; t.path = null; t.target = -1;
+  }
+  for (const [c, n] of want) if (n >= 2 && !trains.some(t => t.comp === c)) {
+    const st = stations.find(x => x.comp === c && buildings[x.b].type === 'store') || stations.find(x => x.comp === c);
+    trains.push(makeTrain(st.k, c));
+    if (started && !trPending && !demoMode) { popRing(tx(st.k), ty(st.k), '#ffffff'); toast('A train is running on your new line', 'good'); sfx('upgrade'); }
+  }
+  xingN = 0; for (let k = 0; k < N; k++) if (rail[k] && road[k]) xingN++;
+  if (xingN && !xingT) xingT = new Float32Array(N);
+}
+function makeTrain(k, comp) {
+  let a = 0; for (let d = 0; d < 8; d++) if ((rlnk[k] >> d) & 1) { a = Math.atan2(DY[d], DX[d]); break; }
+  return {id: ++trainSeq, comp, k, nk: k, u: 0, x: tx(k), y: ty(k), ang: a, da: a, load: 0, color: -1, cash: 0, state: 'stop', stopT: 0.6, path: null, pi: 0, target: -1,
+          hx: new Float32Array(32), hy: new Float32Array(32), hn: 0, hh: 0};
+}
+/* shortest rail path (in tiles) from `from` to the first tile ok() accepts, or null */
+function railPath(from, ok) {
+  bfsStamp++; let h = 0, t = 0; bfsQ[t++] = from; bfsSeen[from] = bfsStamp; bfsPrev[from] = -1;
+  while (h < t) {
+    const a = bfsQ[h++];
+    if (a !== from && ok(a)) { const out = []; let c = a; while (c >= 0) { out.push(c); c = bfsPrev[c]; } return out.reverse(); }
+    for (let d = 0; d < 8; d++) if ((rlnk[a] >> d) & 1) { const n = nbr(a, d); if (n >= 0 && rail[n] && bfsSeen[n] !== bfsStamp) { bfsSeen[n] = bfsStamp; bfsPrev[n] = a; bfsQ[t++] = n; } }
+  }
+  return null;
+}
+const wantHouse = k => { const st = stationAt.get(k); if (!st) return false; const b = buildings[st.b]; return !!b && b.type === 'house' && b.color === trainQ.color; };
+const wantStore = k => {
+  const st = stationAt.get(k); if (!st) return false; const b = buildings[st.b];
+  if (!b || b.type !== 'store' || b.pins - b.claimed <= 0) return false;
+  for (const o of stations) if (o.comp === st.comp && o !== st && buildings[o.b].type === 'house' && buildings[o.b].color === b.color) return true;
+  return false;
+};
+function trainStep(t, dt) {
+  if (t.state === 'stop') { t.stopT -= dt; trainGate(t); if (t.stopT > 0) return; t.state = 'run'; }
+  if (!t.path || t.pi >= t.path.length - 1) {
+    trainQ = t;
+    if (t.load > 0 ? wantHouse(t.k) : wantStore(t.k)) { t.path = null; trainArrive(t); return; }   // the station it stands at can serve it
+    const p = railPath(t.k, t.load > 0 ? wantHouse : wantStore);
+    if (!p) { t.state = 'stop'; t.stopT = 1; t.path = null; return; }      // nothing to do: wait a moment and look again
+    t.path = p; t.pi = 0; t.u = 0; t.nk = p[1];
+  }
+  let left = CFG.carSpeed * TRC.trainSpeed * dt;
+  while (left > 0) {
+    const a = t.path[t.pi], b = t.path[t.pi + 1], d = dirBetween(a, b);
+    if (d < 0 || !rail[b] || !((rlnk[a] >> d) & 1)) { t.path = null; t.state = 'stop'; t.stopT = 0.4; break; }   // the line was cut ahead
+    const L = DIAG(d) ? CELL * Math.SQRT2 : CELL, rem = (1 - t.u) * L;
+    if (left < rem) { t.u += left / L; left = 0; }
+    else { left -= rem; t.pi++; t.u = 0; t.k = b; if (t.pi >= t.path.length - 1) { t.nk = b; trainArrive(t); break; } t.nk = t.path[t.pi + 1]; }
+  }
+  if (t.path) {
+    const a = t.path[t.pi], b = t.path[Math.min(t.pi + 1, t.path.length - 1)];
+    t.x = lerp(tx(a), tx(b), t.u); t.y = lerp(ty(a), ty(b), t.u);
+    if (a !== b) t.ang = Math.atan2(ty(b) - ty(a), tx(b) - tx(a));
+  }
+  trainPush(t); trainGate(t);
+}
+function trainArrive(t) {
+  t.state = 'stop'; t.stopT = TRC.trainStop; t.u = 0;
+  const st = stationAt.get(t.k); if (!st) return;
+  const b = buildings[st.b]; if (!b) return;
+  if (b.type === 'store' && t.load === 0) {
+    const n = Math.min(TRC.trainCap, b.pins - b.claimed);
+    if (n > 0) {
+      b.pins -= n; b.served += n; b.timer = Math.max(0, b.timer - CFG.arrivalRelief * n); if (b.contract) b.contract.got += n;
+      t.load = n; t.color = b.color; t.cash = Math.round(n * payPerParcel(b));
+      popText(bX(b), bY(b) - 14, '-' + n, COLORS[b.color].hex); sfx('place');
+    }
+  } else if (b.type === 'house' && t.load > 0 && b.color === t.color) {
+    creditDelivery(st.b, t.load, t.cash, t.color); TR.stats.train += t.load; stats.trips++;
+    t.load = 0; t.cash = 0; t.color = -1;
+  }
+}
+/* a level crossing stays closed while a train is within two tiles of it */
+function trainGate(t) {
+  if (!xingN) return;
+  const until = clock + TRC.xingHold;
+  if (road[t.k]) xingT[t.k] = until;
+  if (!t.path) return;
+  for (let i = Math.max(0, t.pi - TRC.xingRange); i <= Math.min(t.path.length - 1, t.pi + TRC.xingRange); i++) { const q = t.path[i]; if (road[q]) xingT[q] = until; }
+}
+/* where the train has been, so the wagon can follow it round bends (and lead when it reverses) */
+function trainPush(t) {
+  const i = t.hh; if (t.hn && Math.abs(t.x - t.hx[i]) + Math.abs(t.y - t.hy[i]) < 1) return;
+  const j = (i + 1) % 32; t.hx[j] = t.x; t.hy[j] = t.y; t.hh = j; if (t.hn < 32) t.hn++;
+}
+function trainTail(t, back) {
+  let px = t.x, py = t.y, left = back;
+  for (let n = 0; n < t.hn; n++) {
+    const i = (t.hh - n + 32) % 32, qx = t.hx[i], qy = t.hy[i], d = Math.hypot(qx - px, qy - py);
+    if (d >= left && d > 0) { const u = left / d; _tp.x = px + (qx - px) * u; _tp.y = py + (qy - py) * u; _tp.a = Math.atan2(py - qy, px - qx); return _tp; }
+    left -= d; px = qx; py = qy;
+  }
+  _tp.x = px - Math.cos(t.da) * left; _tp.y = py - Math.sin(t.da) * left; _tp.a = t.da; return _tp;
+}
+function railSnap() { const o = []; for (let k = 0; k < N; k++) if (rail[k]) for (let d = 2; d <= 5; d++) if ((rlnk[k] >> d) & 1) { const n = nbr(k, d); if (n > k) o.push([k, n]); } return o; }
+
+/* ------------------------------------------------------------ buses */
+const busRouteOf = c => busRoutes.find(r => r.bus === c);
+function makeBusCar(si, hi) {
+  const s = buildings[si];
+  const c = {id: ++carSeq, home: hi, color: s.color, van: false, state: 'loading', loc: {t: 'store', i: si}, x: 0, y: 0, ang: 0, v: 0, len: TRC.busLen, edge: null, s: 0, route: null, ri: 0, destNode: -1,
+    job: 'fetch', store: si, bay: -1, want: 0, load: 0, taken: false, timer: 1, stopT: 0, stopAcc: 0, blockedT: 0, replanT: rnd(1, CFG.replanSeconds), replanCool: 0, planFail: 0,
+    brake: false, broken: 0, xf: null, xfEdge: null, cr: null, idle: 0, trips: 0, carried: 0, tripStart: 0, hazard: 0, cash: 0, claim: null, towedBy: null, noRouteT: 0,
+    up: {cap: 0, spd: 0, load: 0, fuel: 2}, isBus: true, bus: null};
+  s.docks.push(c); cars.push(c);
+  const p = parkedPose(c); c.x = p.x; c.y = p.y; c.ang = p.a;
+  return c;
+}
+function makeBusRoute(si, houses, silent) {
+  const s = buildings[si]; if (!s || s.type !== 'store') return null;
+  const hs = (houses || []).filter((hi, i, a) => buildings[hi] && buildings[hi].type === 'house' && buildings[hi].color === s.color && a.indexOf(hi) === i).slice(0, TRC.busMax);
+  if (!hs.length) return null;
+  const c = makeBusCar(si, hs[0]), r = {id: ++busSeq, store: si, houses: hs, bus: c};
+  c.bus = {route: r.id, i: 0, ppp: 0, retry: 0};
+  busRoutes.push(r);
+  if (!silent) { popRing(bX(s), bY(s), COLORS[s.color].hex); toast('Bus route started: the ' + COLORS[s.color].name + ' store and ' + hs.length + ' house' + (hs.length > 1 ? 's' : ''), 'good'); sfx('upgrade'); }
+  return r;
+}
+function removeBusRoute(id) {
+  const i = busRoutes.findIndex(r => r.id === id); if (i < 0) return false;
+  const c = busRoutes[i].bus;
+  dropFromRoad(c); if (c.loc && (c.loc.t === 'store' || c.loc.t === 'bay')) leaveSpot(c);
+  const j = cars.indexOf(c); if (j >= 0) cars.splice(j, 1);
+  busRoutes.splice(i, 1); inv.bus = (inv.bus | 0) + 1;
+  if (sel && sel.type === 'car' && sel.ref === c) closeInspector();
+  toast('Bus route scrapped' + (c.load ? ' — ' + c.load + ' parcel' + (c.load > 1 ? 's' : '') + ' lost' : '') + '. The route token is back in stock.', 'warn'); refreshUI();
+  return true;
+}
+/* the bus stop: on the verge in front of the house, parallel to its road */
+function busStopPose(c) {
+  const h = buildings[c.home]; if (!h) return {x: c.x, y: c.y, a: c.ang};
+  const th = h.face || 0, p = rot(tx(h.k), ty(h.k), th, 0, 15.5);
+  return {x: p.x, y: p.y, a: Math.abs(angDiff(c.ang, th)) <= Math.PI / 2 ? th : th + Math.PI};
+}
+function busPath(c, pose) { const lg = leg(c.x, c.y, c.ang, pose.x, pose.y, pose.a, false, 30); return {t: 0, ph: [lg], dur: lg.dur}; }
+/* at the store: take up to 3 parcels (never ones a car has claimed), then set off round the loop */
+function busLoaded(c) {
+  const r = busRouteOf(c), s = buildings[c.store];
+  if (!r || !s) { removeBusRoute(r ? r.id : -1); return; }
+  if (c.load <= 0) {
+    const n = Math.min(TRC.busCap, s.pins - s.claimed);
+    if (n <= 0) { c.timer = 1.5; return; }                                   // nothing waiting: hold at the dock and look again
+    s.pins -= n; s.served += n; s.timer = Math.max(0, s.timer - CFG.arrivalRelief * n); if (s.contract) s.contract.got += n;
+    c.load = n; c.carried = n; c.bus.ppp = payPerParcel(s); c.cash = Math.round(n * c.bus.ppp); c.bus.i = 0; c.taken = true;
+    popText(bX(s), bY(s) - 14, '-' + n, COLORS[s.color].hex);
+  }
+  busGo(c);
+}
+/* drive to the next house on the route that can be reached, else back to the store */
+function busGo(c) {
+  const r = busRouteOf(c), s = buildings[c.store], from = nodeOfParked(c);
+  if (!r || !s) return;
+  while (c.load > 0 && c.bus.i < r.houses.length) {
+    const hi = r.houses[c.bus.i], h = buildings[hi];
+    if (h && h.acc >= 0 && from >= 0) {
+      const rt = planFor(c, null, from, h.acc);
+      if (rt) { c.home = hi; c.job = 'return'; c.want = 0; c.route = rt; c.ri = 0; c.destNode = h.acc; c.state = 'exiting'; c.xf = null; c.planFail = 0; return; }
+    }
+    c.bus.i++;
+  }
+  busHome(c);
+}
+function busHome(c) {
+  const s = buildings[c.store], from = nodeOfParked(c);
+  c.bus.i = 0; c.bus.retry = 2;
+  if (!s) return;
+  if (c.loc.t === 'store') { c.state = 'loading'; c.job = 'fetch'; c.want = 0; c.timer = 3; return; }   // already there (no house reachable): wait
+  const rt = (s.acc >= 0 && from >= 0) ? planFor(c, null, from, s.acc) : null;
+  if (!rt) { c.state = 'parked'; c.job = null; c.route = null; c.v = 0; return; }               // no way yet: busTick tries again shortly
+  c.job = 'fetch'; c.want = 0; c.route = rt; c.ri = 0; c.destNode = s.acc; c.state = 'exiting'; c.xf = null; c.planFail = 0;
+}
+/* pulled in: at the store, start loading; at a house, drop a share of the load and carry on */
+function busArrive(c) {
+  if (c.loc.t === 'store') { c.state = 'loading'; c.taken = false; c.timer = CFG.pickupPause * Math.pow(0.7, perks.loading); return; }
+  const r = busRouteOf(c);
+  if (c.loc.t === 'home' && c.load > 0 && r) {
+    const left = Math.max(1, r.houses.length - c.bus.i), n = Math.min(c.load, Math.ceil(c.load / left)), cash = Math.round(n * c.bus.ppp);
+    creditDelivery(c.home, n, cash, c.color); TR.stats.bus += n; c.load -= n; c.cash = Math.max(0, c.cash - cash); stats.trips++; c.trips++;
+  }
+  c.bus.i++; c.state = 'parked'; c.job = null; c.route = null; c.idle = 0;
+  busGo(c);
+}
+function busTick(r, dt) {
+  const c = r.bus;
+  if (!cars.includes(c) || !buildings[r.store]) { busRoutes.splice(busRoutes.indexOf(r), 1); return; }
+  if (c.state === 'parked') { c.bus.retry -= dt; if (c.bus.retry <= 0) { c.bus.retry = 2; if (c.load > 0) busGo(c); else busHome(c); } }
+}
+function busStatus(c) { return c.state === 'loading' ? 'Loading at the store' : c.job === 'return' ? 'Heading for a house' : c.job === 'fetch' ? 'Heading back to the store' : c.state === 'entering' ? 'Pulling in' : 'Waiting for a road'; }
+/* the Bus tool: a store, then its houses, then the store again */
+function busTool(k, dragging) {
+  if (dragging || k < 0) return;
+  const bi = bAt[k], b = bi >= 0 ? buildings[bi] : null;
+  if (!busPick) {
+    if (!b || b.type !== 'store') { hint('Tap a store first, then up to ' + TRC.busMax + ' houses of its colour.'); return; }
+    if (!canTake('bus')) { hint('A bus route costs ' + fmt$(PRICE.bus) + '. ' + shortBy(PRICE.bus)); return; }
+    busPick = {store: bi, houses: []}; hint('Now tap up to ' + TRC.busMax + ' ' + COLORS[b.color].name + ' houses, then the store again to start the bus.'); sfx('ui');
+    return;
+  }
+  const s = buildings[busPick.store];
+  if (bi === busPick.store) { if (busPick.houses.length) busFinish(); else hint('Tap some ' + COLORS[s.color].name + ' houses first.'); return; }
+  if (!b || b.type !== 'house') { hint('Houses only, then the store again to start.'); return; }
+  if (b.color !== s.color) { hint('That house is the wrong colour — the bus serves ' + COLORS[s.color].name + ' houses.'); return; }
+  const j = busPick.houses.indexOf(bi);
+  if (j >= 0) { busPick.houses.splice(j, 1); hint('House removed from the route.'); return; }
+  busPick.houses.push(bi); sfx('ui');
+  if (busPick.houses.length >= TRC.busMax) busFinish(); else hint('Stop ' + busPick.houses.length + ' of ' + TRC.busMax + '. Tap more houses, or the store to start the bus.');
+}
+function busFinish() {
+  const p = busPick; busPick = null;
+  if (!canTake('bus')) { hint('A bus route costs ' + fmt$(PRICE.bus) + '. ' + shortBy(PRICE.bus)); return; }
+  if (!makeBusRoute(p.store, p.houses)) { hint('That route couldn’t be started.'); return; }
+  take('bus'); refreshUI();
+}
+function renderBusInspector() {
+  const box = $('inspect'), body = $('i-body'), title = $('i-title'), c = sel.ref; if (!box || !body) return;
+  if (!cars.includes(c)) { closeInspector(); return; }
+  const r = busRouteOf(c), n = r ? r.houses.length : 0;
+  title.textContent = COLORS[c.color].name + ' bus';
+  let html = '<div class="vcard" style="--vc:' + COLORS[c.color].hex + '"><div class="vtype">bus · ' + n + ' stop' + (n === 1 ? '' : 's') + '</div>' +
+    '<div class="vslots" title="Parcel seats">' + Array.from({length: TRC.busCap}, (_, i) => '<i class="' + (i < c.load ? 'full' : '') + '"></i>').join('') + '</div>' +
+    '<div class="vsub"><b>' + c.load + '</b> of ' + TRC.busCap + ' seats full</div></div>';
+  html += '<p class="line"><b>' + busStatus(c) + '</b></p>';
+  html += '<p class="line muted">Loops the ' + COLORS[c.color].name + ' store and ' + n + ' of its houses, dropping parcels at every stop. ' + TR.stats.bus + ' delivered by bus so far.</p>';
+  html += '<div class="acts"><button class="act" id="a-follow" type="button">' + (follow ? 'Stop following' : 'Follow') + '</button><button class="act danger" id="a-scrap" type="button">Scrap route</button></div>';
+  setHTML(body, html); box.hidden = false;
+  const f = $('a-follow'); if (f) f.onclick = () => { follow = !follow; if (follow) cam.auto = false; renderInspector(); refreshUI(); };
+  const sc = $('a-scrap'); if (sc) sc.onclick = () => { if (r) removeBusRoute(r.id); };
+}
+
+/* ------------------------------------------------------------ drones */
+function syncDrones() {
+  const want = perks ? Math.min(PERKS.drone.max, perks.drone | 0) : 0;
+  while (drones.length > want) drones.pop();
+  if (drones.length >= want) return;
+  const stores = []; for (let i = 0; i < buildings.length; i++) if (buildings[i].type === 'store') stores.push(i);
+  if (!stores.length) return;
+  while (drones.length < want) {
+    let best = -1, bs = -Infinity;                                    // the busiest store without a drone yet
+    for (const i of stores) { let sc = buildings[i].pins; for (const d of drones) if (d.store === i) sc -= 100; if (sc > bs) { bs = sc; best = i; } }
+    const s = buildings[best];
+    drones.push({id: ++droneSeq, store: best, house: -1, lastH: -1, x: bX(s), y: bY(s) - 10, ang: 0, st: 'idle', load: 0, color: -1, cash: 0, t: 0.5});
+    if (started && !trPending && !demoMode) popRing(bX(s), bY(s), '#ffffff');
+  }
+}
+function nearestHouse(s, skip) {
+  let best = -1, bd = Infinity, n = 0; const sx = cx(s.k), sy = cy(s.k);
+  for (let i = 0; i < buildings.length; i++) { const h = buildings[i]; if (h.type !== 'house' || h.color !== s.color) continue; n++; if (i === skip) continue; const d = Math.hypot(cx(h.k) - sx, cy(h.k) - sy); if (d < bd) { bd = d; best = i; } }
+  return best >= 0 ? best : (n ? skip : -1);
+}
+function droneFly(d, gx, gy, v) {
+  const dx = gx - d.x, dy = gy - d.y, L = Math.hypot(dx, dy);
+  if (L <= v) { d.x = gx; d.y = gy; return true; }
+  d.x += dx / L * v; d.y += dy / L * v; d.ang = lerpAng(d.ang, Math.atan2(dy, dx), 0.12); return false;
+}
+function droneStep(d, dt) {
+  let s = buildings[d.store];
+  if (!s || s.type !== 'store') { d.store = buildings.findIndex(b => b.type === 'store'); s = buildings[d.store]; if (!s) return; d.st = 'back'; }
+  const v = CFG.carSpeed * TRC.droneSpeed * dt;
+  switch (d.st) {
+    case 'idle': {
+      d.x = bX(s) + Math.cos(animT * 0.5 + d.id) * 5; d.y = bY(s) - 10 + Math.sin(animT * 0.5 + d.id) * 3; d.ang = lerpAng(d.ang, animT * 0.5 + d.id + Math.PI / 2, 0.1);
+      d.t -= dt; if (d.t > 0) break;
+      if (s.pins - s.claimed > 0) { const hi = nearestHouse(s, d.lastH); if (hi >= 0) { s.claimed++; d.house = hi; d.st = 'load'; d.t = TRC.droneLoad; } else d.t = 2; }
+      else d.t = 0.5;
+      break;
+    }
+    case 'load':
+      d.t -= dt; if (d.t > 0) break;
+      s.claimed = Math.max(0, s.claimed - 1);
+      if (s.pins > 0 && buildings[d.house]) {
+        s.pins--; s.served++; s.timer = Math.max(0, s.timer - CFG.arrivalRelief); if (s.contract) s.contract.got++;
+        d.load = 1; d.color = s.color; d.cash = Math.round(payPerParcel(s)); d.st = 'out';
+        popText(bX(s), bY(s) - 14, '-1', COLORS[s.color].hex);
+      } else { d.st = 'idle'; d.t = 1; }
+      break;
+    case 'out': {
+      const h = buildings[d.house]; if (!h) { d.st = 'back'; break; }
+      if (droneFly(d, tx(h.k), ty(h.k) - 4, v)) { creditDelivery(d.house, 1, d.cash, d.color); TR.stats.drone++; stats.trips++; d.lastH = d.house; d.load = 0; d.cash = 0; d.st = 'back'; }
+      break;
+    }
+    case 'back': if (droneFly(d, bX(s), bY(s) - 10, v)) { d.st = 'idle'; d.t = 0.3; d.color = -1; } break;
+    default: d.st = 'idle';
+  }
+}
+
+/* ------------------------------------------------------------ the tick, save and load */
+function stepTransport(dt) {
+  if (trPending) finishTransportLoad();
+  ensureTr();
+  trSyncT -= dt; if (trSyncT <= 0) { trSyncT = 1; syncDrones(); syncTransportTools(); }
+  for (const t of trains) trainStep(t, dt);
+  for (let i = busRoutes.length - 1; i >= 0; i--) busTick(busRoutes[i], dt);
+  for (const d of drones) droneStep(d, dt);
+}
+function transportSave() {
+  const list = []; for (let k = 0; k < N; k++) if (rail[k]) list.push([k, rlnk[k]]);
+  return {on: [TR.railOn ? 1 : 0, TR.busOn ? 1 : 0], rail: list, dstat: TR.stats,
+    trains: trains.map(t => ({k: t.k, load: t.load, col: t.color, cash: t.cash})),
+    buses: busRoutes.map(r => ({s: r.store, h: r.houses.slice(), i: r.bus.bus.i, load: r.bus.load, cash: r.bus.cash, ppp: r.bus.bus.ppp})),
+    drones: drones.map(d => ({s: d.store, h: d.house, st: d.st, x: +d.x.toFixed(1), y: +d.y.toFixed(1), load: d.load, cash: d.cash, col: d.color}))};
+}
+/* the rail layer comes back at once; trains, buses and drones are rebuilt on the first tick, once the roads exist */
+function transportLoad(o) {
+  if (!o || typeof o !== 'object') return;
+  if (Array.isArray(o.rail)) for (const p of o.rail) if (Array.isArray(p) && Number.isInteger(p[0]) && p[0] >= 0 && p[0] < N) { rail[p[0]] = 1; rlnk[p[0]] = p[1] & 255; }
+  for (let k = 0; k < N; k++) if (rail[k]) for (let d = 0; d < 8; d++) if ((rlnk[k] >> d) & 1) { const n = nbr(k, d); if (n < 0 || !rail[n]) rlnk[k] &= ~(1 << d); }
+  TR.railOn = !!(o.on && o.on[0]); TR.busOn = !!(o.on && o.on[1]);
+  if (o.dstat) TR.stats = {train: o.dstat.train | 0, bus: o.dstat.bus | 0, drone: o.dstat.drone | 0};
+  trPending = o;
+}
+function finishTransportLoad() {
+  const o = trPending; trPending = null;
+  rebuildRail();
+  for (const st of (o.trains || [])) {
+    if (!(st.k >= 0 && st.k < N && rail[st.k])) continue;
+    const t = trains.find(x => x.comp === railComp[st.k]); if (!t) continue;
+    t.k = st.k; t.nk = st.k; t.x = tx(st.k); t.y = ty(st.k); t.load = clamp(st.load | 0, 0, TRC.trainCap); t.color = st.col >= 0 && st.col < COLORS.length ? st.col : -1; if (t.color < 0) t.load = 0; t.cash = +st.cash || 0;
+  }
+  for (const b of (o.buses || [])) {
+    const r = makeBusRoute(b.s, b.h, true); if (!r) continue;
+    r.bus.load = clamp(b.load | 0, 0, TRC.busCap); r.bus.cash = +b.cash || 0; r.bus.bus.ppp = +b.ppp || 0; r.bus.bus.i = clamp(b.i | 0, 0, r.houses.length - 1);
+  }
+  syncDrones();
+  (o.drones || []).forEach((sd, i) => {
+    const d = drones[i]; if (!d) return;
+    if (buildings[sd.s] && buildings[sd.s].type === 'store') d.store = sd.s;
+    d.house = buildings[sd.h] && buildings[sd.h].type === 'house' ? sd.h : -1;
+    d.st = sd.st === 'out' && d.house >= 0 && sd.load > 0 ? 'out' : sd.st === 'back' ? 'back' : 'idle';
+    d.load = d.st === 'out' ? 1 : 0; d.cash = +sd.cash || 0; d.color = d.st === 'out' && sd.col >= 0 && sd.col < COLORS.length ? sd.col : -1;
+    if (isFinite(sd.x) && isFinite(sd.y)) { d.x = sd.x; d.y = sd.y; }
+  });
+}
+
+/* ------------------------------------------------------------ drawing */
+function buildRailPaths() {
+  const P = {ver: railVer, bed: new Path2D(), rails: new Path2D(), lone: new Path2D(), xings: []};
+  for (let k = 0; k < N; k++) {
+    if (!rail[k]) continue;
+    const x = tx(k), y = ty(k);
+    if (!rlnk[k]) { P.lone.moveTo(x - 0.01, y); P.lone.lineTo(x + 0.01, y); }
+    if (road[k]) { let a = 0; for (let d = 0; d < 8; d++) if ((lnk[k] >> d) & 1) { a = Math.atan2(DY[d], DX[d]); break; } P.xings.push({k, x, y, a}); }
+    for (let d = 2; d <= 5; d++) {
+      if (!((rlnk[k] >> d) & 1)) continue; const n = nbr(k, d); if (n <= k) continue;
+      const nx = tx(n), ny = ty(n), L = Math.hypot(nx - x, ny - y), ux = (nx - x) / L, uy = (ny - y) / L, o = 2.4;
+      P.bed.moveTo(x, y); P.bed.lineTo(nx, ny);
+      P.rails.moveTo(x - uy * o, y + ux * o); P.rails.lineTo(nx - uy * o, ny + ux * o);
+      P.rails.moveTo(x + uy * o, y - ux * o); P.rails.lineTo(nx + uy * o, ny - ux * o);
+    }
+  }
+  railCache = P;
+}
+function drawRail(vr) {
+  if (trPending) finishTransportLoad();
+  if (!railN) return;
+  if (railCache.ver !== railVer) buildRailPaths();
+  const P = railCache, bed = PAL.pave || '#cbc9bd', dark = shade(bed, -0.3), steel = theme === 'dark' ? '#b4bcc3' : '#7f8a93';
+  ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.globalAlpha = SUN.a; ctx.translate(SUN.x * 1.2, SUN.y * 1.2); ctx.strokeStyle = PAL.sh; ctx.lineWidth = 11.5; ctx.stroke(P.bed); ctx.stroke(P.lone); ctx.translate(-SUN.x * 1.2, -SUN.y * 1.2); ctx.globalAlpha = 1;
+  ctx.strokeStyle = bed; ctx.lineWidth = 10; ctx.stroke(P.bed); ctx.stroke(P.lone);                        // ballast
+  ctx.strokeStyle = dark; ctx.lineWidth = 7.4; ctx.lineCap = 'butt'; ctx.setLineDash([1.7, 4.3]); ctx.stroke(P.bed); ctx.setLineDash([]); ctx.lineCap = 'round';   // sleepers
+  ctx.strokeStyle = steel; ctx.lineWidth = 1.3; ctx.stroke(P.rails);                                       // two rails
+  for (const st of stations) drawStation(st);
+  for (const xg of P.xings) drawCrossing(xg);
+  ctx.restore();
+}
+/* a small platform on the building's side of the rail, with a round shelter in the building's colour */
+function drawStation(st) {
+  const b = buildings[st.b]; if (!b) return;
+  const a = Math.atan2(DY[st.d], DX[st.d]), x = tx(st.k) + DX[st.d] * 10, y = ty(st.k) + DY[st.d] * 10, col = COLORS[b.color].hex;
+  dropShadow(x, y, a, 1, 1.4, [[-2.3, -9, 4.6, 18, 2.3]]);
+  ctx.save(); ctx.translate(x, y); ctx.rotate(a);
+  rr(-2.3, -9, 4.6, 18, 2.3); ctx.fillStyle = theme === 'dark' ? '#6b7574' : '#ebe6d8'; ctx.fill(); ctx.lineWidth = 0.8; ctx.strokeStyle = rgba(col, 0.9); ctx.stroke();
+  ctx.fillStyle = col; ctx.beginPath(); ctx.arc(0, -5, 2.4, 0, 6.3); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.beginPath(); ctx.arc(-0.6, -5.6, 0.9, 0, 6.3); ctx.fill();
+  ctx.fillStyle = rgba(col, 0.6); for (const py of [1, 4, 7]) { rr(-1.2, py - 0.5, 2.4, 1, 0.5); ctx.fill(); }
+  ctx.restore();
+}
+/* striped gate arms either side of the rails across the road; they flash red while a train is near */
+function drawCrossing(xg) {
+  const shut = xingT && xingT[xg.k] > clock, blink = shut && Math.sin(animT * 9) > 0;
+  for (const sgn of [-1, 1]) {
+    ctx.save(); ctx.translate(xg.x + Math.cos(xg.a) * sgn * 9.5, xg.y + Math.sin(xg.a) * sgn * 9.5); ctx.rotate(xg.a + Math.PI / 2);
+    rr(-6.5, -1.4, 13, 2.8, 1.4); ctx.fillStyle = '#f6f2e8'; ctx.fill();
+    ctx.fillStyle = shut ? '#ff3b30' : '#d8352a'; for (let i = 0; i < 3; i++) { rr(-5.4 + i * 4.3, -1.4, 2.1, 2.8, 1); ctx.fill(); }
+    ctx.fillStyle = blink ? '#ff3b30' : '#5a2a28'; ctx.beginPath(); ctx.arc(sgn * 7.6, 0, 1.5, 0, 6.3); ctx.fill();
+    ctx.restore();
+  }
+}
+function drawTrain(t) {
+  t.da = lerpAng(t.da, t.ang, 0.25);
+  const col = t.color >= 0 ? COLORS[t.color].hex : (theme === 'dark' ? '#8b97a0' : '#9ba6ad'), tl = trainTail(t, 18), ta = tl.a, wx = tl.x, wy = tl.y;
+  dropShadow(wx, wy, ta, 1, 2.6, [[-7.5, -3.8, 15, 7.6, 2.8]]);
+  ctx.save(); ctx.translate(wx, wy); ctx.rotate(ta);                                           // the wagon
+  rr(-7.5, -3.8, 15, 7.6, 2.8); ctx.fillStyle = col; ctx.fill(); ctx.lineWidth = 0.6; ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.stroke();
+  rr(-6.2, -2.7, 12.4, 5.4, 1.8); ctx.fillStyle = 'rgba(255,255,255,.2)'; ctx.fill();
+  for (let i = 0; i < TRC.trainCap; i++) { ctx.fillStyle = i < t.load ? '#e3b46a' : 'rgba(0,0,0,.2)'; rr(-5.3 + (i % 3) * 3.7, i < 3 ? -2.1 : 0.5, 2.7, 1.6, 0.5); ctx.fill(); }
+  ctx.restore();
+  ctx.strokeStyle = '#2b333a'; ctx.lineWidth = 1.2; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(wx + Math.cos(ta) * 7, wy + Math.sin(ta) * 7); ctx.lineTo(t.x - Math.cos(t.da) * 8.5, t.y - Math.sin(t.da) * 8.5); ctx.stroke();
+  dropShadow(t.x, t.y, t.da, 1, 3, [[-9, -4, 18, 8, 3]]);
+  ctx.save(); ctx.translate(t.x, t.y); ctx.rotate(t.da);                                        // the locomotive
+  rr(-9, -4, 18, 8, 3); ctx.fillStyle = theme === 'dark' ? '#4a5660' : '#3b4650'; ctx.fill(); ctx.lineWidth = 0.6; ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.stroke();
+  rr(-8, -1, 16, 2, 1); ctx.fillStyle = col; ctx.fill();
+  rr(2, -3, 5.6, 6, 2); ctx.fillStyle = 'rgba(24,44,58,.9)'; ctx.fill();
+  ctx.fillStyle = '#fff5d6'; for (const vx of [-6.4, -3.4, -0.4]) { ctx.beginPath(); ctx.arc(vx, -2.6, 0.85, 0, 6.3); ctx.fill(); ctx.beginPath(); ctx.arc(vx, 2.6, 0.85, 0, 6.3); ctx.fill(); }
+  ctx.fillStyle = '#ffd98a'; ctx.beginPath(); ctx.arc(8.2, 0, 1.1, 0, 6.3); ctx.fill();
+  ctx.restore();
+}
+function drawBus(c) {
+  c.da = c.da === undefined ? c.ang : lerpAng(c.da, c.ang, 0.28);
+  const L = TRC.busLen, Wd = 7.6, hw = Wd / 2, col = COLORS[c.color].hex;
+  dropShadow(c.x, c.y, c.da, 1, 3, [[-L / 2, -hw, L, Wd, 3]]);
+  ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.da);
+  for (const x of [L / 2 - 4, -L / 2 + 4]) for (const sy of [-1, 1]) wheel(x, sy * hw, 3.2, 1.3);
+  rr(-L / 2, -hw, L, Wd, 3); ctx.fillStyle = col; ctx.fill(); ctx.lineWidth = 0.6; ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.stroke();
+  rr(-L / 2 + 1.2, -1.1, L - 4.6, 2.2, 1.1); ctx.fillStyle = '#f4f2ec'; ctx.fill();                      // white roof stripe
+  rr(L / 2 - 3.6, -hw + 0.8, 2.7, Wd - 1.6, 1.2); ctx.fillStyle = 'rgba(24,44,58,.9)'; ctx.fill();        // windscreen
+  ctx.fillStyle = 'rgba(24,44,58,.85)';
+  for (let i = 0; i < 5; i++) for (const sy of [-1, 1]) { ctx.beginPath(); ctx.arc(-L / 2 + 2.6 + i * 3.2, sy * (hw - 1.45), 0.95, 0, 6.3); ctx.fill(); }   // round windows
+  for (let i = 0; i < TRC.busCap; i++) { ctx.fillStyle = i < c.load ? '#e3b46a' : 'rgba(0,0,0,.22)'; rr(-L / 2 + 3 + i * 3.6, -0.75, 2.6, 1.5, 0.5); ctx.fill(); }
+  ctx.fillStyle = '#fff5c8'; ctx.beginPath(); ctx.arc(L / 2 - 0.9, -hw + 1.3, 0.85, 0, 6.3); ctx.fill(); ctx.beginPath(); ctx.arc(L / 2 - 0.9, hw - 1.3, 0.85, 0, 6.3); ctx.fill();
+  if (c.brake) { ctx.fillStyle = '#ff4a3a'; ctx.beginPath(); ctx.arc(-L / 2 + 0.8, -hw + 1.3, 0.7, 0, 6.3); ctx.fill(); ctx.beginPath(); ctx.arc(-L / 2 + 0.8, hw - 1.3, 0.7, 0, 6.3); ctx.fill(); }
+  ctx.restore();
+  if (sel && sel.type === 'car' && sel.ref === c) {
+    ctx.strokeStyle = theme === 'dark' ? '#fff' : '#12303f'; ctx.lineWidth = 1.8 / Math.max(0.6, cam.z * 0.6);
+    ctx.beginPath(); ctx.arc(c.x, c.y, 14 + Math.sin(animT * 5), 0, 6.3); ctx.stroke();
+  }
+}
+const DRONE_STD = {body: '#f4f2ec', rotor: '#1f262b', k: 'nose'}, DRONE_ARMS = [[4.4, -3.9], [4.4, 3.9], [-4.4, -3.9], [-4.4, 3.9]];
+/* a drone from above: four spinning rotors on short arms, a rounded body, a parcel slung underneath */
+function drawDrone(d, sc, preview) {
+  const sk = GEN_P.drone[design('drone')] || DRONE_STD, body = sk.body, rot_ = sk.rotor, acc = d.color >= 0 ? COLORS[d.color].hex : '#9ba6ad', pc = sk.c || acc;
+  const spin = REDUCED_MOTION ? 0.4 : animT * 24 + d.id;
+  if (gfx.shadows !== 'off') { ctx.save(); ctx.globalAlpha = SUN.a * 0.45; ctx.fillStyle = PAL.sh; ctx.beginPath(); ctx.ellipse(d.x + SUN.x * 7 * (sc || 1), d.y + SUN.y * 7 * (sc || 1), 6.5 * (sc || 1), 5 * (sc || 1), d.ang, 0, 6.3); ctx.fill(); ctx.restore(); }
+  ctx.save(); ctx.translate(d.x, d.y); ctx.rotate(d.ang); if (sc && sc !== 1) ctx.scale(sc, sc);
+  if (sk.k === 'glow') { ctx.save(); ctx.globalCompositeOperation = 'lighter'; const gl = ctx.createRadialGradient(0, 0, 1, 0, 0, 9); gl.addColorStop(0, rgba(pc, 0.6)); gl.addColorStop(1, rgba(pc, 0)); ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(0, 0, 9, 0, 6.3); ctx.fill(); ctx.restore(); }
+  ctx.strokeStyle = rot_; ctx.lineWidth = 1.1; ctx.lineCap = 'round'; ctx.beginPath(); for (const [ax, ay] of DRONE_ARMS) { ctx.moveTo(0, 0); ctx.lineTo(ax, ay); } ctx.stroke();
+  for (const [ax, ay] of DRONE_ARMS) {
+    ctx.fillStyle = rgba(rot_, 0.8); for (let i = 0; i < 3; i++) { const a = spin * (ax > 0 ? 1 : -1) + i * 2.094 + ay; ctx.beginPath(); ctx.arc(ax + Math.cos(a) * 2.3, ay + Math.sin(a) * 2.3, 0.75, 0, 6.3); ctx.fill(); }
+    ctx.fillStyle = rot_; ctx.beginPath(); ctx.arc(ax, ay, 0.95, 0, 6.3); ctx.fill();
+  }
+  if (d.load > 0) { ctx.fillStyle = '#e3b46a'; rr(-1.7, 1.4, 3.4, 2.6, 0.6); ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,.45)'; rr(-0.25, 1.4, 0.5, 2.6, 0.2); ctx.fill(); }
+  rr(-4.2, -2.6, 8.4, 5.2, 2.6); ctx.fillStyle = body; ctx.fill(); ctx.lineWidth = 0.5; ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.stroke();
+  if (sk.k === 'dots') { ctx.fillStyle = pc; for (const px of [-2.2, 0, 2.2]) { ctx.beginPath(); ctx.arc(px, 0.3, 0.7, 0, 6.3); ctx.fill(); } }
+  else if (sk.k === 'band') { ctx.fillStyle = pc; rr(-1.2, -2.6, 2.4, 5.2, 0.9); ctx.fill(); }
+  else if (sk.k === 'stripe') { ctx.fillStyle = pc; rr(-4.2, -0.7, 8.4, 1.4, 0.7); ctx.fill(); }
+  else if (sk.k === 'nose' || !sk.k) { ctx.fillStyle = acc; rr(1.2, -1.6, 2.4, 3.2, 1.2); ctx.fill(); }
+  ctx.fillStyle = 'rgba(255,255,255,.4)'; rr(-3.4, -2.1, 3.6, 1.1, 0.55); ctx.fill();
+  ctx.fillStyle = 'rgba(24,44,58,.9)'; ctx.beginPath(); ctx.arc(3.3, 0, 0.8, 0, 6.3); ctx.fill();
+  ctx.restore();
+}
+function drawDrones() { for (const d of drones) drawDrone(d, 1, false); }   // above the badges: they fly
+function drawTransport() {
+  for (const t of trains) drawTrain(t);
+  if (sel && sel.type === 'car' && sel.ref.isBus) drawBusRoute(busRouteOf(sel.ref), COLORS[sel.ref.color].hex);
+  if (busPick && tool === 'bus') { const s = buildings[busPick.store]; if (s) drawBusRoute({store: busPick.store, houses: busPick.houses}, COLORS[s.color].hex); }
+}
+function drawBusRoute(r, col) {
+  if (!r) return;
+  const s = buildings[r.store]; if (!s) return;
+  ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = 2.2; ctx.setLineDash([5, 5]); ctx.lineDashOffset = REDUCED_MOTION ? 0 : -animT * 20; ctx.globalAlpha = 0.8;
+  ctx.beginPath(); let px = bX(s), py = bY(s);
+  for (const hi of r.houses) { const h = buildings[hi]; if (!h) continue; ctx.moveTo(px, py); ctx.lineTo(tx(h.k), ty(h.k)); px = tx(h.k); py = ty(h.k); }
+  ctx.moveTo(px, py); ctx.lineTo(bX(s), bY(s)); ctx.stroke(); ctx.setLineDash([]);
+  const box = plotBox(s, 3); rr(box.x, box.y, box.w, box.h, 8); ctx.stroke();
+  for (const hi of r.houses) { const h = buildings[hi]; if (h) { ctx.beginPath(); ctx.arc(tx(h.k), ty(h.k), 20 + Math.sin(animT * 4), 0, 6.3); ctx.stroke(); } }
+  ctx.restore();
+}
+
+/* ------------------------------------------------------------ hooks: wrap rather than edit the busy functions */
+const _stepTraffic61 = stepTraffic;
+stepTraffic = function (dt) { _stepTraffic61(dt); stepTransport(dt); };
+const _drawCar61 = drawCar;
+drawCar = function (c, sb) { if (c.isBus) return drawBus(c); return _drawCar61(c, sb); };
+const _eraseAt61 = eraseAt;
+eraseAt = function (k, silent) { if (k >= 0 && rail[k] && parkAt[k] < 0 && depotAt[k] < 0 && !sign[k] && !special[k]) return eraseRail(k); return _eraseAt61(k, silent); };
+const _renderInspector61 = renderInspector;
+renderInspector = function () { if (sel && sel.type === 'car' && sel.ref && sel.ref.isBus) { renderBusInspector(); return; } _renderInspector61(); };
+const _refreshUI61 = refreshUI;
+refreshUI = function () { ensureTr(); if (busPick && tool !== 'bus') busPick = null; _refreshUI61(); syncTransportTools(); };
 
 /* ---------------------------------------------------------------------
    5. RENDERING — a flat, top-down canvas.
@@ -4112,6 +4766,181 @@ function withCtx(g, fn) { const keep = ctx; ctx = g; try { fn(); } finally { ctx
 let W = 900, H = 700, dpr = 1;
 const cam = {x: 0, y: 0, z: 1, auto: true};
 const insets = {l: 0, r: 0, t: 0, b: 0};
+/* ---- quality: shadows, decoration density, smooth motion and a frame cap. Three presets, or your own mix. */
+const GFX_PRESETS = {high: {shadows: 'on', decor: 1, smooth: true, cap: 0}, balanced: {shadows: 'simple', decor: 0.6, smooth: true, cap: 60}, battery: {shadows: 'off', decor: 0.3, smooth: false, cap: 30}};
+const GFX_NOTES = {high: 'Everything on. Best on computers.', balanced: 'Simple shadows, fewer decorations, 60 fps. The phone default.', battery: 'No shadows, few decorations, 30 fps. Easiest on the battery.', custom: 'Your own mix.'};
+let gfx = Object.assign({preset: 'high'}, GFX_PRESETS.high);
+function gfxPresetOf() { for (const k in GFX_PRESETS) { const p = GFX_PRESETS[k]; if (p.shadows === gfx.shadows && +p.decor === +gfx.decor && !!p.smooth === !!gfx.smooth && +p.cap === +gfx.cap) return k; } return 'custom'; }
+function setGfx(o) { Object.assign(gfx, o); gfx.preset = gfxPresetOf(); savePrefs(true); syncGfxUI(); }
+function syncGfxUI() {
+  const seg = (id, v) => document.querySelectorAll('#' + id + ' button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v !== undefined ? +b.dataset.v === +v || b.dataset.v === String(v) : b.dataset.gfx === v)));
+  seg('gfx-pre', gfx.preset); seg('gfx-shadows', gfx.shadows); seg('gfx-decor', gfx.decor); seg('gfx-cap', gfx.cap);
+  const sm = $('gfx-smooth'); if (sm) sm.checked = !!gfx.smooth;
+  const n = $('gfx-note'); if (n) n.textContent = GFX_NOTES[gfx.preset] || GFX_NOTES.custom;
+}
+/* flow-view */
+/* ---------------------------------------------------------- traffic flow view (F2)
+   Roads tinted by how many cars use them (blue where they move freely, orange where they queue), little chevrons
+   drifting along the busy ones, and a ring round every junction coloured by its average wait. An edge's flow is cars
+   a minute: e.passed is snapshotted every 5 s of city time into a 12-slot ring kept in a Map by edge key, so it
+   survives rebuildNet(). Each junction keeps a five-minute history (a point every 10 s) for the inspector chart,
+   keyed by tile. Sampling runs from update() and costs a few comparisons a tick. */
+let showFlow = false;
+const FLOW_SLOTS = 12, FLOW_HIST = 30, FLOW_T = 6;
+const flowEdges = new Map(), flowNodes = new Map();
+let flowSampleAt = -99, flowHistAt = -99, flowPanelAt = -99, flowMax = 12, flowCols = null;
+function flowTick() {
+  if (clock < flowSampleAt) { flowSampleAt = flowHistAt = -99; flowEdges.clear(); flowNodes.clear(); flowMax = 12; }   // a new city
+  if (clock - flowSampleAt >= 5) {
+    flowSampleAt = clock;
+    let mx = 0;
+    for (const e of edges) {
+      let f = flowEdges.get(e.key);
+      if (!f || e.passed < f.ring[f.i]) { f = {ring: new Array(FLOW_SLOTS).fill(e.passed), i: 0, n: 0, rate: 0}; flowEdges.set(e.key, f); }
+      f.i = (f.i + 1) % FLOW_SLOTS; const old = f.ring[f.i]; f.ring[f.i] = e.passed;
+      f.n = Math.min(FLOW_SLOTS, f.n + 1);
+      f.rate = (e.passed - old) * FLOW_SLOTS / f.n;           // cars in the last minute (scaled up while the ring fills)
+      if (f.rate > mx) mx = f.rate;
+    }
+    flowMax += (Math.max(12, mx) - flowMax) * 0.5;            // the tint scale follows the busiest road, gently
+    if (flowEdges.size > edges.length + 64) for (const k of flowEdges.keys()) if (!edgeMap.has(k)) flowEdges.delete(k);
+  }
+  if (clock - flowHistAt >= 10) {
+    flowHistAt = clock;
+    for (const nd of nodeList) {
+      if (!nd.junction) continue;
+      let h = flowNodes.get(nd.k);
+      if (!h || nd.passed < h.last) { h = {pts: [], last: nd.passed, seen: [nd.passed]}; flowNodes.set(nd.k, h); }
+      const w = nd.waitN ? nd.waitSum / nd.waitN : 0;
+      h.seen.push(nd.passed); if (h.seen.length > 4) h.seen.shift();           // cars a minute over the last 30 s, so the line isn't all spikes
+      h.pts.push({rate: (nd.passed - h.seen[0]) * 6 / (h.seen.length - 1), jam: w / 10, w}); h.last = nd.passed;
+      if (h.pts.length > FLOW_HIST) h.pts.shift();
+    }
+    if (flowNodes.size > nodeList.length) for (const k of flowNodes.keys()) if (!nodes[k] || !nodes[k].junction) flowNodes.delete(k);
+  }
+}
+function flowRateInto(nd) { let r = 0; for (const e of nd.ins) { const f = flowEdges.get(e.key); if (f) r += f.rate; } return r; }
+function flowPalette() {
+  const cs = getComputedStyle(document.documentElement), get = (k, d) => (cs.getPropertyValue(k) || '').trim() || d;
+  flowCols = {good: get('--good', '#43d17a'), mid: get('--mid', '#ffb02e'), bad: get('--bad', '#ff5a4a'),
+              pill: theme === 'dark' ? 'rgba(255,255,255,.92)' : 'rgba(18,48,63,.88)', pillInk: theme === 'dark' ? '#12303f' : '#fff', lut: []};
+  for (let j = 0; j < 3; j++) for (let t = 0; t < FLOW_T; t++) {        // j: 0 moving, 1 slowing, 2 queued; t: how busy
+    const u = t / (FLOW_T - 1), m = j / 2, r = Math.round(70 + (255 - 70) * m), g = Math.round(150 + (140 - 150) * m), b = Math.round(255 + (40 - 255) * m);
+    flowCols.lut.push('rgba(' + r + ',' + g + ',' + b + ',' + (0.16 + 0.56 * u).toFixed(2) + ')');
+  }
+}
+const flowBuckets = []; for (let i = 0; i < 3 * FLOW_T; i++) flowBuckets.push([]);
+const flowBusy = [], flowRing = [[], [], []];
+function drawFlow(vr) {
+  if (!flowCols) flowPalette();
+  const x0 = vr.x0 - CELL, y0 = vr.y0 - CELL, x1 = vr.x1 + CELL, y1 = vr.y1 + CELL, o = CFG.laneOffset * laneSign;
+  for (const b of flowBuckets) b.length = 0;
+  flowBusy.length = 0;
+  const inv = 1 / Math.max(12, flowMax);
+  for (const e of edges) {
+    if (Math.max(e.ax, e.bx) < x0 || Math.min(e.ax, e.bx) > x1 || Math.max(e.ay, e.by) < y0 || Math.min(e.ay, e.by) > y1) continue;
+    const f = flowEdges.get(e.key), t = clamp((f ? f.rate : 0) * inv, 0, 1), ti = Math.min(FLOW_T - 1, Math.floor(t * FLOW_T));
+    flowBuckets[(e.q < 0.5 ? 0 : e.q < 1.5 ? 1 : 2) * FLOW_T + ti].push(e);
+    if (t > 0.3) flowBusy.push(e);
+  }
+  ctx.save();
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (let i = 0; i < flowBuckets.length; i++) {
+    const b = flowBuckets[i]; if (!b.length) continue;
+    ctx.strokeStyle = flowCols.lut[i]; ctx.lineWidth = 5 + 7 * ((i % FLOW_T) / (FLOW_T - 1));
+    ctx.beginPath();
+    for (const e of b) {                                      // one continuous line along plain road; a gap where a junction ring sits
+      const s0 = nodes[e.a] && nodes[e.a].junction ? e.r0 : 0, s1 = nodes[e.b] && nodes[e.b].junction ? e.stop : e.L;
+      ctx.moveTo(e.ax + e.ux * s0 + e.nx * o, e.ay + e.uy * s0 + e.ny * o); ctx.lineTo(e.ax + e.ux * s1 + e.nx * o, e.ay + e.uy * s1 + e.ny * o);
+    }
+    ctx.stroke();
+  }
+  if (flowBusy.length && cam.z > 0.55) {                      // chevrons drift the way the traffic goes
+    const SP = 16, off = REDUCED_MOTION ? 6 : (animT * 26) % SP;
+    ctx.strokeStyle = 'rgba(255,255,255,.8)'; ctx.lineWidth = 1.7; ctx.beginPath();
+    for (const e of flowBusy) {
+      const bx = e.ax + e.nx * o, by = e.ay + e.ny * o;
+      for (let s = e.r0 + off; s < e.stop - 1; s += SP) {
+        const x = bx + e.ux * s, y = by + e.uy * s, tx_ = x - e.ux * 3.2, ty_ = y - e.uy * 3.2;
+        ctx.moveTo(tx_ + e.nx * 3.2, ty_ + e.ny * 3.2); ctx.lineTo(x, y); ctx.lineTo(tx_ - e.nx * 3.2, ty_ - e.ny * 3.2);
+      }
+    }
+    ctx.stroke();
+  }
+  for (const r of flowRing) r.length = 0;
+  for (const nd of nodeList) {
+    if (!nd.junction) continue;
+    const x = tx(nd.k), y = ty(nd.k); if (x < x0 || x > x1 || y < y0 || y > y1) continue;
+    const w = nd.waitN ? nd.waitSum / nd.waitN : 0;
+    flowRing[w < 1.5 ? 0 : w < 4 ? 1 : 2].push(nd);
+  }
+  const cols = [flowCols.good, flowCols.mid, flowCols.bad];
+  for (let i = 0; i < 3; i++) {
+    const L = flowRing[i]; if (!L.length) continue;
+    ctx.beginPath(); for (const nd of L) { const x = tx(nd.k), y = ty(nd.k); ctx.moveTo(x + 11, y); ctx.arc(x, y, 11, 0, 6.3); }
+    ctx.fillStyle = cols[i]; ctx.globalAlpha = 0.16; ctx.fill();
+    ctx.globalAlpha = 0.95; ctx.strokeStyle = cols[i]; ctx.lineWidth = 2.6; ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  if (cam.z > 1.3) {                                          // the wait itself, on a little pill under the ring
+    ctx.font = '700 6.5px system-ui, -apple-system, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (const L of flowRing) for (const nd of L) {
+      if (!nd.waitN) continue;
+      const x = tx(nd.k), y = ty(nd.k) + 18, t = (nd.waitSum / nd.waitN).toFixed(1) + ' s', pw = ctx.measureText(t).width + 7;
+      ctx.fillStyle = flowCols.pill; rr(x - pw / 2, y - 4.6, pw, 9.2, 4.6); ctx.fill();
+      ctx.fillStyle = flowCols.pillInk; ctx.fillText(t, x, y + 0.3);
+    }
+  }
+  ctx.restore();
+  if (animT - flowPanelAt > 1) { flowPanelAt = animT; flowPalette(); renderFlowPanel(); }
+}
+/* the five worst places right now: junctions by average wait (plus what's queued on the way in), and plain
+   stretches of road that are backing up (a store entrance, a dead end) by how many cars stand on them */
+function flowSpots() {
+  const list = [];
+  for (const nd of nodeList) {
+    if (!nd.junction) continue;
+    const w = nd.waitN ? nd.waitSum / nd.waitN : 0, r = flowRateInto(nd); let q = 0;
+    for (const e of nd.ins) q += e.qRaw;
+    const score = w + q * 0.6;
+    if (score < 0.5 || (r <= 0 && q <= 0)) continue;
+    list.push({k: nd.k, x: tx(nd.k), y: ty(nd.k), score, what: JUNC_NAMES[nd.type] || 'Junction', w, q, r});
+  }
+  for (const e of edges) {
+    const nd = nodes[e.b]; if (!nd || nd.junction || e.q < 1) continue;
+    const f = flowEdges.get(e.key);
+    list.push({k: e.b, x: (e.ax + e.bx) / 2, y: (e.ay + e.by) / 2, score: e.q * 0.8, what: e.fast ? 'Motorway' : 'Road', w: -1, q: e.q, r: f ? f.rate : 0});
+  }
+  list.sort((a, b) => b.score - a.score);
+  return list.slice(0, 5);
+}
+function renderFlowPanel() {
+  const box = $('flow-list'); if (!box || !showFlow) return;
+  const spots = flowSpots();
+  setHTML(box, spots.length ? spots.map(o => '<div class="fp-row"><div><b>' + o.what + ' at col ' + (cx(o.k) - org + 1) + ', row ' + (cy(o.k) - org + 1) + '</b><small>' +
+    (o.w >= 0 ? o.w.toFixed(1) + ' s avg wait' + (o.q >= 1 ? ' \u00b7 ' + Math.round(o.q) + ' queued' : '') : Math.round(o.q) + ' queued') + ' \u00b7 ' + Math.round(o.r) + ' cars/min</small></div>' +
+    '<button class="act" type="button" data-flow-jump="' + o.x.toFixed(0) + ',' + o.y.toFixed(0) + '" aria-label="Jump to ' + o.what + ' at col ' + (cx(o.k) - org + 1) + ', row ' + (cy(o.k) - org + 1) + '">Jump</button></div>').join('')
+    : '<p class="fp-empty">Traffic is moving freely everywhere.</p>');
+}
+function toggleFlow(on) {
+  showFlow = on === undefined ? !showFlow : !!on;
+  flowCols = null;
+  const b = $('btn-flow'); if (b) b.setAttribute('aria-pressed', showFlow ? 'true' : 'false');
+  const p = $('flow-panel'); if (p) p.hidden = !showFlow;
+  if (showFlow) { flowPanelAt = animT; renderFlowPanel(); }
+}
+/* the inspector chart: cars a minute (filled) and average wait (line, 5 s = full height) over the last five minutes */
+function drawFlowChart(c, nd) {
+  if (!c || !c.getContext) return;
+  const h = flowNodes.get(nd.k), pts = h ? h.pts : [];
+  if (pts.length < 2) {
+    const g = c.getContext('2d'); g.clearRect(0, 0, c.width, c.height);
+    g.fillStyle = (getComputedStyle(document.documentElement).getPropertyValue('--soft') || '#aab').trim(); g.font = '11px system-ui, sans-serif'; g.textBaseline = 'middle';
+    g.fillText('Watching this junction\u2026 the chart fills in over five minutes.', 8, c.height / 2); return;
+  }
+  const n = pts.length, off = FLOW_HIST - n, D = FLOW_HIST - 1;
+  plotSeries(c, pts, i => (i + off) / D, [4, 3, 2, 1].map(m => ({x: (D - m * 6) / D, label: '\u2212' + m + ' min'})));   // ticks left to right
+}
 let theme = 'light', animT = 0, showHeat = false, showGrid = false, nightOn = true, fxOn = true, showMoto = true;
 let fx = [];
 
@@ -4149,7 +4978,21 @@ const GEN = {
     ['tartan', 'Tartan', 40, '', {k: 'plaid', c: ['#1f3a5f', '#c8102e']}], ['cloudnine', 'Cloud nine', 30, '', {k: 'clouds', c: ['#ffffff']}],
     ['mermaid', 'Mermaid scales', 55, '', {k: 'scales', c: ['#e9fbff'], glow: '#5ccbd4'}], ['flowerpower', 'Flower power', 45, '', {k: 'flowers', c: ['#ffffff', '#ffd23a']}],
     ['hoops', 'Hoops', 25, '', {k: 'rings', c: ['#ffffff']}], ['lagoonfade', 'Lagoon fade', 50, '', {k: 'fade', c: ['#7fe3ff', '#2f9bff']}],
-    ['bumblebee', 'Bumblebee', 40, '', {k: 'zebra', c: ['#1f262b'], roof: '#ffd23a'}], ['firefly', 'Firefly', 0, 'U', {k: 'dots', c: ['#fff1a8'], glow: '#ffd23a'}]
+    ['bumblebee', 'Bumblebee', 40, '', {k: 'zebra', c: ['#1f262b'], roof: '#ffd23a'}], ['firefly', 'Firefly', 0, 'U', {k: 'dots', c: ['#fff1a8'], glow: '#ffd23a'}],
+    /* p40 designs */
+    ['paws', 'Paw prints', 30, '', {k: 'paws', c: ['#ffffff']}], ['tiger', 'Tiger', 35, '', {k: 'tiger', c: ['#1f262b']}],
+    ['softcamo', 'Soft camo', 35, '', {k: 'blobs', c: ['#5b7a4a', '#8a9e6a', '#3e5a36']}], ['sunsettop', 'Sunset top', 30, '', {k: 'vfade', c: ['#ffd23a', '#ff6f61']}],
+    ['swirl', 'Swirl', 35, '', {k: 'swirl', c: ['#ffffff']}], ['mintdots', 'Mint dots', 25, '', {k: 'dots', c: ['#7ff0c8']}],
+    ['gingham', 'Gingham', 30, '', {k: 'plaid', c: ['#ffffff', '#ffffff']}], ['bluebird', 'Bluebird', 30, '', {k: 'band', c: ['#2f7de1'], roof: '#2f7de1'}],
+    ['dalmatian', 'Dalmatian', 35, '', {k: 'spots', c: ['#1f262b']}], ['peppermint', 'Peppermint', 30, '', {k: 'rings', c: ['#ff6b8b']}],
+    ['ladybird', 'Ladybird', 45, '', {k: 'spots', c: ['#1f262b'], roof: '#e0483e'}], ['lavaflow', 'Lava flow', 50, '', {k: 'blobs', c: ['#ff6a2b', '#ffb347'], glow: '#ff6a2b'}],
+    ['seafoam', 'Sea foam', 50, '', {k: 'clouds', c: ['#e9fbff'], glow: '#5ccbd4'}], ['koi', 'Koi', 55, '', {k: 'blobs', c: ['#ff6f3c', '#ffffff']}],
+    ['goldpaws', 'Golden paws', 45, '', {k: 'paws', c: ['#ffd23a']}],
+    ['northern', 'Northern lights', 0, 'U', {k: 'vfade', c: ['#4dffc3', '#7a5bff'], glow: '#4dffc3'}], ['twinkle', 'Twinkle', 0, 'U', {k: 'dots', c: ['#ffffff', '#7fe3ff'], big: 1, glow: '#7fe3ff'}],
+    /* p51 Halloween */
+    ['ghost', 'Ghost', 60, '', {k: 'ghost'}],
+    /* p60 campaign reward */
+    ['trophy', 'Trophy', 0, 'C', {k: 'star', c: ['#ffd23a', '#fffaf0'], roof: '#ffd23a', glow: '#ffd23a'}]
   ],
   house: [
     ['cabin', 'Log cabin', 35, '', {shape: 'box', roof: '#8a5a35', pat: 'logs', x: ['chimney']}], ['chalet', 'Alpine chalet', 40, '', {shape: 'box', roof: '#6b4a30', pat: 'ridge', x: ['chimney', 'flowers']}],
@@ -4164,7 +5007,18 @@ const GEN = {
     ['leafpod', 'Leafy pod', 35, '', {shape: 'round', roof: '#6fae55', pat: 'leaves', door: 'col'}], ['chequered', 'Chequered cottage', 30, '', {shape: 'box', roof: '#f4efe1', pat: 'checker', acc: 'col', x: ['chimney']}],
     ['snowcabin', 'Snowy cabin', 40, '', {shape: 'box', roof: '#7a5236', pat: 'logs', x: ['snow', 'chimney']}], ['bubblehouse', 'Bubble house', 55, '', {shape: 'dome', roof: '#cfeef7', pat: 'bubbles'}],
     ['terrace', 'Terrace garden', 50, '', {shape: 'box', roof: '#e9e4da', pat: 'terrace', acc: '#86c46a', x: ['umbrella']}], ['mintchip', 'Mint chip', 30, '', {shape: 'pill', roof: '#bff0dc', pat: 'chips', acc: '#6b4220', x: ['hedge']}],
-    ['arched', 'Arched cottage', 50, '', {shape: 'box', roof: '#ffffff', pat: 'arcs'}], ['moonhouse', 'Moon house', 0, 'U', {shape: 'dome', roof: '#e8e6df', pat: 'craters', x: ['antenna']}]
+    ['arched', 'Arched cottage', 50, '', {shape: 'box', roof: '#ffffff', pat: 'arcs'}], ['moonhouse', 'Moon house', 0, 'U', {shape: 'dome', roof: '#e8e6df', pat: 'craters', x: ['antenna']}],
+    /* p40 designs */
+    ['rainbowroof', 'Rainbow roof', 35, '', {shape: 'box', roof: '#f4efe1', pat: 'rainbow'}], ['lattice', 'Lattice cottage', 30, '', {shape: 'box', roof: '#e9e4da', pat: 'lattice', acc: 'col', x: ['chimney']}],
+    ['mosaic', 'Mosaic house', 35, '', {shape: 'pill', roof: '#f4f2ec', pat: 'mosaic', acc: 'col'}], ['twill', 'Twill roof', 30, '', {shape: 'box', roof: 'col', pat: 'twill'}],
+    ['porthole', 'Porthole house', 35, '', {shape: 'round', roof: '#dfe8ef', acc: 'col', x: ['portholes']}], ['balloonhouse', 'Balloon house', 40, '', {shape: 'box', roof: '#fbf8f1', pat: 'dots', acc: 'col', x: ['balloons']}],
+    ['keep', 'Little keep', 40, '', {shape: 'box', roof: '#cfc8bb', pat: 'tiles', acc: 'col', x: ['turret']}], ['lemon', 'Lemon cottage', 25, '', {shape: 'pill', roof: '#fff3c4', pat: 'tiles'}],
+    ['lilacdome', 'Lilac dome', 30, '', {shape: 'dome', roof: '#d9b8e8', pat: 'dots', acc: '#ffffff'}], ['peachpod', 'Peach pod', 25, '', {shape: 'round', roof: '#f6cdb4', pat: 'scallop', acc: 'col'}],
+    ['arbour', 'Rose arbour', 40, '', {shape: 'box', roof: '#e9e4da', pat: 'lattice', acc: '#6fae55', x: ['flowers', 'hedge']}], ['parlour', 'Ice cream parlour', 55, '', {shape: 'pill', roof: '#ffd1e3', pat: 'rainbow', cols: ['#ffd1e3', '#fff3c4', '#c9eedc'], x: ['umbrella']}],
+    ['starrydome', 'Starry dome', 50, '', {shape: 'dome', roof: '#1a1f3a', pat: 'dots', acc: '#fff1a8', x: ['antenna']}], ['sunsetdome', 'Sunset dome', 50, '', {shape: 'dome', roof: '#ff9f6a', pat: 'rainbow', cols: ['#ffd23a', '#ff9f6a', '#e3527a', '#8a4fb0']}],
+    ['candyquilt', 'Candy quilt', 0, 'U', {shape: 'box', roof: '#fbf8f1', pat: 'mosaic', acc: 'col', cols: ['#ff6b8b', '#ffd23a', '#7fe3ff', '#3fd16a'], x: ['balloons']}], ['crystaldome', 'Crystal dome', 0, 'U', {shape: 'dome', roof: '#bfe8ff', pat: 'lattice', acc: '#ffffff', x: ['turret']}],
+    /* p60 campaign reward */
+    ['mayor', 'Mayor\u2019s hall', 0, 'C', {shape: 'box', roof: '#e9e4da', pat: 'arcs', acc: '#d4af37', x: ['turret', 'flowers']}]
   ],
   road: [
     ['midnight', 'Midnight', 35, '', {road: '#1d2a3a', edge: '#0d1520', lane: '#ffd23a'}], ['mint', 'Mint', 30, '', {road: '#bfe8d6', edge: '#4fa688', lane: '#ffffff'}],
@@ -4179,7 +5033,16 @@ const GEN = {
     ['butter', 'Butter', 30, '', {road: '#f2e3a6', edge: '#b89a3a', lane: '#ffffff'}], ['teal', 'Teal', 35, '', {road: '#2f7a78', edge: '#174746', lane: '#c7fff5'}],
     ['blush', 'Blush', 30, '', {road: '#f3c9cf', edge: '#c06b7a', lane: '#ffffff'}], ['sage', 'Sage', 25, '', {road: '#b8c6a8', edge: '#6f8261', lane: '#ffffff'}],
     ['coral', 'Coral', 45, '', {road: '#ff9b85', edge: '#c4523c', lane: '#fff3e0'}], ['denim', 'Denim', 50, '', {road: '#3d5a80', edge: '#22324a', lane: '#e0fbfc'}],
-    ['aurora', 'Aurora', 0, 'U', {road: '#10233a', edge: '#4dffc3', lane: '#c59bff'}]
+    ['aurora', 'Aurora', 0, 'U', {road: '#10233a', edge: '#4dffc3', lane: '#c59bff'}],
+    /* p40 designs */
+    ['lemon', 'Lemon', 25, '', {road: '#fff0b0', edge: '#c9a227', lane: '#ffffff'}], ['lilac', 'Lilac', 30, '', {road: '#e3d6f3', edge: '#8f74c4', lane: '#ffffff'}],
+    ['moss', 'Moss', 30, '', {road: '#7f9a6a', edge: '#4a6038', lane: '#f1f5e6'}], ['pebble', 'Pebble', 25, '', {road: '#cfc8bb', edge: '#8a8378', lane: '#ffffff'}],
+    ['copper', 'Copper', 50, '', {road: '#b87a55', edge: '#6a3f26', lane: '#ffe6cc'}], ['seafoam', 'Sea foam', 30, '', {road: '#cdeee3', edge: '#4fa688', lane: '#ffffff'}],
+    ['charcoal', 'Charcoal', 30, '', {road: '#3a3f45', edge: '#1d2024', lane: '#e3e9ee'}], ['mulberry', 'Mulberry', 45, '', {road: '#7a3b5e', edge: '#45203a', lane: '#ffd1f0'}],
+    ['honey', 'Honey', 45, '', {road: '#e8b85a', edge: '#9a6f1c', lane: '#fff8e1'}],
+    ['cherry', 'Cherry', 45, '', {road: '#c8102e', edge: '#7a1830', lane: '#ffffff'}], ['pearl', 'Pearl', 50, '', {road: '#f7f5f0', edge: '#c9c3ba', lane: '#d4af37', wet: '#ffffff'}],
+    ['neonmint', 'Neon mint', 55, '', {road: '#10233a', edge: '#4dffc3', lane: '#ffffff'}],
+    ['sunset', 'Sunset', 0, 'U', {road: '#2d1638', edge: '#ffa05c', lane: '#ffd23a'}], ['candyfloss', 'Candy floss', 0, 'U', {road: '#ffd1e3', edge: '#7fe3ff', lane: '#ffffff', wet: '#ffe4ee'}]
   ],
   store: [
     ['awning', 'Striped awning', 30, '', {base: '#fbf8f1', pat: 'stripes', acc: 'col'}], ['skylights', 'Skylights', 30, '', {base: '#c9ced2', pat: 'grid', acc: '#aee0f5'}],
@@ -4194,7 +5057,18 @@ const GEN = {
     ['daisies', 'Daisy roof', 40, '', {base: '#7cbf5e', pat: 'flowers', acc: 'col'}], ['lanes', 'Racing lanes', 35, '', {base: '#3e4448', pat: 'lanes', acc: 'col'}],
     ['cloudy', 'Cloudy sky', 30, '', {base: 'col', pat: 'clouds', acc: '#ffffff'}], ['tiles', 'Soft tiles', 25, '', {base: '#e9e4da', pat: 'tiles', acc: 'col'}],
     ['sundeck', 'Sun deck', 55, '', {base: '#c9a876', pat: 'sundeck', acc: 'col'}], ['jungle', 'Jungle roof', 45, '', {base: '#4f8d3f', pat: 'leaves', acc: 'col'}],
-    ['nightdots', 'Midnight dots', 30, '', {base: '#1d2a3a', pat: 'dots', acc: 'col'}], ['bigtop', 'Big top', 0, 'U', {base: '#f4efe1', pat: 'bigtop', acc: 'col'}]
+    ['nightdots', 'Midnight dots', 30, '', {base: '#1d2a3a', pat: 'dots', acc: 'col'}], ['bigtop', 'Big top', 0, 'U', {base: '#f4efe1', pat: 'bigtop', acc: 'col'}],
+    /* p40 designs */
+    ['mosaic', 'Mosaic roof', 35, '', {base: '#f4f2ec', pat: 'mosaic', acc: 'col'}], ['rainbow', 'Rainbow roof', 35, '', {base: '#fbf8f1', pat: 'rainbow', acc: 'col'}],
+    ['spiral', 'Spiral roof', 30, '', {base: 'col', pat: 'spiral', acc: '#ffffff'}], ['bloom', 'Big bloom', 35, '', {base: '#7cbf5e', pat: 'bloom', acc: 'col'}],
+    ['honeycomb', 'Honeycomb', 30, '', {base: '#f2c14e', pat: 'honey', acc: 'col'}], ['peachtiles', 'Peach tiles', 25, '', {base: '#f6cdb4', pat: 'tiles', acc: 'col'}],
+    ['lilacdots', 'Lilac dots', 25, '', {base: '#d9b8e8', pat: 'dots', acc: '#ffffff'}], ['seafoam', 'Sea foam', 30, '', {base: '#bff0dc', pat: 'scallop', acc: 'col'}],
+    ['teabox', 'Tea box', 30, '', {base: 'dark', pat: 'grid', acc: 'col'}],
+    ['sunsetbands', 'Sunset bands', 45, '', {base: '#ff9f6a', pat: 'rainbow', cols: ['#ffd23a', '#ff9f6a', '#e3527a', '#8a4fb0'], acc: 'col'}], ['lagoonpool', 'Lagoon pool', 50, '', {base: '#e9e4da', pat: 'pool', acc: '#4fc6d6'}],
+    ['nightbloom', 'Night bloom', 50, '', {base: '#1d2a3a', pat: 'bloom', acc: 'col'}], ['candymosaic', 'Candy mosaic', 55, '', {base: '#fbf8f1', pat: 'mosaic', acc: 'col', cols: ['#ff6b8b', '#ffd23a', '#7fe3ff', '#3fd16a']}],
+    ['goldspiral', 'Golden spiral', 0, 'U', {base: '#d4af37', pat: 'spiral', acc: '#fff1a8'}], ['auroraroof', 'Aurora roof', 0, 'U', {base: '#10233a', pat: 'rainbow', cols: ['#3dffb0', '#2fd6ff', '#7a5bff', '#d65bff'], acc: 'col'}],
+    /* p51 Halloween */
+    ['batwing', 'Bat wing', 60, '', {base: '#2a1f3d', pat: 'batwing', acc: 'col'}]
   ],
   light: [
     ['mint', 'Mint', 25, '', {h: '#bff0dc', ring: '#4fa688'}], ['coral', 'Coral', 25, '', {h: '#ff8a75'}], ['sky', 'Sky', 25, '', {h: '#9fd5f2'}],
@@ -4208,7 +5082,16 @@ const GEN = {
     ['butter', 'Butter', 25, '', {h: '#f2e3a6', ring: '#b89a3a'}], ['daisy', 'Daisy', 40, '', {h: '#ffffff', ring: '#ffd23a', shape: 'flower'}], ['blossom', 'Blossom', 45, '', {h: '#ff9ecb', ring: '#ffffff', shape: 'flower'}],
     ['cloud', 'Cloud', 40, '', {h: '#f4f8fb', ring: '#9fd5f2', shape: 'cloud'}], ['storm', 'Storm cloud', 35, '', {h: '#5b6f86', ring: '#c9d3dc', shape: 'cloud'}], ['olive', 'Olive', 25, '', {h: '#8c8f5a', shape: 'pill'}],
     ['marine', 'Marine', 30, '', {h: '#1a7ca6', ring: '#7fe3ff', shape: 'square'}], ['studded', 'Studded', 50, '', {h: '#2b3036', ring: '#ffd23a', studs: '#ffd23a'}],
-    ['sunburst', 'Sunburst', 0, 'U', {h: '#ffd23a', ring: '#ff9f1a', glow: '#ffb02e', shape: 'flower'}]
+    ['sunburst', 'Sunburst', 0, 'U', {h: '#ffd23a', ring: '#ff9f1a', glow: '#ffb02e', shape: 'flower'}],
+    /* p40 designs */
+    ['lemon', 'Lemon', 25, '', {h: '#fff3c4', ring: '#e8c55a'}], ['sage', 'Sage', 25, '', {h: '#b8c6a8', ring: '#6f8261', shape: 'pill'}],
+    ['denim', 'Denim', 30, '', {h: '#3d5a80', ring: '#a9c4e0', shape: 'square'}], ['coralring', 'Coral ring', 30, '', {h: '#ff8a75', shape: 'ring', ring: '#ffffff'}],
+    ['pebbleblob', 'Pebble blob', 50, '', {h: '#9aa3a8', shape: 'blob', ring: '#e3e9ee'}], ['pearl', 'Pearl', 45, '', {h: '#f4f2ec', ring: '#ffffff', cap: 1}],
+    ['lifebuoy', 'Life buoy', 45, '', {h: '#ffffff', shape: 'ring', dash: '#e0483e'}], ['mossy', 'Mossy', 25, '', {h: '#6fae55', shape: 'blob', ring: '#4f8d3f'}],
+    ['bubblegum', 'Bubblegum', 45, '', {h: '#ff9ecb', shape: 'blob', cap: 1}], ['liquorice', 'Liquorice', 45, '', {h: '#2b3036', shape: 'ring', dash: '#ffffff'}],
+    ['candystripe', 'Candy stripe', 45, '', {h: '#ffffff', shape: 'ring', dash: '#ff6b8b', ring: '#ff6b8b'}], ['lagoonglow', 'Lagoon glow', 50, '', {h: '#0e3b3e', ring: '#5ff2d0', glow: '#5ff2d0', shape: 'ring'}],
+    ['moonstone', 'Moonstone', 50, '', {h: '#e8e6df', ring: '#c9c5ba', cap: 1, glow: '#ffffff', shape: 'blob'}],
+    ['lifesaver', 'Spinning buoy', 0, 'U', {h: '#ffd23a', shape: 'ring', dash: '#e0483e', spin: 1, glow: '#ffd23a'}], ['cosmicring', 'Cosmic ring', 0, 'U', {h: '#1a0f3d', shape: 'ring', dash: '#c59bff', spin: 1, glow: '#c59bff'}]
   ],
   round: [
     ['rosegarden', 'Rose garden', 35, '', {fill: '#6fb35e', pat: 'petals', acc: '#ff6b8b', c2: '#ffd23a'}], ['sunflower', 'Sunflower', 35, '', {fill: '#86c46a', pat: 'petals', acc: '#ffd23a', c2: '#7a4a20'}],
@@ -4225,7 +5108,18 @@ const GEN = {
     ['stepping', 'Stepping stones', 30, '', {fill: '#6fb35e', pat: 'stones', acc: ['#cfc8bb', '#b4ada1']}], ['fullmoon', 'Full moon', 45, '', {fill: '#e8e6df', pat: 'craters', acc: '#c9c5ba', c2: '#d8d5cc'}],
     ['balance', 'Balance', 40, '', {fill: '#f4efe1', pat: 'yinyang', acc: '#2b3036'}], ['cookie', 'Cookie', 30, '', {fill: '#d9a066', pat: 'dots', acc: ['#5a3418', '#6b4220']}],
     ['clock', 'Clock', 55, '', {fill: '#ffffff', pat: 'clock', acc: '#2b3036', c2: '#e0483e'}], ['flowerbed', 'Flower bed', 35, '', {fill: '#6fb35e', pat: 'flowerbed', acc: ['#ff6b8b', '#ffffff', '#b07bff'], c2: '#ffd23a'}],
-    ['planet', 'Ringed planet', 0, 'U', {fill: '#1a0f3d', pat: 'planet', acc: '#f0b26a', c2: '#ffd9a8', dots: '#ffffff'}]
+    ['planet', 'Ringed planet', 0, 'U', {fill: '#1a0f3d', pat: 'planet', acc: '#f0b26a', c2: '#ffd9a8', dots: '#ffffff'}],
+    /* p40 designs */
+    ['maze', 'Hedge maze', 35, '', {fill: '#86c46a', pat: 'maze', acc: '#4f8d3f'}], ['bubblepool', 'Bubble pool', 30, '', {fill: '#5fb4d6', pat: 'bubbles', acc: '#ffffff'}],
+    ['ripple', 'Ripple pond', 30, '', {fill: '#7cc9a6', pat: 'ripple', acc: '#e9fbff'}], ['tyre', 'Tyre', 25, '', {fill: '#2b3036', pat: 'tyre', acc: '#9aa3a8'}],
+    ['peachrings', 'Peach rings', 25, '', {fill: '#f6cdb4', pat: 'rings', acc: '#ffffff'}], ['lilacbed', 'Lilac bed', 30, '', {fill: '#6fb35e', pat: 'flowerbed', acc: ['#d9b8e8', '#ffffff', '#a58bdb'], c2: '#ffd23a'}],
+    ['sandcircle', 'Sand circle', 25, '', {fill: '#efe3c8', pat: 'zen', acc: '#c9a876'}], ['lemonslice', 'Lemon slice', 45, '', {fill: '#ffe066', pat: 'citrus', acc: '#fff7c2', c2: '#ffef9a'}],
+    ['berrypie', 'Berry pie', 35, '', {fill: '#d9a066', pat: 'wedges', acc: ['#a0184f'], dots: '#ffffff'}],
+    ['lavapool', 'Lava pool', 50, '', {fill: '#2a1714', pat: 'bubbles', acc: '#ff6a2b'}], ['icerink', 'Ice rink', 45, '', {fill: '#dff3fb', pat: 'ripple', acc: '#ffffff'}],
+    ['racering', 'Race ring', 45, '', {fill: '#3e4448', pat: 'tyre', acc: '#ffffff'}],
+    ['goldmaze', 'Golden maze', 0, 'U', {fill: '#d4af37', pat: 'maze', acc: '#fff1a8'}], ['nebula', 'Nebula', 0, 'U', {fill: '#1a0f3d', pat: 'ripple', acc: '#c59bff', dots: '#ffffff'}],
+    /* p60 campaign reward */
+    ['medal', 'Medal', 0, 'C', {fill: '#d4af37', pat: 'bands', acc: ['#fff1a8', '#b8901c']}]
   ],
   bridge: [
     ['mint', 'Mint rails', 30, '', ['#4fd1a5', '#bff0dc', '#2a9670']], ['cherry', 'Cherry', 35, '', ['#c8102e', '#ff8a75', '#7a1830']], ['ocean', 'Ocean', 35, '', ['#1a7ca6', '#7fe3ff', '#0d5f82']],
@@ -4238,7 +5132,15 @@ const GEN = {
     ['pebble', 'Pebble rails', 30, '', Object.assign(['#9aa3a8', '#e3e9ee', '#6b7378'], {k: 'beads', gap: 9})], ['mintchip', 'Mint chip', 35, '', Object.assign(['#bff0dc', '#6b4220', '#7fd1b0'], {k: 'beads', gap: 7})],
     ['pearl', 'Pearl', 50, '', Object.assign(['#f4f2ec', '#ffffff', '#c9c3ba'], {k: 'beads', gap: 7})], ['garland', 'Flower garland', 55, '', Object.assign(['#4f8d3f', '#86c46a', '#3f7a35'], {k: 'flowers', c: ['#ff6b8b', '#ffd23a', '#ffffff']})],
     ['lanterns', 'Lantern rails', 50, '', Object.assign(['#3a2a22', '#ffb347', '#2a1d17'], {k: 'beads', gap: 16, glow: '#ffb347'})], ['cotton', 'Cotton candy', 40, '', Object.assign(['#ffd1e3', '#ffffff', '#f5b8d0'], {k: 'flowers', c: ['#ffffff', '#9fd5f2']})],
-    ['seaside', 'Seaside stripes', 35, '', Object.assign(['#ffffff', '#2f7de1', '#dfe8f2'], {k: 'bands'})], ['starlight', 'Starlight', 0, 'U', Object.assign(['#151a28', '#fff1a8', '#0b0f1f'], {k: 'beads', gap: 10, glow: '#fff1a8'})]
+    ['seaside', 'Seaside stripes', 35, '', Object.assign(['#ffffff', '#2f7de1', '#dfe8f2'], {k: 'bands'})], ['starlight', 'Starlight', 0, 'U', Object.assign(['#151a28', '#fff1a8', '#0b0f1f'], {k: 'beads', gap: 10, glow: '#fff1a8'})],
+    /* p40 designs */
+    ['lilaclinks', 'Lilac links', 30, '', Object.assign(['#a58bdb', '#e9e1f5', '#7a5fb0'], {k: 'links'})], ['peachlinks', 'Peach links', 30, '', Object.assign(['#f6b89a', '#fff1e6', '#c97c5d'], {k: 'links'})],
+    ['sagerail', 'Sage rail', 25, '', Object.assign(['#b8c6a8', '#ffffff', '#6f8261'], {k: 'twinrail'})], ['butterrail', 'Butter rail', 25, '', Object.assign(['#f2e3a6', '#ffffff', '#b89a3a'], {k: 'twinrail'})],
+    ['chain', 'Chain rail', 45, '', Object.assign(['#5b6f86', '#c9d3dc', '#3a4a5a'], {k: 'chain'})], ['coralchain', 'Coral chain', 45, '', Object.assign(['#ff8a75', '#ffd9d0', '#c4523c'], {k: 'chain'})],
+    ['olive', 'Olive', 25, '', ['#8c8f5a', '#f1ecc8', '#565833']], ['rose', 'Rose', 30, '', ['#e8a5b0', '#fff0f3', '#a0184f']], ['sky', 'Sky', 45, '', ['#9fd5f2', '#ffffff', '#5b9cc8']],
+    ['pearlchain', 'Pearl chain', 50, '', Object.assign(['#f4f2ec', '#ffffff', '#c9c3ba'], {k: 'chain', glow: '#ffffff'})], ['neonlinks', 'Neon links', 55, '', Object.assign(['#151a28', '#00e1ff', '#0b0f1f'], {k: 'links', glow: '#00e1ff'})],
+    ['icerail', 'Ice rail', 45, '', Object.assign(['#dff3fb', '#ffffff', '#7fc4e0'], {k: 'twinrail'})],
+    ['goldchain', 'Gold chain', 0, 'U', Object.assign(['#d4af37', '#fff1a8', '#8f6d10'], {k: 'chain', glow: '#ffd23a'})], ['auroralinks', 'Aurora links', 0, 'U', Object.assign(['#10233a', '#4dffc3', '#0b0f1f'], {k: 'links', glow: '#4dffc3'})]
   ],
   moto: [
     ['mint', 'Mint', 30, '', ['#bff0dc', '#4fd1a5']], ['peach', 'Peach', 30, '', ['#ffd9c2', '#f0b26a']], ['ocean', 'Ocean', 35, '', ['#7fe3ff', '#1a7ca6', '#0d5f82']],
@@ -4251,9 +5153,47 @@ const GEN = {
     ['lagoon', 'Lagoon', 40, '', ['#bff3ff', '#5ccbd4', '#1a7ca6']], ['citrus', 'Citrus', 45, '', ['#fff1a8', '#ffb347', '#ff6f61']],
     ['catseye', 'Cat\u2019s eyes', 35, '', Object.assign(['#5a656e', '#3a4249'], {k: 'dots', x: '#ffd23a'})], ['pebbledash', 'Pebble dash', 30, '', Object.assign(['#cfc8bb', '#9a9389'], {k: 'dots', x: '#f4efe1'})],
     ['runway', 'Runway lights', 50, '', Object.assign(['#2b3240', '#1c2230'], {k: 'edge', x: '#7fe3ff'})], ['verge', 'Wildflower verge', 55, '', Object.assign(['#a8d88e', '#6fb35e'], {k: 'flowers', x: ['#ff6b8b', '#ffd23a', '#ffffff']})],
-    ['starlit', 'Starlit', 0, 'U', Object.assign(['#1a0f3d', '#0b0f1f'], {k: 'edge', x: '#fff1a8', glow: 1})]
+    ['starlit', 'Starlit', 0, 'U', Object.assign(['#1a0f3d', '#0b0f1f'], {k: 'edge', x: '#fff1a8', glow: 1})],
+    /* p40 designs */
+    ['sagerails', 'Sage rails', 30, '', Object.assign(['#b8c6a8', '#8ea07e'], {k: 'rails', x: '#ffffff'})], ['peachcentre', 'Peach centre', 30, '', Object.assign(['#ffd9c2', '#f0b26a'], {k: 'centre', x: '#ffffff'})],
+    ['lilacpills', 'Lilac pills', 30, '', Object.assign(['#e9e1f5', '#a58bdb'], {k: 'pills', x: '#ffffff'})], ['olive', 'Olive', 25, '', ['#c8cb9a', '#8c8f5a']],
+    ['rose', 'Rose', 30, '', ['#f3c9cf', '#e8a5b0', '#a0184f']], ['sky', 'Sky', 25, '', ['#dff3fb', '#9fd5f2']],
+    ['mintrails', 'Mint rails', 30, '', Object.assign(['#bff0dc', '#4fd1a5'], {k: 'rails', x: '#2a9670'})], ['sandpills', 'Sand pills', 30, '', Object.assign(['#efe3c8', '#c9a876'], {k: 'pills', x: '#fff7e6'})],
+    ['cherrycentre', 'Cherry centre', 45, '', Object.assign(['#ff8a75', '#c8102e'], {k: 'centre', x: '#ffffff'})],
+    ['nightrails', 'Night rails', 50, '', Object.assign(['#2b3240', '#1c2230'], {k: 'rails', x: '#ffd23a', glow: 1})], ['icepills', 'Ice pills', 45, '', Object.assign(['#dff3fb', '#7fc4e0'], {k: 'pills', x: '#ffffff'})],
+    ['rainbowcentre', 'Rainbow centre', 50, '', Object.assign(['#f4efe1', '#e3e9ee'], {k: 'centre', x: ['#ff4d4d', '#ffd23a', '#3fd16a', '#2f9bff']})],
+    ['goldrails', 'Gold rails', 0, 'U', Object.assign(['#fff1a8', '#d4af37', '#8f6d10'], {k: 'rails', x: '#fff8d0', glow: 1})], ['neonpills', 'Neon pills', 0, 'U', Object.assign(['#151a28', '#0b0f1f'], {k: 'pills', x: '#ff3df2', glow: 1})]
   ]
 };
+/* p61 drone skins: body colour, rotor colour and a pattern (nose / dots / band / stripe / glow) */
+GEN.drone = [
+  ['snow', 'Snow', 25, '', {body: '#ffffff', rotor: '#9fb3c2', k: 'band', c: '#dfe8f2'}], ['mint', 'Mint', 25, '', {body: '#bff0dc', rotor: '#2a9670', k: 'nose'}],
+  ['peach', 'Peach', 25, '', {body: '#ffd9c2', rotor: '#c97c5d', k: 'nose'}], ['lilac', 'Lilac', 25, '', {body: '#e9e1f5', rotor: '#8a5bd6', k: 'nose'}],
+  ['sky', 'Sky', 25, '', {body: '#dff3fb', rotor: '#5b9cc8', k: 'nose'}], ['butter', 'Butter', 25, '', {body: '#fff3c4', rotor: '#b89a3a', k: 'nose'}],
+  ['slate', 'Slate', 25, '', {body: '#5b6f86', rotor: '#c9d3dc', k: 'stripe', c: '#9fb3c2'}], ['charcoal', 'Charcoal', 30, '', {body: '#3a4046', rotor: '#ffd23a', k: 'dots', c: '#ffd23a'}],
+  ['polka', 'Polka dots', 30, '', {body: '#f4f2ec', rotor: '#e0483e', k: 'dots', c: '#e0483e'}], ['bluebird', 'Bluebird', 30, '', {body: '#2f7de1', rotor: '#dff3fb', k: 'band', c: '#ffffff'}],
+  ['ladybird', 'Ladybird', 35, '', {body: '#e0483e', rotor: '#1f262b', k: 'dots', c: '#1f262b'}], ['bumble', 'Bumblebee', 35, '', {body: '#ffd23a', rotor: '#1f262b', k: 'band', c: '#1f262b'}],
+  ['coral', 'Coral', 30, '', {body: '#ff8a75', rotor: '#ffffff', k: 'stripe', c: '#ffd9d0'}], ['teal', 'Teal', 30, '', {body: '#16a2b8', rotor: '#bff0dc', k: 'stripe', c: '#ffffff'}],
+  ['olive', 'Olive', 25, '', {body: '#8c8f5a', rotor: '#f1ecc8', k: 'nose'}], ['rose', 'Rose', 30, '', {body: '#e8a5b0', rotor: '#a0184f', k: 'dots', c: '#ffffff'}],
+  ['denim', 'Denim', 30, '', {body: '#3d5a80', rotor: '#98c1d9', k: 'band', c: '#98c1d9'}], ['sand', 'Sand', 25, '', {body: '#efe3c8', rotor: '#c9a876', k: 'stripe', c: '#c9a876'}],
+  ['forest', 'Forest', 30, '', {body: '#2e7d32', rotor: '#93c47d', k: 'nose'}], ['plum', 'Plum', 35, '', {body: '#5a3a6b', rotor: '#d9b8e8', k: 'dots', c: '#d9b8e8'}],
+  ['pistachio', 'Pistachio', 30, '', {body: '#93c47d', rotor: '#2e5a24', k: 'band', c: '#f4efe1'}], ['tangerine', 'Tangerine', 30, '', {body: '#e88a0e', rotor: '#fff1a8', k: 'stripe', c: '#fff1a8'}],
+  ['pearl', 'Pearl', 40, '', {body: '#f3efe6', rotor: '#c9c3ba', k: 'band', c: '#ffffff'}], ['copper', 'Copper', 35, '', {body: '#b57a4a', rotor: '#e0a878', k: 'stripe', c: '#6a2c20'}],
+  ['lagoon', 'Lagoon', 35, '', {body: '#1a9a9a', rotor: '#bff3ff', k: 'dots', c: '#bff3ff'}], ['raspberry', 'Raspberry', 35, '', {body: '#a0184f', rotor: '#ff9ecb', k: 'band', c: '#ff9ecb'}],
+  ['midnight', 'Midnight', 40, '', {body: '#1c2050', rotor: '#8a94e6', k: 'dots', c: '#ffffff'}], ['chalk', 'Chalk', 25, '', {body: '#e3e9ee', rotor: '#7d8790', k: 'nose'}],
+  ['mocha', 'Mocha', 30, '', {body: '#8a7060', rotor: '#f6b89a', k: 'stripe', c: '#54301c'}], ['kelly', 'Kelly green', 30, '', {body: '#2e9e44', rotor: '#ffffff', k: 'band', c: '#ffffff'}],
+  ['neon', 'Neon', 55, '', {body: '#151a28', rotor: '#22e6ff', k: 'glow', c: '#22e6ff'}], ['pinkglow', 'Pink glow', 55, '', {body: '#2a1a33', rotor: '#ff3df2', k: 'glow', c: '#ff3df2'}],
+  ['ember', 'Ember', 50, '', {body: '#3a1f18', rotor: '#ff6a2b', k: 'glow', c: '#ff6a2b'}], ['sunrise', 'Sunrise', 45, '', {body: '#ff8a5c', rotor: '#ffd23a', k: 'band', c: '#ffd23a'}],
+  ['candycane', 'Candy cane', 50, '', {body: '#ffffff', rotor: '#c8102e', k: 'stripe', c: '#e0483e'}], ['tiger', 'Tiger', 45, '', {body: '#f0a81c', rotor: '#1f262b', k: 'stripe', c: '#1f262b'}],
+  ['icecream', 'Ice cream', 45, '', {body: '#ffd1e3', rotor: '#6b4220', k: 'dots', c: '#6b4220'}], ['royal', 'Royal', 50, '', {body: '#221a4c', rotor: '#d4af37', k: 'band', c: '#d4af37'}],
+  ['arctic', 'Arctic', 45, '', {body: '#bff3ff', rotor: '#ffffff', k: 'glow', c: '#bff3ff'}], ['lava', 'Lava', 55, '', {body: '#2a1714', rotor: '#ff5a1a', k: 'stripe', c: '#ffc23a'}],
+  ['firefly', 'Firefly', 50, '', {body: '#1f3a2a', rotor: '#fff1a8', k: 'glow', c: '#ffd23a'}], ['seafoam', 'Sea foam', 45, '', {body: '#3fbfad', rotor: '#e9fbff', k: 'dots', c: '#e9fbff'}],
+  ['honey', 'Honey', 45, '', {body: '#f2c511', rotor: '#8d5a35', k: 'dots', c: '#8d5a35'}], ['orchid', 'Orchid', 50, '', {body: '#b755c9', rotor: '#f6dfe6', k: 'glow', c: '#c9a3e0'}],
+  ['chrome', 'Chrome', 60, '', {body: '#c9d3dc', rotor: '#3a4046', k: 'stripe', c: '#ffffff'}],
+  ['gold', 'Gold', 0, 'U', {body: '#d4af37', rotor: '#fff1a8', k: 'glow', c: '#ffd23a'}], ['galaxy', 'Galaxy', 0, 'U', {body: '#1a0f3d', rotor: '#c59bff', k: 'dots', c: '#ffffff'}],
+  ['aurora', 'Aurora', 0, 'U', {body: '#0e1b2e', rotor: '#3dffb0', k: 'glow', c: '#4dffc3'}], ['toxic', 'Toxic', 0, 'U', {body: '#2a3a1a', rotor: '#7dff3a', k: 'glow', c: '#7dff3a'}],
+  ['starlight', 'Starlight', 0, 'U', {body: '#e8e4ff', rotor: '#8a5bff', k: 'dots', c: '#8a5bff'}]
+];
 const GEN_P = {}; for (const c in GEN) { GEN_P[c] = {}; for (const e of GEN[c]) GEN_P[c][e[0]] = e[4]; }
 /* a generated house: one rounded body (box, pill, round or dome), a roof pattern, a trim in the house's colour, a door and a few extras */
 function houseGen(p, b, col, model) {
@@ -4288,6 +5228,10 @@ function houseGen(p, b, col, model) {
   else if (pt === 'chips') { ctx.fillStyle = acc; ctx.beginPath(); for (let i = 0; i < 16; i++) { const cx = -10 + hash01(i, 161) * 20, cy = -13 + hash01(i, 162) * 15, a = hash01(i, 163) * 3; ctx.moveTo(cx + Math.cos(a) * 0.75, cy + Math.sin(a) * 0.75); ctx.ellipse(cx, cy, 0.75, 0.45, a, 0, 6.3); } ctx.fill(); }
   else if (pt === 'arcs') { const cs_ = [shade(col, 0.55), shade(col, 0.3), col, shade(col, -0.2)]; ctx.lineWidth = 2.3; ctx.lineCap = 'round'; for (let i = 0; i < 4; i++) { ctx.strokeStyle = cs_[i]; ctx.beginPath(); ctx.arc(0, 4.5, 13.5 - i * 2.4, Math.PI, 0); ctx.stroke(); } }
   else if (pt === 'craters') { for (let i = 0; i < 6; i++) { const cx = -6.5 + hash01(i, 171) * 13, cy = -11.5 + hash01(i, 172) * 12, cr = 0.9 + hash01(i, 173) * 1.5; dot(cx, cy, cr, shade(roof, -0.15)); dot(cx + cr * 0.22, cy + cr * 0.22, cr * 0.68, shade(roof, -0.05)); } }
+  else if (pt === 'lattice') { ctx.strokeStyle = acc; ctx.lineWidth = 0.7; ctx.lineCap = 'round'; ctx.globalAlpha = 0.85; ctx.beginPath(); for (let d = -30; d < 30; d += 3.4) { ctx.moveTo(d - 14, 5); ctx.lineTo(d + 6, -15); ctx.moveTo(d + 14, 5); ctx.lineTo(d - 6, -15); } ctx.stroke(); ctx.globalAlpha = 1; }
+  else if (pt === 'mosaic') { const cs_ = p.cols || [acc, shade(acc, 0.35), shade(acc, 0.6), '#ffffff']; for (let y = -13, j = 0; y < 4; y += 3, j++) for (let x = -12, i = 0; x < 12; x += 3, i++) { ctx.fillStyle = cs_[Math.floor(hash01(i * 17 + j, 251) * cs_.length)]; sfr(x + 0.2, y + 0.2, 2.6, 2.6); } }
+  else if (pt === 'rainbow') { const cs_ = p.cols || ['#ff6b6b', '#ffb347', '#ffd23a', '#3fd16a', '#2f9bff', '#8a5bff'], bh = 18 / cs_.length; cs_.forEach((c, i) => { ctx.fillStyle = c; sfr(-13, -14 + i * bh, 26, bh + 0.2); }); }
+  else if (pt === 'twill') { ctx.strokeStyle = shade(roof, -0.18); ctx.lineWidth = 0.6; ctx.lineCap = 'round'; ctx.beginPath(); for (let y = -12.5, j = 0; y < 4; y += 2.4, j++) for (let x = -12; x < 12; x += 2.4) { const up = j % 2; ctx.moveTo(x + 0.3, y + (up ? 1.4 : 0.2)); ctx.lineTo(x + 1.9, y + (up ? 0.2 : 1.4)); } ctx.stroke(); }
   ctx.restore();
   if (p.roof !== 'col' && !p.noTrim) { body(); ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.stroke(); }
   const dy = round ? 1.4 : p.shape === 'pill' ? -1.6 : 0.2;
@@ -4302,6 +5246,9 @@ function houseGen(p, b, col, model) {
     else if (xk === 'snow') { ctx.fillStyle = '#fbfdff'; ctx.beginPath(); for (let x = -9; x <= 9; x += 3) { const r_ = 1.5 + hash01(x + 20, 181) * 0.6, yy = round ? -5 - Math.sqrt(Math.max(0, 90 - x * x)) + 0.6 : p.shape === 'pill' ? -11.3 : -12.8; ctx.moveTo(x + r_, yy); ctx.arc(x, yy, r_, 0, 6.3); } ctx.fill(); }
     else if (xk === 'umbrella') { const ux = -7.4, uy = -8.4; dotShadow(ux, uy, 3, 3); for (let i = 0; i < 6; i++) { ctx.fillStyle = i % 2 ? '#ffffff' : col; ctx.beginPath(); ctx.moveTo(ux, uy); ctx.arc(ux, uy, 3, i * 1.047, (i + 1) * 1.047); ctx.closePath(); ctx.fill(); } dot(ux, uy, 0.6, shade(col, -0.3)); }
     else if (xk === 'hedge') for (let x = -9.5; x <= 9.6; x += 2.4) { dot(x, 4.6, 1.35, PAL.tree2); dot(x - 0.4, 4.2, 0.75, PAL.tree1); }
+    else if (xk === 'portholes') for (const px of [-4.6, 4.6]) { dot(px, -7.2, 2.2, acc); dot(px, -7.2, 1.45, '#bfe7f5'); dot(px - 0.4, -7.7, 0.5, 'rgba(255,255,255,.75)'); }
+    else if (xk === 'balloons') { ctx.strokeStyle = 'rgba(60,60,60,.45)'; ctx.lineWidth = 0.3; ctx.lineCap = 'round'; ctx.beginPath(); for (const [bx, by] of [[9.6, -12.5], [12.4, -8.6], [7.6, -16]]) { ctx.moveTo(bx, by + 1.8); ctx.quadraticCurveTo(bx - 0.8, by + 4.5, 10.5, -3.5); } ctx.stroke(); [[9.6, -12.5, '#ff6b8b'], [12.4, -8.6, '#7fe3ff'], [7.6, -16, '#ffd23a']].forEach(([bx, by, c]) => { dotShadow(bx, by, 1.8, 2.5); dot(bx, by, 1.8, c); dot(bx - 0.5, by - 0.6, 0.55, 'rgba(255,255,255,.6)'); }); }
+    else if (xk === 'turret') { dotShadow(-9, -11, 3.2, 3); dot(-9, -11, 3.2, '#cfc8bb'); dot(-9, -11, 2.3, col); dot(-9.6, -11.6, 0.7, 'rgba(255,255,255,.45)'); }
   }
   if (showSymbols) glyph(COLORS[b.color].glyph, 0, round ? -5 : -6, 2.3, roof.startsWith('#') && lum(roof) > 0.5 ? col : 'rgba(255,255,255,.92)');
 }
@@ -4330,7 +5277,22 @@ function storeGen(p, Bx, By, Bw, Bh, col) {
   else if (pt === 'sundeck') { for (let y = By, i = 0; y < By + Bh; y += 3, i++) { ctx.fillStyle = i % 2 ? '#b8946a' : '#c9a876'; sfr(Bx, y + 0.3, Bw, 2.6); } ctx.fillStyle = '#5fc4e6'; sfr(Bx + Bw * 0.5, By + 6, Bw * 0.4, Bh * 0.38); ctx.fillStyle = 'rgba(255,255,255,.55)'; sfr(Bx + Bw * 0.53, By + 9, Bw * 0.22, 1.4); ctx.fillStyle = '#fbf8f1'; sfr(Bx + 6, By + Bh - 12, 9, 4); sfr(Bx + 18, By + Bh - 12, 9, 4); for (const [ux, uy] of [[Bx + 12, By + 12], [Bx + Bw * 0.7, By + Bh - 9]]) { dot(ux + 1.5, uy + 2, 5, 'rgba(0,0,0,.15)'); for (let q = 0; q < 8; q++) { ctx.fillStyle = q % 2 ? '#ffffff' : acc; ctx.beginPath(); ctx.moveTo(ux, uy); ctx.arc(ux, uy, 5, q * 0.785, (q + 1) * 0.785); ctx.closePath(); ctx.fill(); } dot(ux, uy, 0.9, '#6b4a2e'); } }
   else if (pt === 'leaves') { for (let i = 0; i < 26; i++) { ctx.fillStyle = ['#2f6a3a', '#4f8d3f', '#6fae55'][i % 3]; ctx.beginPath(); ctx.ellipse(Bx + hash01(i, 222) * Bw, By + hash01(i, 223) * Bh, 4.6, 2.2, hash01(i, 221) * 6.3, 0, 6.3); ctx.fill(); } for (let i = 0; i < 7; i++) { const x = Bx + 5 + hash01(i, 224) * (Bw - 10), y = By + 5 + hash01(i, 225) * (Bh - 10); dot(x, y, 2.3, acc); dot(x, y, 0.8, '#ffd23a'); } }
   else if (pt === 'bigtop') { const cx = Bx + Bw / 2, cy = By + Bh / 2, R = Math.min(Bw, Bh) * 0.44; dot(cx + 1.6, cy + 2, R + 1.5, 'rgba(0,0,0,.15)'); for (let q = 0; q < 12; q++) { ctx.fillStyle = q % 2 ? '#ffffff' : acc; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, R, q * 0.5236, (q + 1) * 0.5236); ctx.closePath(); ctx.fill(); } for (let q = 0; q < 12; q++) { const a = (q + 0.5) * 0.5236; dot(cx + Math.cos(a) * R, cy + Math.sin(a) * R, R * 0.14, q % 2 ? acc : '#ffffff'); } dot(cx, cy, 2.6, '#ffd23a'); dot(cx - 0.7, cy - 0.7, 0.9, '#fff6c8'); }
+  else if (pt === 'mosaic') { const cs_ = p.cols || [acc, shade(acc, 0.3), shade(acc, 0.55), '#ffffff']; for (let y = By + 3, j = 0; y < By + Bh - 3; y += 7, j++) for (let x = Bx + 3, i = 0; x < Bx + Bw - 3; x += 7, i++) { ctx.fillStyle = cs_[Math.floor(hash01(i * 31 + j, 241) * cs_.length)]; sfr(x, y, 5.6, 5.6); } }
+  else if (pt === 'rainbow') { const cs_ = p.cols || ['#ff6b6b', '#ffb347', '#ffd23a', '#3fd16a', '#2f9bff', '#8a5bff'], bh = Bh / cs_.length; cs_.forEach((c, i) => { ctx.fillStyle = c; sfr(Bx + 2, By + i * bh + 0.6, Bw - 4, bh - 1.2); }); }
+  else if (pt === 'spiral') { const cx = Bx + Bw / 2, cy = By + Bh / 2, rx = Bw * 0.46, ry = Bh * 0.46; ctx.strokeStyle = acc; ctx.lineWidth = 2.4; ctx.lineCap = 'round'; ctx.beginPath(); for (let t = 0; t <= 14; t += 0.25) { const f_ = t / 14; t ? ctx.lineTo(cx + Math.cos(t) * f_ * rx, cy + Math.sin(t) * f_ * ry) : ctx.moveTo(cx, cy); } ctx.stroke(); }
+  else if (pt === 'bloom') { const cx = Bx + Bw / 2, cy = By + Bh / 2, R = Math.min(Bw, Bh) * 0.42; ctx.fillStyle = '#4f8d3f'; for (const [ex, ey] of [[Bx + 7, By + 7], [Bx + Bw - 7, By + 7], [Bx + 7, By + Bh - 7], [Bx + Bw - 7, By + Bh - 7]]) { ctx.beginPath(); ctx.ellipse(ex, ey, 5, 2.6, (ex - cx) * (ey - cy) > 0 ? 0.785 : -0.785, 0, 6.3); ctx.fill(); } dot(cx + 1.5, cy + 2, R * 0.92, 'rgba(0,0,0,.12)'); ctx.fillStyle = acc; for (let i = 0; i < 8; i++) { const a = i * 0.785; ctx.beginPath(); ctx.ellipse(cx + Math.cos(a) * R * 0.55, cy + Math.sin(a) * R * 0.55, R * 0.42, R * 0.24, a, 0, 6.3); ctx.fill(); } dot(cx, cy, R * 0.3, '#ffd23a'); dot(cx - R * 0.08, cy - R * 0.08, R * 0.12, 'rgba(255,255,255,.5)'); }
+  else if (pt === 'honey') { const b0 = C(p.base); for (let y = By + 5, j = 0; y < By + Bh - 2; y += 7, j++) for (let x = Bx + 5 + (j % 2) * 4; x < Bx + Bw - 2; x += 8) { dot(x, y, 3.3, acc); dot(x, y, 2.3, b0); dot(x - 0.7, y - 0.7, 0.6, 'rgba(255,255,255,.45)'); } }
   else if (pt === 'waves') { ctx.strokeStyle = acc; ctx.lineWidth = 1.6; ctx.lineCap = 'round'; ctx.beginPath(); for (let y = By + 6; y < By + Bh; y += 7) for (let x = Bx; x <= Bx + Bw; x += 1) { const yy = y + Math.sin(x * 0.35) * 1.6; x === Bx ? ctx.moveTo(x, yy) : ctx.lineTo(x, yy); } ctx.stroke(); }
+  else if (pt === 'batwing') {                            // bat-wing scallops along every edge, a crescent moon and a few stars in the store's colour
+    const b0 = C(p.base), rim = b0[0] === '#' ? shade(b0, -0.45) : 'rgba(0,0,0,.4)';
+    ctx.fillStyle = rim; ctx.beginPath();
+    for (let x = Bx + 4; x < Bx + Bw; x += 8) { ctx.moveTo(x + 4, By); ctx.arc(x, By, 4, 0, Math.PI); ctx.moveTo(x + 4, By + Bh); ctx.arc(x, By + Bh, 4, Math.PI, 6.2832); }
+    for (let y = By + 4; y < By + Bh; y += 8) { ctx.moveTo(Bx, y - 4); ctx.arc(Bx, y, 4, -1.5708, 1.5708); ctx.moveTo(Bx + Bw, y + 4); ctx.arc(Bx + Bw, y, 4, 1.5708, 4.7124); }
+    ctx.fill(); ctx.strokeStyle = acc; ctx.lineWidth = 1; ctx.stroke();
+    const mx = Bx + Bw / 2, my = By + Bh / 2, R = Math.min(Bw, Bh) * 0.2;
+    dot(mx + 1, my + 1.2, R, 'rgba(0,0,0,.2)'); dot(mx, my, R, acc); dot(mx + R * 0.5, my - R * 0.3, R * 0.8, b0);
+    for (const [sx, sy] of [[0.27, 0.3], [0.72, 0.24], [0.3, 0.74], [0.76, 0.7]]) dot(Bx + Bw * sx, By + Bh * sy, 0.9, rgba(acc, 0.8));
+  }
 }
 /* a generated roundabout middle: a fill and a pattern */
 function roundGen(p, x, y, IR) {
@@ -4357,6 +5319,10 @@ function roundGen(p, x, y, IR) {
   else if (pt === 'clock') { ctx.fillStyle = cs[0]; ctx.beginPath(); for (let i = 0; i < 12; i++) { const a = i * 0.5236, d = R0 - 1.2, rd = i % 3 ? 0.28 : 0.5; ctx.moveTo(x + Math.cos(a) * d + rd, y + Math.sin(a) * d); ctx.arc(x + Math.cos(a) * d, y + Math.sin(a) * d, rd, 0, 6.3); } ctx.fill(); const ph = dayPhase(), ha = ph * 12.566 - 1.5708, ma = ph * 150.8 - 1.5708; ctx.lineCap = 'round'; ctx.strokeStyle = cs[0]; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(ha) * R0 * 0.4, y + Math.sin(ha) * R0 * 0.4); ctx.stroke(); ctx.strokeStyle = p.c2 || cs[0]; ctx.lineWidth = 0.5; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(ma) * R0 * 0.64, y + Math.sin(ma) * R0 * 0.64); ctx.stroke(); dot(x, y, 0.6, cs[0]); }
   else if (pt === 'flowerbed') { for (let ring = 0; ring < 3; ring++) { const d = R0 * (0.76 - ring * 0.26), n = 12 - ring * 4; ctx.fillStyle = cs[ring % cs.length]; ctx.beginPath(); for (let i = 0; i < n; i++) { const a = i * 6.283 / n + ring * 0.3; ctx.moveTo(x + Math.cos(a) * d + 0.75, y + Math.sin(a) * d); ctx.arc(x + Math.cos(a) * d, y + Math.sin(a) * d, 0.75, 0, 6.3); } ctx.fill(); } dot(x, y, 0.9, p.c2 || '#ffd23a'); }
   else if (pt === 'planet') { const ringH = (a0, a1) => { ctx.save(); ctx.translate(x, y); ctx.rotate(-0.45); ctx.strokeStyle = cs[0]; ctx.lineWidth = 0.7; ctx.beginPath(); ctx.ellipse(0, 0, R0 * 0.8, R0 * 0.26, 0, a0, a1); ctx.stroke(); ctx.restore(); }; ringH(Math.PI, 2 * Math.PI); dot(x, y, R0 * 0.4, p.c2 || '#f0b26a'); dot(x - R0 * 0.12, y - R0 * 0.12, R0 * 0.2, 'rgba(255,255,255,.35)'); ringH(0, Math.PI); }
+  else if (pt === 'maze') { ctx.strokeStyle = cs[0]; ctx.lineWidth = 0.9; ctx.lineCap = 'round'; for (let i = 0; i < 3; i++) { const rad = R0 * (0.82 - i * 0.26), g0 = i * 2.1; ctx.beginPath(); ctx.arc(x, y, rad, g0 + 0.5, g0 + 3.4); ctx.stroke(); ctx.beginPath(); ctx.arc(x, y, rad, g0 + 4, g0 + 6.3); ctx.stroke(); } dot(x, y, 0.9, cs[0]); }
+  else if (pt === 'bubbles') { ctx.lineWidth = 0.35; ctx.strokeStyle = cs[0]; for (let i = 0; i < 7; i++) { const a = i * 2.4, d = Math.sqrt((i + 0.5) / 7) * R0 * 0.7, bx = x + Math.cos(a) * d, by = y + Math.sin(a) * d, br = 0.7 + hash01(i, 261) * 1.1; ctx.fillStyle = 'rgba(255,255,255,.22)'; ctx.beginPath(); ctx.arc(bx, by, br, 0, 6.3); ctx.fill(); ctx.stroke(); dot(bx - br * 0.35, by - br * 0.35, br * 0.28, 'rgba(255,255,255,.9)'); } }
+  else if (pt === 'ripple') { ctx.strokeStyle = cs[0]; ctx.lineWidth = 0.5; for (let i = 0; i < 4; i++) { ctx.globalAlpha = 0.95 - i * 0.22; ctx.beginPath(); ctx.arc(x, y, R0 * (0.22 + i * 0.22), 0, 6.3); ctx.stroke(); } ctx.globalAlpha = 1; dot(x, y, 0.8, cs[0]); }
+  else if (pt === 'tyre') { ctx.strokeStyle = cs[0]; ctx.lineWidth = 1.3; ctx.lineCap = 'butt'; ctx.setLineDash([1.2, 1.4]); ctx.beginPath(); ctx.arc(x, y, R0 - 0.9, 0, 6.3); ctx.stroke(); ctx.setLineDash([]); dot(x, y, R0 * 0.5, cs[0]); dot(x, y, R0 * 0.36, p.fill); dot(x, y, R0 * 0.16, cs[0]); }
   if (p.dots) for (let i = 0; i < 7; i++) { const a = i * 2.4 + 0.5, d = Math.sqrt((i + 0.5) / 7) * R0 * 0.75; dot(x + Math.cos(a) * d, y + Math.sin(a) * d, 0.6, p.dots); }
   ctx.restore();
 }
@@ -4406,7 +5372,22 @@ const MAP_THEMES = {
   mars: {label: 'Red planet', tone: 'dark', decor: 'crater', land: '#6b3a2a', land2: '#633527', patch: '#7d4632', water: '#3a5f7a', foam: '#6a8fa8', grass: '#5e3426'},
   twilight: {label: 'Twilight', tone: 'dark', decor: 'pine', land: '#262a3f', land2: '#222539', patch: '#2f3450', water: '#1d3254', foam: '#3a5a8a', tree1: '#3a4a6a', tree2: '#2a3654', grass: '#2e3350'},
   festival: {label: 'Lantern festival', tone: 'dark', decor: 'lantern', land: '#2a2230', land2: '#251e2b', patch: '#3a2a36', water: '#1f3a52', foam: '#3a5f80', grass: '#3a2e3e', tree1: '#5a3a4a', tree2: '#40283a'},
-  cosmos: {label: 'Cosmos', tone: 'dark', decor: 'planet', land: '#1a1838', land2: '#16142f', patch: '#26224a', water: '#0e0c22', foam: '#3a3470', grass: '#24204a'}
+  cosmos: {label: 'Cosmos', tone: 'dark', decor: 'planet', land: '#1a1838', land2: '#16142f', patch: '#26224a', water: '#0e0c22', foam: '#3a3470', grass: '#24204a'},
+  /* p40 map themes */
+  poppyfield: {label: 'Poppy field', tone: 'light', decor: 'poppy', land: '#e3e6c6', land2: '#dadeba', patch: '#e8b2a8', water: '#9cc8e0', grass: '#c4d69a'},
+  daisymeadow: {label: 'Daisy meadow', tone: 'light', decor: 'daisy', land: '#dfe8cc', land2: '#d6e1c0', patch: '#f2f4e6', water: '#9fcbe3', grass: '#c0da9e'},
+  rosegarden: {label: 'Rose garden', tone: 'light', decor: 'rosebush', land: '#e0e6cf', land2: '#d7dfc3', patch: '#f1cbd9', water: '#9ac6de', tree1: '#5a9c58', tree2: '#3f7a45', grass: '#bfd79c'},
+  lemongrove: {label: 'Lemon grove', tone: 'light', decor: 'lemontree', land: '#e9e8c0', land2: '#e1e0b2', patch: '#f2e58a', water: '#8fc7d8', tree1: '#6fae55', tree2: '#4f8d3f', grass: '#d2dc92'},
+  apiary: {label: 'Apiary', tone: 'light', decor: 'beehive', land: '#ebe3b8', land2: '#e3daaa', patch: '#f0cf6a', water: '#93c0cf', tree1: '#9caf55', tree2: '#7a8c3c', grass: '#dccf8c'},
+  oakwood: {label: 'Oak wood', tone: 'light', decor: 'acorn', land: '#e0e3c4', land2: '#d7dbb8', patch: '#c9d39a', water: '#9cc6d8', tree1: '#8fb35a', tree2: '#5f8a3a', grass: '#b9cf8a'},
+  gelato: {label: 'Gelato', tone: 'light', decor: 'icecream', land: '#fbeee6', land2: '#f5e3d8', patch: '#fde0c8', water: '#a8dcf2', foam: '#e9f7fd', tree1: '#f2a7c3', tree2: '#d98aa8', check: 'rgba(255,255,255,.4)'},
+  teagarden: {label: 'Tea garden', tone: 'light', decor: 'teacup', land: '#efe6d6', land2: '#e8ddcb', patch: '#d6c9e8', water: '#a3c9d9', grass: '#d8d3a8'},
+  pebblebeach: {label: 'Pebble beach', tone: 'light', decor: 'cairn', land: '#e8e2d4', land2: '#e0d9c9', patch: '#d6d0c4', water: '#6bbfd8', foam: '#e0f5fb', grass: '#d9d2bc'},
+  plaza: {label: 'Fountain plaza', tone: 'light', decor: 'fountain', land: '#e9e4da', land2: '#e1dbcf', patch: '#c9d8a8', water: '#86c1d4', grass: '#c9d8a8'},
+  donutshop: {label: 'Donut shop', tone: 'light', decor: 'donut', land: '#f7e9dc', land2: '#f0dfcf', patch: '#f3d0dc', water: '#b5dcf0', foam: '#eaf6fc', check: 'rgba(255,255,255,.4)'},
+  yuletide: {label: 'Yuletide', tone: 'dark', decor: 'bauble', land: '#1f3a2a', land2: '#1a3324', patch: '#2b4d36', water: '#1c4458', foam: '#3a6a8a', tree1: '#3f7a4a', tree2: '#2f5a3a', grass: '#2a4a34'},
+  abyss: {label: 'Abyss', tone: 'dark', decor: 'jellyfish', land: '#0f2a3a', land2: '#0c2431', patch: '#163d4d', water: '#071a26', foam: '#1f5a70', tree1: '#2f8a7a', tree2: '#1f6a5e', grass: '#143a46'},
+  wispmarsh: {label: 'Wisp marsh', tone: 'dark', decor: 'wisp', land: '#1e2a2e', land2: '#1a2529', patch: '#27393a', water: '#16343a', foam: '#2f6a6a', tree1: '#2f5a4e', tree2: '#21453a', grass: '#2a403e'}
 };
 const MAP_PAL_KEYS = ['land', 'land2', 'patch', 'water', 'foam', 'tree1', 'tree2', 'grass', 'check'];
 let mapPrefs = {theme: 'meadow', decor: 'auto', land: '', patch: '', water: '', road: '', moto: '', lastDay: 'meadow'};
@@ -4432,7 +5413,7 @@ function palFor(id, custom) {
   else if (rd === 'gold') { P.road = '#efc23a'; P.roadWet = '#d9ad27'; P.edge = '#8a6a10'; P.lane = 'rgba(255,255,255,.75)'; }
   else if (rd === 'marble') { P.road = '#e9e6e1'; P.roadWet = '#dcd8d2'; P.edge = '#a59f96'; P.lane = '#c9a24a'; }
   else if (rd === 'lava') { P.road = '#2a1714'; P.roadWet = '#24130f'; P.edge = '#ff5a1a'; P.lane = '#ffc23a'; }
-  else if (GEN_P.road[rd]) { const q = GEN_P.road[rd]; P.road = q.road; P.roadWet = mixHex(q.road, '#000000', 0.08); P.edge = q.edge; P.lane = q.lane; }
+  else if (GEN_P.road[rd]) { const q = GEN_P.road[rd]; P.road = q.road; P.roadWet = q.wet || mixHex(q.road, '#000000', 0.08); P.edge = q.edge; P.lane = q.lane; }
   if (cu.road) {                                     // road surface; its kerb and the wet look follow it
     P.road = cu.road; P.roadWet = mixHex(cu.road, '#000000', 0.09);
     P.edge = mixHex(cu.road, '#000000', lum(cu.road) > 0.3 ? 0.72 : 0.6);
@@ -4544,7 +5525,8 @@ function drawPatches(vr) {
 const DECOR = {
   tree: 'Trees', pine: 'Pines', bush: 'Bushes', blossom: 'Blossom', autumn: 'Autumn trees', palm: 'Palms', cactus: 'Cacti',
   snowpine: 'Snowy pines', pumpkin: 'Pumpkins', mushroom: 'Mushrooms', flowers: 'Flowers', rock: 'Rocks', crystal: 'Crystals',
-  topiary: 'Topiary', sunflower: 'Sunflowers', tulip: 'Tulips', lavender: 'Lavender', haybale: 'Hay bales', snowfolk: 'Snowballs', lantern: 'Lanterns', birch: 'Birches', willow: 'Willows', bamboo: 'Bamboo', coral: 'Coral', shell: 'Seashells', pond: 'Ponds', parasol: 'Parasols', balloon: 'Balloons', cupcake: 'Cupcakes', lollipop: 'Lollipops', gumdrop: 'Gumdrops', cloud: 'Clouds', bubble: 'Bubbles', crater: 'Craters', orchard: 'Fruit trees', firefly: 'Fireflies', planet: 'Planets'
+  topiary: 'Topiary', sunflower: 'Sunflowers', tulip: 'Tulips', lavender: 'Lavender', haybale: 'Hay bales', snowfolk: 'Snowballs', lantern: 'Lanterns', birch: 'Birches', willow: 'Willows', bamboo: 'Bamboo', coral: 'Coral', shell: 'Seashells', pond: 'Ponds', parasol: 'Parasols', balloon: 'Balloons', cupcake: 'Cupcakes', lollipop: 'Lollipops', gumdrop: 'Gumdrops', cloud: 'Clouds', bubble: 'Bubbles', crater: 'Craters', orchard: 'Fruit trees', firefly: 'Fireflies', planet: 'Planets',
+  poppy: 'Poppies', daisy: 'Daisies', rosebush: 'Rose bushes', lemontree: 'Lemon trees', beehive: 'Beehives', acorn: 'Acorns', icecream: 'Ice creams', teacup: 'Teacups', cairn: 'Pebble stacks', donut: 'Donuts', bauble: 'Baubles', fountain: 'Fountains', jellyfish: 'Jellyfish', wisp: 'Wisps', ghostlight: 'Ghost lights'
 };
 function drawDecor(g, kind, X, Y, R, sway, k) {
   const sh = (x, y, rx, ry, h) => { g.globalAlpha = SUN.a; g.fillStyle = PAL.treeSh; g.beginPath(); g.ellipse(x + SUN.x * h, y + SUN.y * h, rx, ry, 0, 0, 6.3); g.fill(); g.globalAlpha = 1; };
@@ -4884,6 +5866,166 @@ function drawDecor(g, kind, X, Y, R, sway, k) {
           for (let i = 0; i < 6; i++) { const a = i * 1.05 + h2 * 6, d = R * (0.3 + hash01(k, 350 + i) * 0.45), fx = X + Math.cos(a) * d + sway, fy = Y + Math.sin(a) * d; dot(fx, fy, R * 0.12, fr); dot(fx - R * 0.03, fy - R * 0.03, R * 0.045, 'rgba(255,255,255,.5)'); }
           break;
         }
+        /* p40 decorations */
+        case 'poppy': {
+          g.globalAlpha = 0.8; dot(X, Y, R * 0.72, PAL.tree1); g.globalAlpha = 1;
+          for (let i = 0; i < 5; i++) {
+            const fx = X + (hash01(k, 500 + i) - 0.5) * R * 1.2 + sway * 0.5, fy = Y + (hash01(k, 505 + i) - 0.5) * R * 1.2, r_ = R * (0.14 + hash01(k, 510 + i) * 0.06);
+            g.fillStyle = '#e0483e'; g.beginPath(); for (let q = 0; q < 4; q++) { const a = q * 1.571 + i; circ(fx + Math.cos(a) * r_ * 0.5, fy + Math.sin(a) * r_ * 0.5, r_ * 0.6); } g.fill();
+            dot(fx, fy, r_ * 0.3, '#2b3036');
+          }
+          break;
+        }
+        case 'daisy': {
+          g.globalAlpha = 0.8; dot(X, Y, R * 0.75, PAL.tree1); g.globalAlpha = 1;
+          for (const [dx, dy, s_] of [[-0.3, -0.15, 0.34], [0.32, 0.1, 0.28], [-0.05, 0.35, 0.24]]) {
+            const fx = X + dx * R + sway * 0.5, fy = Y + dy * R, r_ = s_ * R;
+            g.fillStyle = '#ffffff'; g.beginPath(); for (let q = 0; q < 7; q++) { const a = q * 0.8976 + h1; ell(fx + Math.cos(a) * r_ * 0.6, fy + Math.sin(a) * r_ * 0.6, r_ * 0.42, r_ * 0.2, a); } g.fill();
+            dot(fx, fy, r_ * 0.3, '#ffd23a'); dot(fx - r_ * 0.08, fy - r_ * 0.08, r_ * 0.12, '#fff1a8');
+          }
+          break;
+        }
+        case 'rosebush': {
+          sh(X, Y + R * 0.1, R * 0.95, R * 0.6, R * 0.35);
+          const parts = [[-0.45, 0.12, 0.55], [0.45, 0.16, 0.5], [0, -0.22, 0.62]];
+          for (const [dx, dy, r_] of parts) dot(X + dx * R + sway * 0.5, Y + dy * R, r_ * R, '#3f7a45');
+          for (const [dx, dy, r_] of parts) dot(X + dx * R - r_ * R * 0.2 + sway * 0.5, Y + dy * R - r_ * R * 0.25, r_ * R * 0.55, '#5a9c58');
+          const rc = h1 > 0.6 ? ['#d8203a', '#ff6b8b'] : h1 > 0.3 ? ['#ff9ecb', '#ffd1e3'] : ['#ffd23a', '#fff1a8'];
+          for (let i = 0; i < 5; i++) { const rx = X + (hash01(k, 520 + i) - 0.5) * R * 1.4 + sway * 0.5, ry = Y + (hash01(k, 525 + i) - 0.5) * R; dot(rx, ry, R * 0.15, rc[0]); dot(rx - R * 0.02, ry - R * 0.02, R * 0.09, rc[1]); dot(rx + R * 0.02, ry + R * 0.02, R * 0.04, rc[0]); }
+          break;
+        }
+        case 'lemontree': {
+          sh(X, Y, R, R, R * 0.55); dot(X + sway, Y, R, '#4f8d3f'); dot(X - R * 0.22 + sway, Y - R * 0.25, R * 0.66, '#6fae55');
+          const P = []; for (let i = 0; i < 6; i++) { const a = i * 1.05 + h2 * 6, d = R * (0.3 + hash01(k, 530 + i) * 0.45); P.push([X + Math.cos(a) * d + sway, Y + Math.sin(a) * d, a]); }
+          g.fillStyle = '#ffe066'; g.beginPath(); for (const [px, py, a] of P) ell(px, py, R * 0.14, R * 0.1, a); g.fill();
+          g.fillStyle = 'rgba(255,255,255,.5)'; g.beginPath(); for (const [px, py] of P) circ(px - R * 0.04, py - R * 0.03, R * 0.04); g.fill();
+          break;
+        }
+        case 'beehive': {
+          sh(X, Y + R * 0.5, R * 0.7, R * 0.3, R * 0.4);
+          g.fillStyle = '#8a5a2b'; rr_(g, X - R * 0.45, Y + R * 0.45, R * 0.9, R * 0.18, R * 0.09);
+          [[0.45, 0.62, 0.2], [0.12, 0.7, 0.24], [-0.22, 0.62, 0.22], [-0.5, 0.46, 0.18]].forEach(([dy, rx, ry], i) => {
+            g.fillStyle = i % 2 ? '#f2c14e' : '#e3a93a'; g.beginPath(); g.ellipse(X + sway * 0.1 * i, Y + dy * R, rx * R, ry * R, 0, 0, 6.3); g.fill();
+            g.fillStyle = 'rgba(255,255,255,.28)'; g.beginPath(); g.ellipse(X - rx * R * 0.3, Y + dy * R - ry * R * 0.3, rx * R * 0.4, ry * R * 0.35, 0, 0, 6.3); g.fill();
+          });
+          dot(X, Y + R * 0.2, R * 0.11, '#5a3418');
+          g.fillStyle = '#ffd23a'; g.beginPath(); for (let i = 0; i < 3; i++) circ(X + (hash01(k, 490 + i) - 0.5) * R * 1.8 + sway, Y - R * 0.3 + (hash01(k, 495 + i) - 0.5) * R * 1.2, R * 0.06); g.fill();
+          break;
+        }
+        case 'acorn': {
+          sh(X, Y + R * 0.2, R * 0.7, R * 0.45, R * 0.3);
+          for (const [dx, dy, s_, i] of [[-0.3, 0.1, 0.5, 0], [0.35, 0.2, 0.4, 1]]) {
+            const r_ = s_ * R;
+            g.save(); g.translate(X + dx * R + sway * 0.3, Y + dy * R); g.rotate((hash01(k, 480 + i) - 0.5) * 0.8);
+            g.fillStyle = '#b8794a'; g.beginPath(); g.ellipse(0, r_ * 0.2, r_ * 0.5, r_ * 0.62, 0, 0, 6.3); g.fill();
+            dot(-r_ * 0.15, r_ * 0.15, r_ * 0.15, 'rgba(255,255,255,.3)');
+            g.fillStyle = '#6b4220'; g.beginPath(); g.ellipse(0, -r_ * 0.25, r_ * 0.56, r_ * 0.36, 0, 0, 6.3); g.fill();
+            g.fillStyle = '#8a5a2b'; g.beginPath(); for (let q = 0; q < 5; q++) circ(-r_ * 0.4 + q * r_ * 0.2, -r_ * 0.3 + (q % 2) * r_ * 0.12, r_ * 0.08); g.fill();
+            g.fillStyle = '#6b4220'; rr_(g, -r_ * 0.07, -r_ * 0.75, r_ * 0.14, r_ * 0.3, r_ * 0.07);
+            g.restore();
+          }
+          break;
+        }
+        case 'icecream': {
+          const sc = [['#ffb3c7', '#fff3f7'], ['#c9f2e3', '#ffffff'], ['#ffe08a', '#fff8d0'], ['#8a5a3a', '#b9794a']], a_ = sc[Math.floor(h1 * 4)], b_ = sc[Math.floor(h2 * 4)];
+          sh(X, Y + R * 0.4, R * 0.5, R * 0.3, R * 0.4);
+          for (let i = 0; i < 4; i++) dot(X + sway * 0.2 * i, Y + R * 0.1 + i * R * 0.2, R * (0.42 - i * 0.1), '#d9a066');
+          g.fillStyle = '#b8794a'; g.beginPath(); for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) circ(X - R * 0.12 + j * R * 0.24 + (i % 2) * R * 0.12, Y + R * 0.1 + i * R * 0.2, R * 0.035); g.fill();
+          dot(X, Y - R * 0.15, R * 0.45, a_[0]); dot(X - R * 0.12, Y - R * 0.25, R * 0.16, a_[1]);
+          dot(X + R * 0.05, Y - R * 0.65, R * 0.38, b_[0]); dot(X - R * 0.06, Y - R * 0.74, R * 0.13, b_[1]);
+          dot(X + R * 0.1, Y - R * 1.0, R * 0.11, '#d8203a'); dot(X + R * 0.07, Y - R * 1.03, R * 0.04, 'rgba(255,255,255,.7)');
+          break;
+        }
+        case 'teacup': {
+          const cc = [['#ffffff', '#9fd5f2'], ['#fff3f7', '#ff9ecb'], ['#fbf8f1', '#ffd23a']][Math.floor(h1 * 3)];
+          sh(X, Y + R * 0.3, R * 0.8, R * 0.35, R * 0.3);
+          g.fillStyle = cc[0]; g.beginPath(); g.ellipse(X, Y + R * 0.35, R * 0.85, R * 0.3, 0, 0, 6.3); g.fill();
+          g.strokeStyle = cc[1]; g.lineWidth = lw(R * 0.06); g.beginPath(); g.ellipse(X, Y + R * 0.35, R * 0.7, R * 0.22, 0, 0, 6.3); g.stroke();
+          g.strokeStyle = cc[0]; g.lineWidth = lw(R * 0.13); g.lineCap = 'round'; g.beginPath(); g.arc(X + R * 0.55, Y - R * 0.05, R * 0.22, -1.4, 1.4); g.stroke(); g.lineCap = lc;
+          g.fillStyle = cc[0]; rr_(g, X - R * 0.5, Y - R * 0.45, R, R * 0.8, R * 0.3);
+          g.fillStyle = cc[1]; g.beginPath(); g.ellipse(X, Y - R * 0.42, R * 0.5, R * 0.2, 0, 0, 6.3); g.fill();
+          g.fillStyle = '#b9733a'; g.beginPath(); g.ellipse(X, Y - R * 0.42, R * 0.38, R * 0.13, 0, 0, 6.3); g.fill();
+          g.fillStyle = 'rgba(255,255,255,.35)'; g.beginPath(); g.ellipse(X - R * 0.1, Y - R * 0.44, R * 0.14, R * 0.05, 0, 0, 6.3); g.fill();
+          break;
+        }
+        case 'cairn': {
+          const base = theme === 'dark' ? '#5c6366' : '#9ba1a4', lite = theme === 'dark' ? '#737b7e' : '#b8bdc0';
+          sh(X, Y + R * 0.5, R * 0.75, R * 0.3, R * 0.3);
+          for (const [dy, rx, ry, i] of [[0.55, 0.72, 0.32, 0], [0.1, 0.6, 0.28, 1], [-0.3, 0.46, 0.24, 2], [-0.62, 0.3, 0.18, 3]]) {
+            const px = X + (hash01(k, 470 + i) - 0.5) * R * 0.12 + sway * 0.2 * i, py = Y + dy * R;
+            g.fillStyle = i % 2 ? lite : base; g.beginPath(); g.ellipse(px, py, rx * R, ry * R, (hash01(k, 475 + i) - 0.5) * 0.3, 0, 6.3); g.fill();
+            g.fillStyle = 'rgba(255,255,255,.22)'; g.beginPath(); g.ellipse(px - rx * R * 0.25, py - ry * R * 0.35, rx * R * 0.45, ry * R * 0.3, 0, 0, 6.3); g.fill();
+          }
+          if (h2 > 0.5) dot(X + R * 0.85, Y + R * 0.55, R * 0.16, base);
+          break;
+        }
+        case 'donut': {
+          const ic = [['#f2b8cf', '#ffffff'], ['#6b4220', '#ffd23a'], ['#9fd5f2', '#ffffff']][Math.floor(h1 * 3)], land = /^#[0-9a-f]{6}$/i.test(PAL.land) ? PAL.land : '#dde5cf';
+          sh(X, Y, R * 0.8, R * 0.8, R * 0.4);
+          dot(X, Y, R * 0.8, '#d9a066'); dot(X - R * 0.04, Y - R * 0.06, R * 0.7, ic[0]);
+          dot(X, Y, R * 0.26, land);
+          g.strokeStyle = ic[1]; g.lineWidth = lw(R * 0.07); g.lineCap = 'round'; g.beginPath();
+          for (let i = 0; i < 7; i++) { const a = i * 0.9 + h2 * 6, d = R * (0.4 + hash01(k, 430 + i) * 0.2), bx = X + Math.cos(a) * d, by = Y + Math.sin(a) * d, b = hash01(k, 440 + i) * 3; g.moveTo(bx - Math.cos(b) * R * 0.08, by - Math.sin(b) * R * 0.08); g.lineTo(bx + Math.cos(b) * R * 0.08, by + Math.sin(b) * R * 0.08); }
+          g.stroke(); g.lineCap = lc;
+          break;
+        }
+        case 'bauble': {
+          const cols = [['#e0483e', '#ff8a75'], ['#d4af37', '#fff1a8'], ['#2f7de1', '#7fe3ff'], ['#8a5bd6', '#c59bff']];
+          for (const [dx, dy, s_, i] of [[-0.32, 0.15, 0.42, 0], [0.36, 0.2, 0.36, 1], [0.05, -0.3, 0.3, 2]]) {
+            const bx = X + dx * R + sway * 0.3, by = Y + dy * R, r_ = s_ * R, c = cols[Math.floor(hash01(k, 460 + i) * 4)];
+            sh(bx, by, r_, r_, r_ * 0.8);
+            g.fillStyle = '#d4af37'; rr_(g, bx - r_ * 0.22, by - r_ * 1.15, r_ * 0.44, r_ * 0.3, r_ * 0.1);
+            g.strokeStyle = '#d4af37'; g.lineWidth = lw(R * 0.04); g.beginPath(); g.arc(bx, by - r_ * 1.25, r_ * 0.16, 0, 6.3); g.stroke();
+            dot(bx, by, r_, c[0]); g.fillStyle = c[1]; g.beginPath(); g.ellipse(bx, by, r_ * 0.95, r_ * 0.22, 0, 0, 6.3); g.fill();
+            dot(bx - r_ * 0.35, by - r_ * 0.38, r_ * 0.22, 'rgba(255,255,255,.65)');
+          }
+          break;
+        }
+        case 'fountain': {
+          dot(X, Y, R * 0.95, theme === 'dark' ? '#5a6168' : '#cfc8bb'); dot(X, Y, R * 0.78, '#5fb4d6');
+          g.strokeStyle = 'rgba(255,255,255,.35)'; g.lineWidth = lw(R * 0.05); g.beginPath(); g.arc(X, Y, R * 0.6, 0, 6.3); g.stroke();
+          sh(X, Y, R * 0.26, R * 0.26, R * 0.5); dot(X, Y, R * 0.26, '#b4ada1'); dot(X - R * 0.05, Y - R * 0.05, R * 0.16, '#e3ddd2');
+          g.strokeStyle = 'rgba(220,245,255,.85)'; g.lineWidth = lw(R * 0.07); g.lineCap = 'round'; g.beginPath();
+          for (let i = 0; i < 6; i++) { const a = i * 1.047 + h1; g.moveTo(X, Y); g.quadraticCurveTo(X + Math.cos(a) * R * 0.25, Y + Math.sin(a) * R * 0.25 - R * 0.3, X + Math.cos(a) * R * 0.5, Y + Math.sin(a) * R * 0.5); }
+          g.stroke(); g.lineCap = lc;
+          g.fillStyle = 'rgba(255,255,255,.8)'; g.beginPath(); for (let i = 0; i < 6; i++) { const a = i * 1.047 + h1 + 0.5; circ(X + Math.cos(a) * R * 0.62, Y + Math.sin(a) * R * 0.62, R * 0.05); } g.fill();
+          break;
+        }
+        case 'jellyfish': {
+          const pc = h1 > 0.5 ? ['#c59bff', '#ffd1f0'] : ['#7fe3ff', '#e9fbff'], jx = X + sway * 1.5, jy = Y - R * 0.2 + (REDUCED_MOTION ? 0 : Math.sin(animT * 1.5 + k) * R * 0.08);
+          g.save(); g.globalCompositeOperation = 'lighter'; dot(jx, jy, R * 0.95, rgba(pc[0], theme === 'dark' ? 0.16 : 0.08)); g.restore();
+          g.strokeStyle = rgba(pc[0], 0.85); g.lineWidth = lw(R * 0.07); g.lineCap = 'round'; g.beginPath();
+          for (let i = 0; i < 5; i++) { const tx_ = jx - R * 0.4 + i * R * 0.2, sg = i % 2 ? 1 : -1; g.moveTo(tx_, jy + R * 0.05); g.quadraticCurveTo(tx_ + sg * R * 0.18, jy + R * 0.5, tx_ - sg * R * 0.08 + sway, jy + R * 0.95); }
+          g.stroke(); g.lineCap = lc;
+          g.fillStyle = rgba(pc[0], 0.9); g.beginPath(); g.ellipse(jx, jy, R * 0.55, R * 0.42, 0, Math.PI, 0); g.fill();
+          g.beginPath(); g.ellipse(jx, jy, R * 0.55, R * 0.14, 0, 0, 6.3); g.fill();
+          dot(jx - R * 0.18, jy - R * 0.16, R * 0.14, rgba(pc[1], 0.7));
+          break;
+        }
+        case 'wisp': {
+          g.fillStyle = theme === 'dark' ? '#2a4a3e' : '#8fb37a'; g.beginPath(); for (let i = 0; i < 5; i++) ell(X + (i - 2) * R * 0.18 + sway * 0.5, Y + R * 0.5, R * 0.3, R * 0.07, -1.57 + (i - 2) * 0.3); g.fill();
+          g.save(); g.globalCompositeOperation = 'lighter';
+          for (let i = 0; i < 3; i++) {
+            const t = REDUCED_MOTION ? 0 : animT * 1.3 + k + i * 2.1, wx = X + (hash01(k, 450 + i) - 0.5) * R * 1.4 + sway * 1.5, wy = Y - R * 0.2 + (hash01(k, 455 + i) - 0.5) * R * 0.9 + (REDUCED_MOTION ? 0 : Math.sin(t) * R * 0.1), pulse = 0.6 + (REDUCED_MOTION ? 0.3 : 0.4 * Math.sin(t * 1.7));
+            dot(wx, wy, R * 0.42, 'rgba(120,230,210,' + (0.16 * pulse).toFixed(2) + ')'); dot(wx, wy, R * 0.18, 'rgba(160,240,230,' + (0.5 * pulse).toFixed(2) + ')'); dot(wx, wy, R * 0.08, i === 1 ? '#9fe3d9' : '#bff3ff');
+          }
+          g.restore();
+          break;
+        }
+        case 'ghostlight': {                               // p51: a hovering will-o'-the-wisp lantern: a soft green glow round a little rounded lantern with a pale flame
+          const bob = REDUCED_MOTION ? 0 : Math.sin(animT * 1.6 + k) * R * 0.08, pulse = REDUCED_MOTION ? 0.8 : 0.7 + 0.3 * Math.sin(animT * 3.1 + k * 2), lx = X + sway, ly = Y - R * 0.25 + bob;
+          sh(X, Y + R * 0.6, R * 0.4, R * 0.15, 0);
+          g.save(); g.globalCompositeOperation = 'lighter';
+          dot(lx, ly, R * 0.95, 'rgba(140,255,200,' + (0.14 * pulse).toFixed(2) + ')'); dot(lx, ly, R * 0.55, 'rgba(180,255,220,' + (0.2 * pulse).toFixed(2) + ')');
+          g.restore();
+          g.strokeStyle = '#4a4262'; g.lineWidth = lw(R * 0.06); g.beginPath(); g.arc(lx, ly - R * 0.56, R * 0.13, Math.PI, 0); g.stroke();
+          g.fillStyle = '#3b3550'; rr_(g, lx - R * 0.3, ly - R * 0.38, R * 0.6, R * 0.76, R * 0.16); g.fill();
+          g.fillStyle = '#4a4262'; rr_(g, lx - R * 0.22, ly - R * 0.52, R * 0.44, R * 0.16, R * 0.06); g.fill();
+          g.fillStyle = 'rgba(200,255,225,' + (0.5 + 0.3 * pulse).toFixed(2) + ')'; rr_(g, lx - R * 0.2, ly - R * 0.28, R * 0.4, R * 0.56, R * 0.1); g.fill();
+          g.fillStyle = '#9fffd0'; g.beginPath(); g.ellipse(lx, ly + R * 0.04, R * 0.1, R * 0.17 * (0.8 + 0.3 * pulse), 0, 0, 6.3); g.fill();
+          dot(lx, ly + R * 0.08, R * 0.05, '#ffffff');
+          break;
+        }
       }
     }
   }
@@ -4944,8 +6086,9 @@ function updateSun() {
 /* a solid shadow for rounded boxes standing `h` high, drawn as the sweep from the base to the offset copy so
    it stays joined to its object. (x, y, ang, sc) is the object's own frame; rects are in that frame. */
 function dropShadow(x, y, ang, sc, h, rects, alphaMul) {
+  if (gfx.shadows === 'off') return;
   const ox = SUN.x * h, oy = SUN.y * h, c = Math.cos(ang), s = Math.sin(ang);
-  const lx = (ox * c + oy * s) / sc, ly = (-ox * s + oy * c) / sc, steps = h > 3 ? 5 : 3;
+  const lx = (ox * c + oy * s) / sc, ly = (-ox * s + oy * c) / sc, steps = gfx.shadows === 'simple' ? 1 : h > 3 ? 5 : 3;
   ctx.save(); ctx.translate(x, y); ctx.rotate(ang); if (sc !== 1) ctx.scale(sc, sc);
   ctx.beginPath();
   for (const [rx, ry, rw, rh, r] of rects) for (let i = 1; i <= steps; i++) { const t = i / steps; rrp(rx + lx * t, ry + ly * t, rw, rh, r); }
@@ -4954,6 +6097,7 @@ function dropShadow(x, y, ang, sc, h, rects, alphaMul) {
 }
 /* a round shadow (trees, cones, sign posts, badges) */
 function dotShadow(x, y, r, h) {
+  if (gfx.shadows === 'off') return;
   ctx.globalAlpha = SUN.a; ctx.fillStyle = PAL.sh;
   ctx.beginPath(); ctx.arc(x + SUN.x * h, y + SUN.y * h, r, 0, Math.PI * 2); ctx.fill();
   ctx.globalAlpha = 1;
@@ -5119,7 +6263,7 @@ function drawTrees(vr) {
   const dk = decorKind();
   for (let r = vr.r0; r <= vr.r1; r++) for (let c = vr.c0; c <= vr.c1; c++) {
     const k = idx(c, r);
-    if (water[k] || occupied(k) || hash01(k, 1) > CFG.treeDensity) continue;
+    if (water[k] || occupied(k) || hash01(k, 1) > CFG.treeDensity * gfx.decor) continue;
     let ok = true;
     for (let d = 0; d < 8 && ok; d++) { const n = nbr(k, d); if (n >= 0 && (road[n] || bAt[n] >= 0 || parkAt[n] >= 0 || depotAt[n] >= 0)) ok = false; }
     if (!ok) continue;
@@ -5176,7 +6320,10 @@ function paintMoto(path, dash, pillars) {
       xs.forEach((c, i) => { ctx.strokeStyle = c; ctx.setLineDash([0.01, per]); ctx.lineDashOffset = -i * 7; ctx.stroke(path); });
       ctx.setLineDash([]); ctx.lineDashOffset = 0;
       mg.forEach((c, i) => { ctx.strokeStyle = c; ctx.lineWidth = sw(i, 10.2); ctx.stroke(path); });
-    } else if (mg.k === 'dots') { ctx.strokeStyle = xs[0]; ctx.lineWidth = 2.2; ctx.setLineDash([0.01, 13]); ctx.lineDashOffset = 3; ctx.stroke(dash); ctx.setLineDash([]); ctx.lineDashOffset = 0; }   // in the gaps of the lane dashes
+    } else if (mg.k === 'rails') { ctx.strokeStyle = xs[0]; ctx.lineWidth = 10.6; ctx.stroke(path); mg.forEach((c, i) => { ctx.strokeStyle = c; ctx.lineWidth = sw(i, 9.2); ctx.stroke(path); }); }   // a thin line inside each edge
+    else if (mg.k === 'pills') { ctx.strokeStyle = xs[0]; ctx.lineWidth = 13.4; ctx.setLineDash([2, 16]); ctx.stroke(path); ctx.setLineDash([]); mg.forEach((c, i) => { ctx.strokeStyle = c; ctx.lineWidth = sw(i, 10.2); ctx.stroke(path); }); }   // rounded segments along both edges
+    else if (mg.k === 'centre') { ctx.lineWidth = 3.4; if (xs.length > 1) { ctx.lineCap = 'butt'; xs.forEach((c, i) => { ctx.strokeStyle = c; ctx.setLineDash([8, 8 * (xs.length - 1)]); ctx.lineDashOffset = -i * 8; ctx.stroke(dash); }); ctx.setLineDash([]); ctx.lineDashOffset = 0; ctx.lineCap = 'round'; } else { ctx.strokeStyle = xs[0]; ctx.stroke(dash); } }   // a soft band down the middle
+    else if (mg.k === 'dots') { ctx.strokeStyle = xs[0]; ctx.lineWidth = 2.2; ctx.setLineDash([0.01, 13]); ctx.lineDashOffset = 3; ctx.stroke(dash); ctx.setLineDash([]); ctx.lineDashOffset = 0; }   // in the gaps of the lane dashes
   }
   else if (md === 'rainbow' && !custom) {
     ['#ff4d4d', '#ff9f1a', '#ffd23a', '#3fd16a', '#2f9bff', '#8a5bff'].forEach((c, i) => { ctx.strokeStyle = c; ctx.lineWidth = 12.6 - i * 2.1; ctx.stroke(path); });
@@ -5267,6 +6414,9 @@ function bridgeParapet(path) {
     if (bg.k === 'beads') { ctx.strokeStyle = bg[1]; ctx.lineWidth = RW + 8.4; ctx.setLineDash([0.01, bg.gap || 8]); ctx.stroke(path); }        // round-capped dots: soft scallops along both rails
     else if (bg.k === 'flowers') { ctx.lineCap = 'butt'; bg.c.forEach((c, i) => { ctx.strokeStyle = c; ctx.setLineDash([1.8, 5 * bg.c.length - 1.8]); ctx.lineDashOffset = -i * 5; ctx.stroke(path); }); ctx.lineDashOffset = 0; }   // little blooms of each colour in turn
     else if (bg.k === 'bands') { ctx.strokeStyle = bg[1]; ctx.setLineDash([4, 4]); ctx.lineCap = 'butt'; ctx.stroke(path); }
+    else if (bg.k === 'links') { ctx.strokeStyle = bg[1]; ctx.lineCap = 'butt'; ctx.setLineDash([7, 2]); ctx.stroke(path); ctx.lineCap = 'round'; ctx.strokeStyle = bg[0]; ctx.setLineDash([0.01, 9]); ctx.lineDashOffset = -8; ctx.stroke(path); ctx.lineDashOffset = 0; }   // segments with rounded ends
+    else if (bg.k === 'twinrail') { ctx.strokeStyle = bg[1]; ctx.lineWidth = RW + 9.6; ctx.stroke(path); ctx.strokeStyle = bg[0]; ctx.lineWidth = RW + 7.5; ctx.stroke(path); }   // a thin outer rim in a second colour
+    else if (bg.k === 'chain') { ctx.strokeStyle = bg[1]; ctx.lineWidth = RW + 9.4; ctx.setLineDash([0.01, 16]); ctx.stroke(path); ctx.lineWidth = RW + 7.2; ctx.lineDashOffset = -8; ctx.stroke(path); ctx.lineDashOffset = 0; }   // big and small beads in turn
     else { ctx.strokeStyle = bg[1]; ctx.setLineDash([1.6, 3.4]); ctx.lineCap = 'butt'; ctx.stroke(path); }
     ctx.setLineDash([]); ctx.lineCap = 'round'; ctx.strokeStyle = bg[2]; ctx.lineWidth = RW + 3.6; ctx.stroke(path);
   } else if (bd === 'wood') {
@@ -5415,9 +6565,14 @@ function drawLightHeads(x, y, ls, dem) {
         if (lg.ring) { ctx.strokeStyle = lg.ring; ctx.lineWidth = 1.2; ctx.stroke(); }
         ctx.fill();
       } else {
-        if (lg.shape === 'square') rr(X - 2.9, Y - 2.9, 5.8, 5.8, 1.8); else if (lg.shape === 'pill') rr(X - 3.6, Y - 2.3, 7.2, 4.6, 2.3); else { ctx.beginPath(); ctx.arc(X, Y, 3, 0, 6.3); }
+        if (lg.shape === 'square') rr(X - 2.9, Y - 2.9, 5.8, 5.8, 1.8); else if (lg.shape === 'pill') rr(X - 3.6, Y - 2.3, 7.2, 4.6, 2.3);
+        else if (lg.shape === 'blob') { ctx.beginPath(); for (const [dx, dy, r_] of [[-1.1, 0.7, 2.2], [1.3, -0.3, 2.1], [-0.4, -1.4, 1.9]]) { ctx.moveTo(X + dx + r_, Y + dy); ctx.arc(X + dx, Y + dy, r_, 0, 6.3); } }
+        else if (lg.shape === 'ring') { ctx.beginPath(); ctx.arc(X, Y, 3.4, 0, 6.3); }
+        else { ctx.beginPath(); ctx.arc(X, Y, 3, 0, 6.3); }
         ctx.fill(); if (lg.ring) { ctx.strokeStyle = lg.ring; ctx.lineWidth = 0.6; ctx.stroke(); }
       }
+      if (lg.dash) { ctx.save(); ctx.strokeStyle = lg.dash; ctx.lineWidth = 1.1; ctx.lineCap = 'butt'; ctx.setLineDash([1.25, 1.25]); ctx.lineDashOffset = lg.spin && !REDUCED_MOTION ? -animT * 3 : 0; ctx.beginPath(); ctx.arc(X, Y, 2.75, 0, 6.3); ctx.stroke(); ctx.restore(); }   // a dashed band round the housing (a spinning one on the unique heads)
+      if (lg.cap) { ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.beginPath(); ctx.ellipse(X - 1.1, Y - 1.5, 1.1, 0.65, -0.7, 0, 6.3); ctx.fill(); }
       if (lg.studs) { ctx.fillStyle = lg.studs; ctx.beginPath(); for (const [dx, dy] of [[-2.55, -2.55], [2.55, -2.55], [2.55, 2.55], [-2.55, 2.55]]) { ctx.moveTo(X + dx + 0.6, Y + dy); ctx.arc(X + dx, Y + dy, 0.6, 0, 6.3); } ctx.fill(); }
       ctx.fillStyle = '#1a1f24'; ctx.beginPath(); ctx.arc(X, Y, 1.95, 0, 6.3); ctx.fill();
       ctx.fillStyle = lamp; ctx.beginPath(); ctx.arc(X, Y, 1.5, 0, 6.3); ctx.fill();
@@ -5512,7 +6667,26 @@ function drawDepot(d) {
     ctx.fillStyle = '#fff'; ctx.font = '600 5.5px Overpass, system-ui, sans-serif'; ctx.fillText(d.slots.length + '/' + d.cap, x, y + 15.7);
   }
 }
-const REDUCED_MOTION = (() => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
+const SYS_REDUCED = (() => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
+let REDUCED_MOTION = SYS_REDUCED;
+let a11y = {scale: 100, contrast: false, motion: 'auto'};
+function applyA11y() {
+  const root = document.documentElement;
+  root.style.setProperty('--ui-zoom', String(a11y.scale / 100));
+  root.setAttribute('data-contrast', a11y.contrast ? 'high' : 'normal');
+  REDUCED_MOTION = a11y.motion === 'reduce' || (a11y.motion === 'auto' && SYS_REDUCED);
+  root.setAttribute('data-motion', REDUCED_MOTION ? 'reduce' : 'full');
+  try { if (typeof layout === 'function' && typeof W !== 'undefined' && W) layout(); } catch (e) {}
+}
+function syncA11yUI() {
+  const sc = $('acc-scale'); if (sc) { sc.value = a11y.scale; $('acc-scale-v').textContent = a11y.scale + '%'; }
+  const hc = $('acc-contrast'); if (hc) hc.checked = !!a11y.contrast;
+  document.querySelectorAll('#acc-motion button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === a11y.motion)));
+}
+/* every icon-only button gets a label for screen readers (its tooltip text) */
+function labelIconButtons() {
+  document.querySelectorAll('button').forEach(b => { if (!b.getAttribute('aria-label') && !b.textContent.trim() && b.title) b.setAttribute('aria-label', b.title); });
+}
 /* buildings pop in with a small overshoot when they appear (visual only; bornAnim never touches the simulation) */
 function spawnScale(b) {
   if (b.bornAnim === undefined || REDUCED_MOTION) return 1;
@@ -5551,6 +6725,7 @@ function drawHouse(b) {
   else if (hd === 'lighthouse') dropShadow(x, y, b.face || 0, s, 11, [[-6.5, -11.5, 13, 13, 6.5]]);
   else if (hd === 'mushroom') dropShadow(x, y, b.face || 0, s, 6, [[-11, -15, 22, 18, 9]]);
   else if (hd !== 'standard') dropShadow(x, y, b.face || 0, s, hd === 'modern' ? 3.4 : 4.2, [[-11, -13, 22, 16, 2]]);
+  else if (houseTier(b)) dropShadow(x, y, b.face || 0, s, 4.5 + houseTier(b) * 2.2, houseTier(b) === 3 ? [[-12, -14, 24, 17.5, 3], [-7, -19, 14, 10, 3]] : [[-12, -14, 24, 17.5, 3]]);   // p62
   else dropShadow(x, y, b.face || 0, s, model === 2 ? 4.4 : 3.6, model === 0 ? [[-9, -12, 18, 15.5, 2.6]] : model === 1 ? [[-11.5, -13, 14.5, 16.5, 2.6], [3.4, -8.5, 8.1, 12, 1.4]] : [[-11.5, -13.5, 23, 17, 2.6]]);
   ctx.save(); ctx.translate(x, y); ctx.rotate(b.face || 0); ctx.scale(s, s);
   rr(-12.5, 2.5, 25, 13.5, 3); ctx.fillStyle = PAL.pave; ctx.fill();                              // forecourt
@@ -5558,6 +6733,7 @@ function drawHouse(b) {
   ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 0.6;
   for (const lx of xs) { rr(lx - 2.9, 5, 5.8, 9.4, 1); ctx.stroke(); }
   if (hd !== 'standard') drawHouseDesign(hd, b, col, model);
+  else if (houseTier(b)) drawHouseTier(b, col, houseTier(b));                                      // p62: townhouse, apartments, tower
   else if (model === 0) {
     // cottage: small gabled house, garden hedge, chimney
     rr(-9, -12, 18, 15.5, 2.6); ctx.fillStyle = PAL.roofBase; ctx.fill();
@@ -5866,8 +7042,14 @@ function drawStore(b) {
   rr(Bx, By, Bw, Bh, 4); ctx.fillStyle = shade(roof, -0.14); ctx.fill();
   rr(Bx + 2.5, By + 2.5, Bw - 5, Bh - 5, 3); ctx.fillStyle = roof; ctx.fill();
   ctx.save(); rr(Bx + 2.5, By + 2.5, Bw - 5, Bh - 5, 3); ctx.clip();
+  const mall = isMall(b), pw = mall ? 16 : 9;                                                  // p62: a mall gets a wide plant room, skylights and a sign
   if (sdz !== 'standard') storeRoofDesign(sdz, Bx, By, Bw, Bh, col);
-  else if (tier === 2) {                                                                       // depot: sawtooth roof
+  else if (mall) {                                                                             // mall: a glazed atrium strip and skylights down both sides
+    ctx.fillStyle = 'rgba(170,215,240,.42)'; rr(-5, By + 12, 10, Bh - 26, 5); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.35)'; rr(-3.6, By + 13.5, 2, Bh - 29, 1); ctx.fill();
+    ctx.fillStyle = 'rgba(170,215,240,.45)';
+    for (let j = 0; j < 4; j++) { rr(Bx + 3.5, By + 14 + j * 8, 4.5, 5, 1.2); ctx.fill(); rr(Bx + Bw - 8, By + 14 + j * 8, 4.5, 5, 1.2); ctx.fill(); }
+  } else if (tier === 2) {                                                                       // depot: sawtooth roof
     for (let yy = By + 2; yy < front; yy += 8) { ctx.fillStyle = 'rgba(0,0,0,.12)'; ctx.fillRect(Bx, yy, Bw, 4); ctx.fillStyle = 'rgba(170,215,240,.5)'; ctx.fillRect(Bx, yy + 4, Bw, 0.8); }
   } else if (tier === 3) {                                                                     // distribution centre: skylights down one side
     ctx.fillStyle = 'rgba(170,215,240,.45)';
@@ -5876,10 +7058,15 @@ function drawStore(b) {
     ctx.fillStyle = 'rgba(170,215,240,.45)'; ctx.fillRect(Bx + Bw - 8, By + 13, 2, Bh - 30); ctx.fillRect(Bx + Bw - 5, By + 13, 2, Bh - 30);
   }
   ctx.restore();
-  ctx.fillStyle = 'rgba(0,0,0,.24)'; rr(Bx + Bw - 13 + so[0], By + 3 + so[1], 9, 8, 1.5); ctx.fill();
-  ctx.fillStyle = '#9aa3a8'; rr(Bx + Bw - 13, By + 3, 9, 8, 1.5); ctx.fill();                   // rooftop plant
-  ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(Bx + Bw - 13, By + 3, 9, 1);
-  ctx.fillStyle = '#6f777c'; ctx.beginPath(); ctx.arc(Bx + Bw - 8.5, By + 7, 2.2, 0, 6.3); ctx.fill();
+  ctx.fillStyle = 'rgba(0,0,0,.24)'; rr(Bx + Bw - 4 - pw + so[0], By + 3 + so[1], pw, 8, 1.5); ctx.fill();
+  ctx.fillStyle = '#9aa3a8'; rr(Bx + Bw - 4 - pw, By + 3, pw, 8, 1.5); ctx.fill();               // rooftop plant (wider on a mall)
+  ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(Bx + Bw - 4 - pw, By + 3, pw, 1);
+  ctx.fillStyle = '#6f777c'; ctx.beginPath(); ctx.arc(Bx + Bw - 8.5, By + 7, 2.2, 0, 6.3); if (mall) ctx.arc(Bx + Bw - 15.5, By + 7, 2.2, 0, 6.3); ctx.fill();
+  if (mall) {                                                                                  // p62: the mall sign, a pill in the store's colour by the front
+    ctx.fillStyle = 'rgba(0,0,0,.2)'; rr(Bx + 4.6, front - 14.4, 24, 6, 3); ctx.fill();
+    ctx.fillStyle = col; rr(Bx + 4, front - 15, 24, 6, 3); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.92)'; ctx.font = '800 4.2px Overpass, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('MALL', Bx + 16, front - 11.8);
+  }
   if (tier === 3) { ctx.strokeStyle = '#5a646a'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(Bx + 6, By + 11); ctx.lineTo(Bx + 6, By + 3); ctx.stroke(); ctx.fillStyle = '#ff5a4a'; ctx.beginPath(); ctx.arc(Bx + 6, By + 3, 1.3, 0, 6.3); ctx.fill(); }
   // parcels waiting, stacked in the middle of the roof
   const pc = tier ? 4 : 3, pr = 3, n = Math.min(b.pins, pc * pr), px0 = -pc * 5 + 1, py0 = By + 14;
@@ -6127,7 +7314,7 @@ function drawCar(c, sizeBoost) {
   dropShadow(c.x, c.y, c.da, 1, bi >= 3 ? 2.8 : 1.9, [[r, -hw, L, Wd, 2.2]]);
   ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.da);
   const cd = design('car');
-  const cg = GEN_P.car[cd], glowC = cd === 'neon' ? col : cg && cg.glow;
+  const cg = GEN_P.car[cd], glowC = cd === 'neon' || cd === 'ghost' ? col : cg && cg.glow;
   if (glowC) {                                             // underglow: in the car's own colour (neon), or the design's
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
     const gl = ctx.createRadialGradient(0, 0, 1, 0, 0, L * 0.85); gl.addColorStop(0, rgba(glowC, 0.55)); gl.addColorStop(1, rgba(glowC, 0));
@@ -6218,7 +7405,30 @@ function drawCar(c, sizeBoost) {
     else if (cg.k === 'scales') { ctx.strokeStyle = cs[0]; ctx.lineWidth = 0.32; ctx.globalAlpha = 0.85; ctx.beginPath(); for (let y = -hw - 0.2, j = 0; y < hw + 1; y += 1.3, j++) for (let x = r + (j % 2) * 0.85; x < f + 1; x += 1.7) { ctx.moveTo(x + 0.85, y); ctx.arc(x, y, 0.85, 0, Math.PI); } ctx.stroke(); ctx.globalAlpha = 1; }
     else if (cg.k === 'flowers') { for (let i = 0; i < 3; i++) { const fx = r + L * (0.18 + i * 0.32), fy = (i % 2 ? 0.32 : -0.32) * hw; ctx.fillStyle = cs[0]; ctx.beginPath(); for (let j = 0; j < 5; j++) { const a = j * 1.2566 + i, px = fx + Math.cos(a) * 0.62, py = fy + Math.sin(a) * 0.62; ctx.moveTo(px + 0.42, py); ctx.arc(px, py, 0.42, 0, 6.3); } ctx.fill(); ctx.fillStyle = cs[1] || '#ffd23a'; ctx.beginPath(); ctx.arc(fx, fy, 0.36, 0, 6.3); ctx.fill(); } }
     else if (cg.k === 'rings') { ctx.strokeStyle = cs[0]; ctx.lineWidth = 0.35; ctx.beginPath(); for (let i = 0; i < 4; i++) { const x = r + L * (0.16 + i * 0.22), y = (i % 2 ? 0.3 : -0.3) * hw, s_ = 0.75 + (i % 2) * 0.25; ctx.moveTo(x + s_, y); ctx.arc(x, y, s_, 0, 6.3); } ctx.stroke(); }
+    else if (cg.k === 'paws') { ctx.fillStyle = cs[0]; ctx.beginPath(); [[f - 2.3, 0, 0.95], [r + 1.25, 0, 0.75]].forEach(([px, py, s_]) => { ctx.moveTo(px - s_ * 0.3 + s_ * 0.5, py); ctx.arc(px - s_ * 0.3, py, s_ * 0.5, 0, 6.3); for (let j = 0; j < 3; j++) { const a = -0.9 + j * 0.9, tx_ = px - s_ * 0.3 + Math.cos(a) * s_ * 0.88, ty_ = py + Math.sin(a) * s_ * 0.88; ctx.moveTo(tx_ + s_ * 0.26, ty_); ctx.arc(tx_, ty_, s_ * 0.26, 0, 6.3); } }); ctx.fill(); }   // a paw on the bonnet and one on the boot
+    else if (cg.k === 'tiger') { ctx.strokeStyle = cs[0]; ctx.lineWidth = 0.75; ctx.lineCap = 'round'; ctx.beginPath(); for (let x = r + 1.3; x < f - 0.6; x += 1.9) { ctx.moveTo(x, -hw - 0.3); ctx.lineTo(x + 0.55, -hw * 0.28); ctx.moveTo(x + 0.95, hw + 0.3); ctx.lineTo(x + 0.4, hw * 0.28); } ctx.stroke(); }
+    else if (cg.k === 'blobs') { ctx.globalAlpha = 0.9; cs.forEach((cc, j) => { ctx.fillStyle = cc; ctx.beginPath(); for (let i = j; i < 9; i += cs.length) { const edge = i < 6, bx = edge ? r + 0.8 + hash01(i, 141) * (L - 1.6) : i === 6 ? f - 2.2 : i === 7 ? r + 1.2 : f - 1, by = edge ? (i % 2 ? 1 : -1) * (hw - 0.2 - hash01(i, 142) * 0.5) : (hash01(i, 142) - 0.5) * 1.2, rx = (edge ? 0.9 : 0.7) + hash01(i, 143) * 0.7, ry = 0.55 + hash01(i, 144) * 0.4, a = (hash01(i, 145) - 0.5) * 0.8; ctx.moveTo(bx + Math.cos(a) * rx, by + Math.sin(a) * rx); ctx.ellipse(bx, by, rx, ry, a, 0, 6.3); } ctx.fill(); }); ctx.globalAlpha = 1; }   // soft blobs along both sides, the bonnet and the boot
+    else if (cg.k === 'vfade') { const gg = ctx.createLinearGradient(0, -hw, 0, hw); gg.addColorStop(0, rgba(cs[0], 0.9)); gg.addColorStop(0.5, rgba(cs[1] || cs[0], 0.35)); gg.addColorStop(1, rgba(cs[1] || cs[0], 0)); ctx.fillStyle = gg; ctx.fillRect(r, -hw, L, Wd); }
+    else if (cg.k === 'swirl') { ctx.strokeStyle = cs[0]; ctx.lineWidth = 0.45; ctx.lineCap = 'round'; ctx.beginPath(); [[f - 2.25, 1.75, 1.0], [r + 1.2, 1.0, 0.9]].forEach(([cx, rx, ry]) => { for (let t = 0; t <= 11; t += 0.3) { const k_ = t / 11, a = t * 1.15; t ? ctx.lineTo(cx + Math.cos(a) * rx * k_, Math.sin(a) * ry * k_ * 2.2) : ctx.moveTo(cx, 0); } }); ctx.stroke(); }   // a curl on the bonnet and a smaller one on the boot
     else if (cg.k === 'wave') { ctx.strokeStyle = cs[0]; ctx.lineWidth = 0.75; ctx.lineCap = 'round'; ctx.beginPath(); for (let x = r; x <= f + 0.01; x += 0.4) { const yy = Math.sin((x - r) * 1.1) * hw * 0.45; x === r ? ctx.moveTo(x, yy) : ctx.lineTo(x, yy); } ctx.stroke(); }
+    else if (cg.k === 'star') {                            // p60 trophy: gold sills and a pale roundel with a five-point gold star
+      const rx = (bon0 + bon1) / 2, sr = hw * 0.64;
+      ctx.fillStyle = cs[0]; sfr(r + 0.4, -hw, L - 0.8, 0.7); sfr(r + 0.4, hw - 0.7, L - 0.8, 0.7);
+      ctx.fillStyle = cs[1] || '#ffffff'; ctx.beginPath(); ctx.arc(rx, 0, sr, 0, 6.3); ctx.fill();
+      ctx.fillStyle = cs[0]; ctx.beginPath();
+      for (let i = 0; i < 10; i++) { const a = -1.5708 + i * 0.6283, rad = i % 2 ? sr * 0.34 : sr * 0.8; ctx.lineTo(rx + Math.cos(a) * rad, Math.sin(a) * rad); }
+      ctx.closePath(); ctx.fill();
+    }
+    else if (cg.k === 'ghost') {                           // a pale see-through sheet over the paint with a wavy hem at the back and two dark eyes; the colour is the outline and the underglow
+      const bob = REDUCED_MOTION ? 0 : Math.sin(animT * 3 + c.id) * 0.3, ey = f - 2.4;
+      ctx.fillStyle = 'rgba(246,244,255,.88)'; sfr(r, -hw, L, Wd);
+      ctx.fillStyle = rgba(col, 0.5); ctx.beginPath(); for (let y = -hw + 0.7; y < hw; y += 1.4) { ctx.moveTo(r + 1.7, y + bob * 0.5); ctx.arc(r + 1, y + bob * 0.5, 0.7, 0, 6.3); } ctx.fill();
+      ctx.fillStyle = '#2a2438';
+      for (const sy of [-1.05, 1.05]) { ctx.beginPath(); ctx.ellipse(ey, sy + bob, 0.62, 0.88, 0, 0, 6.3); ctx.fill(); }
+      ctx.beginPath(); ctx.ellipse(ey + 1.3, bob, 0.3, 0.45, 0, 0, 6.3); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,.75)'; for (const sy of [-1.3, 0.8]) { ctx.beginPath(); ctx.arc(ey - 0.15, sy + bob, 0.18, 0, 6.3); ctx.fill(); }
+      rr(r, -hw, L, Wd, bi === 0 ? hw : 1.5); ctx.strokeStyle = col; ctx.lineWidth = 1.2; ctx.stroke();
+    }
     ctx.restore();
   }
   if (cd === 'pastel') {                                   // a soft pastel wash over the paint, with a white roof
@@ -6282,6 +7492,11 @@ function drawCar(c, sizeBoost) {
     sfr(r + 0.3, -hw + 0.25, L - 7, 0.8); sfr(r + 0.3, hw - 1.05, L - 7, 0.8);
   }
   if (cg && cg.roof && bi <= 1) { rr(roof0, -hw + 0.8, roof1 - roof0, Wd - 1.6, 1.2); ctx.fillStyle = cg.roof; ctx.fill(); }
+  if (cd && cd.startsWith('season_')) {                    // a season crest: a metal band in the division's tint and a laurel roundel on the bonnet
+    const mt = {season_bronze: '#c27a43', season_silver: '#c9d3dc', season_gold: '#ffd23a', season_platinum: '#bff3ff', season_diamond: '#7fe3ff'}[cd] || '#ffd23a';
+    ctx.fillStyle = mt; sfr(r + 0.5, -hw + 0.3, L - 1, 0.9); sfr(r + 0.5, hw - 1.2, L - 1, 0.9);
+    ctx.fillStyle = mt; ctx.beginPath(); ctx.arc((bon0 + bon1) / 2, 0, 1.5, 0, 6.3); ctx.fill(); ctx.fillStyle = '#1f262b'; ctx.beginPath(); ctx.arc((bon0 + bon1) / 2, 0, 0.7, 0, 6.3); ctx.fill();
+  }
   if (cd === 'police') {                                   // a light bar across the roof, flashing red and blue
     const on = REDUCED_MOTION ? 0 : Math.floor(animT * 5 + c.id) % 2, mx = (roof0 + roof1) / 2;
     ctx.fillStyle = '#1f262b'; sfr(mx - 0.8, -hw + 0.8, 1.6, Wd - 1.6);
@@ -6549,6 +7764,8 @@ function drawHover() {
   else if (tool === 'depot') ok = inPlay(hoverCell) && !water[hoverCell] && !occupied(hoverCell) && nearestRoadTo(hoverCell) >= 0 && canTake('depot');
   else if (tool === 'erase') ok = occupied(hoverCell) || !!special[hoverCell] || !!sign[hoverCell];
   else if (tool === 'light' || tool === 'round' || tool === 'moto' || tool.startsWith('only') || tool.startsWith('no') || tool === 'oneway') ok = isRoad(hoverCell);
+  else if (tool === 'rail') ok = railFits(hoverCell) && canTake('rail');
+  else if (tool === 'bus') ok = bAt[hoverCell] >= 0;
   else if (tool === 'select') ok = true;
   else if (tool === 'upgrade') ok = bAt[hoverCell] >= 0 && buildings[bAt[hoverCell]].type === 'store' && storeUpCost(buildings[bAt[hoverCell]]) !== null && money >= storeUpCost(buildings[bAt[hoverCell]]);
   else if (tool === 'tow') ok = bAt[hoverCell] >= 0 && buildings[bAt[hoverCell]].type === 'store' && buildings[bAt[hoverCell]].trucks < CFG.towTrucksPerStore && money >= truckPrice();
@@ -6585,24 +7802,29 @@ function draw() {
   drawGround(vr);
   drawTrees(vr);
   drawRoads();
+  drawRail(vr);
   drawJunctionFurniture(vr);
   drawOneways(vr);
   drawClosures(vr);
   drawBuildings(vr);
   drawTutorialBeacons();
   if (showHeat) drawHeat();
+  if (showFlow) drawFlow(vr);
   drawSelectedBuilding();
   drawSelectedRoute();
   for (const c of cars) if (showMoto || !(c.edge && c.edge.fast) && !(c.cr && c.cr.outE && c.cr.outE.fast)) drawCar(c);
   for (const t of trucks) { if (t.state === 'garage' && isBig(buildings[t.store])) continue; drawTruck(t, t.state === 'garage' ? 0.62 : 0); }   // parked ones wait inside their store
   for (const a of ambs) { drawAmbTarget(a); drawAmb(a); }
+  drawTransport();
+  drawPeds();                                                                                  // p62
   for (const b of buildings) { if (b.type === 'store') { drawStoreLevel(b); drawStoreBadge(b); drawContractBadge(b); } else drawHouseBadge(b); }
-  drawFX(); drawMotoPick();
+  drawDrones(); drawFX(); drawMotoPick();
   const na = nightAmount();
   if (na > 0.02) drawNight(vr, na);
   drawOutside(vr);
   drawHover();
   drawOffscreenAlerts();
+  drawWeather();                                                                               // p62: snow, fog, heat (screen space)
   // rain, in screen space
   if (rain.amt > 0.03) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -6681,7 +7903,10 @@ const IC = {
   coin: '<circle cx="12" cy="12" r="8.5"/><path d="M14.6 9.3c-.6-.8-1.5-1.3-2.7-1.3-1.5 0-2.5.8-2.5 1.9 0 2.6 5.3 1.2 5.3 3.9 0 1.2-1.1 2-2.7 2-1.2 0-2.2-.5-2.8-1.4M12 6.4V8m0 8v1.6"/>',
   truck: '<path d="M3 16v-5h9v5M12 12h4l2 2v2H3"/><circle cx="7" cy="17.6" r="1.7"/><circle cx="15" cy="17.6" r="1.7"/><path d="M6 11l6-7 4 2M16 6v4"/>',
   up: '<path d="M12 19V6M6 12l6-6 6 6"/><path d="M5 22h14"/>',
-  oneway: '<path d="M12 4v16"/><path d="M6 10l6-6 6 6"/>'
+  oneway: '<path d="M12 4v16"/><path d="M6 10l6-6 6 6"/>',
+  rail: '<path d="M8 3v18M16 3v18M8 7.5h8M8 12h8M8 16.5h8"/>',
+  bus: '<rect x="4" y="3.5" width="16" height="14.5" rx="3.5"/><path d="M4 11h16M8 18v2.5M16 18v2.5"/><circle cx="8" cy="14.5" r="1"/><circle cx="16" cy="14.5" r="1"/>',
+  drone: '<circle cx="12" cy="12" r="2.6"/><path d="M9.9 9.9L7.2 7.2M14.1 9.9l2.7-2.7M9.9 14.1l-2.7 2.7M14.1 14.1l2.7 2.7"/><circle cx="5.5" cy="5.5" r="2.2"/><circle cx="18.5" cy="5.5" r="2.2"/><circle cx="5.5" cy="18.5" r="2.2"/><circle cx="18.5" cy="18.5" r="2.2"/>'
 };
 function icon(name, size) {
   return '<svg viewBox="0 0 24 24" width="' + (size || 24) + '" height="' + (size || 24) + '" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (IC[name] || '<circle cx="12" cy="12" r="3"/>') + '</svg>';
@@ -6708,6 +7933,9 @@ const TOOLS = [
   {id: 'upgrade', label: 'Upgrade', icon: 'up', key: 'U', group: 'manage', hint: 'Click a store to make every parcel it gives pay more. Costs cash.'},
   {id: 'tow', label: 'Hire tow', icon: 'truck', key: 'Y', group: 'manage', hint: 'Click a store to hire a tow truck based there. It drives out to stuck and broken cars and hauls them clear.'}
 ];
+TOOLS.push(   /* p61: picked from the dock, no key; hidden until unlocked */
+  {id: 'rail', label: 'Rail', icon: 'rail', key: '', inv: 'rail', group: 'build', hint: 'Drag to lay rail. Rail beside a store or a house makes a station; a line with two stations gets a train that shuttles 6 parcels a trip.'},
+  {id: 'bus', label: 'Bus', icon: 'bus', key: '', inv: 'bus', group: 'build', hint: 'Tap a store, then up to 4 houses of its colour, then the store again: a bus loops them with 3 parcels at a time.'});
 const SIGNS = [
   {id: 'only-left', label: 'Left only'}, {id: 'only-forward', label: 'Ahead only'}, {id: 'only-right', label: 'Right only'},
   {id: 'no-left', label: 'No left'}, {id: 'no-forward', label: 'No ahead'}, {id: 'no-right', label: 'No right'},
@@ -6777,6 +8005,7 @@ const hudIcon = (k, sz) => '<svg class="hi" viewBox="0 0 24 24" width="' + (sz |
    press still shows, and nothing is hidden on menus or in the tutorial. */
 let notesMode = 'all', lastUiAct = 0;
 document.addEventListener('pointerdown', e => { if (e.target && e.target.id !== 'cv') lastUiAct = performance.now(); }, true);
+document.addEventListener('pointerdown', e => { const b = e.target && e.target.closest && e.target.closest('button,.rl-item,.rl-tile,.tool,.cbtn'); if (b && !b.disabled) sfx('ui'); }, true);
 document.addEventListener('keydown', () => { lastUiAct = performance.now(); }, true);
 function muteToast(kind) {
   if (notesMode === 'all' || !started || over || tutorialMode || spectating || !$('m-start').hidden) return false;
@@ -6786,23 +8015,32 @@ function muteToast(kind) {
 function toast(msg, kind) {
   const box = $('toasts'); if (!box || demoMode) return;
   if (muteToast(kind)) return;
-  const small = compactUI();
-  while (box.children && box.children.length > (small ? 1 : 3)) box.removeChild(box.children[0]);
-  const d = document.createElement('div');
+  const small = compactUI(), text = kind === 'tip' ? String(msg).replace(/^Tip:\s*/, '').replace(/^./, c => c.toUpperCase()) : String(msg);
+  const lastT = box.lastElementChild;
+  if (lastT && !lastT.classList.contains('out') && lastT.dataset.text === text && lastT.dataset.kind === (kind || '')) {   // the same again: count it up
+    const n = (+lastT.dataset.n || 1) + 1; lastT.dataset.n = n;
+    let c = lastT.querySelector('.tcount'); if (!c) { c = document.createElement('em'); c.className = 'tcount'; lastT.append(c); }
+    c.textContent = '\u00d7' + n; lastT.classList.remove('bump'); void lastT.offsetWidth; lastT.classList.add('bump');
+    clearTimeout(lastT._t); lastT._t = setTimeout(() => { lastT.classList.add('out'); setTimeout(() => { if (lastT.parentNode) lastT.parentNode.removeChild(lastT); }, 400); }, small ? 2400 : 3400);
+    return;
+  }
+  while (box.children && box.children.length >= (small ? 2 : 3)) box.removeChild(box.children[0]);
+  const d = document.createElement('div'); d.dataset.text = text; d.dataset.kind = kind || '';
   d.className = 'toast' + (kind ? ' ' + kind : '');
   const txt = document.createElement('span'); txt.textContent = kind === 'tip' ? String(msg).replace(/^Tip:\s*/, '').replace(/^./, c => c.toUpperCase()) : msg;
   d.innerHTML = hudIcon(kind === 'good' ? 'good' : kind === 'warn' ? 'warn' : kind === 'tip' ? 'tip' : 'info', 17);
   if (kind === 'tip') { const k = document.createElement('b'); k.textContent = 'Tip'; d.append(k); }
   d.append(txt);
   box.append(d);
-  setTimeout(() => { d.classList.add('out'); setTimeout(() => { if (d.parentNode) d.parentNode.removeChild(d); }, 400); }, small ? (kind === 'tip' ? 4200 : 2400) : (kind === 'tip' ? 6500 : 3400));
+  d._t = setTimeout(() => { d.classList.add('out'); setTimeout(() => { if (d.parentNode) d.parentNode.removeChild(d); }, 400); }, small ? (kind === 'tip' ? 4200 : 2400) : (kind === 'tip' ? 6500 : 3400));
 }
 
 /* ---------------------------------------------------------------- sound */
 let actx = null, muted = false;
 function sfxReady() { return !!actx; }
 function sfx(kind) {
-  if (muted || !audioPrefs.sfx) return;
+  if (muted || !audioPrefs.sfx || !audioPrefs.sfxVol) return;
+  if (kind === 'ui' && !audioPrefs.ui) return;
   const nowMs = performance.now(); sfx.last = sfx.last || {};
   if (sfx.last[kind] && nowMs - sfx.last[kind] < 70) return;
   sfx.last[kind] = nowMs;
@@ -6814,7 +8052,7 @@ function sfx(kind) {
       const o = actx.createOscillator(), g = actx.createGain();
       o.type = type || 'sine'; o.frequency.setValueAtTime(f, t + (delay || 0));
       if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + (delay || 0) + dur);
-      g.gain.setValueAtTime(0.0001, t + (delay || 0)); g.gain.exponentialRampToValueAtTime(vol || 0.05, t + (delay || 0) + 0.01);
+      g.gain.setValueAtTime(0.0001, t + (delay || 0)); g.gain.exponentialRampToValueAtTime((vol || 0.05) * audioPrefs.sfxVol, t + (delay || 0) + 0.01);
       g.gain.exponentialRampToValueAtTime(0.0001, t + (delay || 0) + dur);
       o.connect(g); g.connect(actx.destination); o.start(t + (delay || 0)); o.stop(t + (delay || 0) + dur + 0.02);
     };
@@ -6825,12 +8063,22 @@ function sfx(kind) {
     else if (kind === 'alarm') { tone(320, 0.18, 'square', 0.03); tone(260, 0.22, 'square', 0.03, 0.2); }
     else if (kind === 'over') { tone(300, 0.3, 'sawtooth', 0.05, 0, 90); }
     else if (kind === 'buck') { tone(988, 0.09, 'sine', 0.035); tone(1319, 0.16, 'sine', 0.03, 0.06); }
+    else if (kind === 'ui') tone(1200, 0.025, 'sine', 0.014, 0, 900);
+    else if (kind === 'click') tone(700, 0.05, 'triangle', 0.03, 0, 500);
+    else if (kind === 'crate') { tone(330, 0.1, 'triangle', 0.05, 0, 660); tone(990, 0.2, 'sine', 0.04, 0.12); }
+    else if (kind === 'claim') { tone(784, 0.1, 'sine', 0.04); tone(988, 0.1, 'sine', 0.04, 0.09); tone(1319, 0.25, 'sine', 0.045, 0.18); }
   } catch (e) {}
 }
 /* ---- the soundtrack: a slow, generated ambient piece (soft pad chords, sparse bell notes, a wash of reverb)
    with a quiet hum of distant traffic underneath that swells and settles with how many cars are moving.
    Nothing is downloaded; it is all made here with Web Audio, and it only starts after your first click or key. */
-const audioPrefs = {music: true, musicVol: 0.6, traffic: 0.45, sfx: true};
+const audioPrefs = {music: true, musicVol: 0.6, traffic: 0.45, sfx: true, sfxVol: 1, ui: true, haptics: true};
+/* a short buzz on phones (deliveries, week ends, game over, crates, the daily reward) */
+function haptic(kind) {
+  if (!audioPrefs.haptics || !navigator.vibrate) return;
+  const P = {deliver: 8, week: [12, 50, 12], over: [70, 40, 70], crate: 18, claim: [10, 30, 20], ui: 4};
+  try { navigator.vibrate(P[kind] || 10); } catch (e) {}
+}
 let mus = null;
 const midiHz = m => 440 * Math.pow(2, (m - 69) / 12);
 const MUSIC_CHORDS = [[48, 52, 55, 59, 62], [45, 48, 52, 55, 59], [41, 45, 48, 52, 57], [43, 47, 50, 55, 57]];   // Cmaj9, Am9, Fmaj9, G6
@@ -6905,7 +8153,8 @@ function onDeliver(c, n, cash) {
   const h = buildings[c.home];
   popText(tx(h.k), ty(h.k) - 12, '+' + n, COLORS[c.color].hex); popRing(tx(h.k), ty(h.k), COLORS[c.color].hex);
   if (cash) popText(tx(h.k), ty(h.k) - 25, '+' + fmtP(cash), '#7be495');
-  sfx('deliver'); bump('v-score'); bump('v-money');
+  sfx('deliver'); haptic('deliver'); bump('v-score'); bump('v-money');
+  if (questsActive()) { questEvent('deliver', n); questEvent('trips', 1); questEvent('earn', Math.floor(stats.earned || 0)); }
 }
 
 /* ----------------------------------------------------------- HUD refresh */
@@ -7151,7 +8400,7 @@ function renderPerks() {
     h += '<div class="perk' + (l ? ' on' : '') + '"><span class="pic">' + icon(P.icon, 20) + '</span><div><b>' + P.name + '</b><small>' + (l >= P.max ? P.desc(l) : (l ? 'Now: ' + P.desc(l) + ' ' : '') + 'Next: ' + P.desc(l + 1)) + '</small></div><div class="pbuy"><span class="pips">' + pips + '</span>' + buyBtn('perk', id) + '</div></div>';
   }
   setHTML($('perk-list'), h);
-  const items = [['road', 'Road tiles'], ['bridge', 'Bridges'], ['park', 'Lots'], ['depot', 'Bays'], ['moto', 'Motorways'], ['light', 'Lights'], ['round', 'Roundabouts'], ['sign', 'Signs']];
+  const items = [['road', 'Road tiles'], ['bridge', 'Bridges'], ['park', 'Lots'], ['depot', 'Bays'], ['moto', 'Motorways'], ['light', 'Lights'], ['round', 'Roundabouts'], ['sign', 'Signs'], ['rail', 'Rail tiles'], ['bus', 'Bus routes']];
   setHTML($('inv-list'), items.map(([k, n]) => '<div class="invrow"><span>' + n + '</span><b>' + inv[k] + '</b></div>').join(''));
 }
 function renderShop() {
@@ -7318,10 +8567,13 @@ function renderInspector() {
     if (nd.type === 'round') html += '<p class="line">Up to <b>' + roundCapOf(nd) + '</b> cars circulate at once.</p>';
     html += nd.type === 'light' ? '<p class="line muted" id="lt-pass"></p>'
                                 : '<p class="line muted">Waiting now ' + nd.qNow + ' · passed ' + nd.passed + ' cars</p>';
+    if (nd.junction) html += '<h5 class="ihead2">Last five minutes</h5><canvas class="flowchart" id="i-flow" width="240" height="70" aria-label="Cars a minute and average wait over the last five minutes"></canvas>' +
+                             '<p class="line muted fp-leg"><i style="background:var(--good)"></i>' + Math.round(flowRateInto(nd)) + ' cars/min <i style="background:var(--bad)"></i>' + (nd.waitN ? nd.waitSum / nd.waitN : 0).toFixed(1) + ' s avg wait</p>';
     if (nd.junction) html += '<div id="i-junc"></div>';       // filled below on its own, so the light panel above isn't rebuilt when cash changes
   }
   setHTML(body, html);
   if (sel.type === 'tile' && nodes[sel.k] && nodes[sel.k].type === 'light') bindLightPanel(nodes[sel.k]);
+  if (sel.type === 'tile' && nodes[sel.k]) drawFlowChart($('i-flow'), nodes[sel.k]);
   const jb = $('i-junc');
   if (jb && sel.type === 'tile' && nodes[sel.k]) {
     const nd = nodes[sel.k], nx = nd.lvl < CFG.junctionUpgradeMax ? 'Next: ' + juncEffect(nd, nd.lvl + 1) + '.' : 'Top level: ' + juncEffect(nd, nd.lvl) + '.';
@@ -7350,6 +8602,93 @@ function selectAt(sx, sy) {
 
 /* -------------------------------------------------------------- modals */
 let modalOpen = false, rerollLeft = 1, lastGrew = false;
+/* a yes/no question in the game's own style. Resolves true for OK, false for Cancel; Enter and Esc work too. */
+let askResolve = null;
+function ask(o) {
+  o = o || {};
+  $('ask-title').textContent = o.title || 'Are you sure?';
+  $('ask-text').textContent = o.text || '';
+  const ok = $('ask-ok'), cancel = $('ask-cancel');
+  ok.textContent = o.ok || 'OK'; cancel.textContent = o.cancel || 'Cancel';
+  ok.classList.toggle('danger', !!o.danger);
+  if (askResolve) askResolve(false);
+  openModal('m-ask');
+  setTimeout(() => { try { (o.danger ? cancel : ok).focus(); } catch (e) {} }, 30);
+  return new Promise(res => { askResolve = v => { askResolve = null; closeModal('m-ask'); res(!!v); }; });
+}
+function bindAsk() {
+  $('ask-ok').addEventListener('click', () => { if (askResolve) askResolve(true); });
+  $('ask-cancel').addEventListener('click', () => { if (askResolve) askResolve(false); });
+  $('m-ask').addEventListener('click', e => { if (e.target === $('m-ask') && askResolve) askResolve(false); });
+}
+/* ---- the pause menu: Esc while playing. Resume, keep editing while paused, restart, settings, help, or save and quit. */
+function openPause() {
+  if (!started || over || spectating || demoMode || modalOpen || !$('m-start').hidden) return false;
+  if (isoLive()) { isoAsk(running ? 'pause' : 'resume'); return false; }
+  running = false; closeInspector(); closeMenu(); toggleCust(false);
+  renderPause(); openModal('m-pause'); refreshUI();
+  return true;
+}
+function renderPause() {
+  const sec = Math.round(clock), mm = Math.floor(sec / 60), ss = String(sec % 60).padStart(2, '0');
+  $('pause-title').textContent = tutorialMode ? 'Tutorial paused' : DIFF.label + ' \u00b7 week ' + week;
+  $('pause-stats').innerHTML = [['Week', week], ['Parcels', score.toLocaleString('en-US')], ['Time', mm + ':' + ss], ['Cash', '$' + Math.round(money).toLocaleString('en-US')], ['Cars', cars.length], ['Trips', stats.trips]]
+    .map(([a, b]) => '<div><b>' + b + '</b><span>' + a + '</span></div>').join('');
+  $('pause-restart').hidden = tutorialMode || diffKey === 'iso';
+}
+function closePause(resume) {
+  if ($('m-pause').hidden) return;
+  closeModal('m-pause');
+  if (resume) running = true;
+  refreshUI();
+}
+function bindPause() {
+  $('pause-resume').addEventListener('click', () => closePause(true));
+  $('pause-edit').addEventListener('click', () => { closePause(false); hint('Paused \u2014 build away. Press P or the play button when you\u2019re ready.'); });
+  $('pause-restart').addEventListener('click', async () => {
+    if (!(await ask({title: 'Restart this city?', text: 'Week ' + week + ' and ' + score + ' parcels will be lost. The same mode starts again on a fresh map.', ok: 'Restart', danger: true}))) return;
+    const dk = diffKey, slot = curSlot; closePause(false);
+    pendingSlot = slot; resetGame(dk); running = true; refreshHud(); layout(); writeSlot();
+  });
+  $('pause-settings').addEventListener('click', () => { closePause(false); openMenu('settings'); });
+  $('pause-help').addEventListener('click', () => openModal('m-help'));
+  $('pause-quit').addEventListener('click', () => { closePause(false); goHome(); });
+  $('m-pause').addEventListener('click', e => { if (e.target === $('m-pause')) closePause(true); });
+}
+/* ---- a quick fade between the main menu and a city (and the splash screen on load) */
+function fadeFlash(ms) {
+  const f = $('fade'); if (!f) return;
+  ms = ms || (REDUCED_MOTION ? 160 : 420);
+  f.hidden = false; f.style.transition = 'none'; f.style.opacity = '1'; void f.offsetWidth;
+  f.style.transition = 'opacity ' + ms + 'ms ease'; f.style.opacity = '0';
+  clearTimeout(fadeFlash.t); fadeFlash.t = setTimeout(() => { f.hidden = true; }, ms + 40);
+}
+let booted = false;
+/* ---- the installable app: a service worker caches the game for offline play; the browser's install prompt is offered in Settings */
+let installPrompt = null, swWaiting = null;
+function setupApp() {
+  const note = $('app-note'), ib = $('btn-install'), ub = $('btn-update');
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      const watch = () => { const w = reg.waiting; if (w && navigator.serviceWorker.controller) { swWaiting = w; if (ub) ub.hidden = false; } };
+      watch(); reg.addEventListener('updatefound', () => { const nw = reg.installing; if (nw) nw.addEventListener('statechange', watch); });
+    }).catch(e => console.warn('Service worker not registered', e));
+    navigator.serviceWorker.addEventListener('controllerchange', () => { if (swWaiting) location.reload(); });
+  }
+  window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installPrompt = e; if (ib) ib.hidden = false; });
+  window.addEventListener('appinstalled', () => { installPrompt = null; if (ib) ib.hidden = true; if (note) note.textContent = 'Junction is installed. Open it from your home screen or app list.'; toast('Junction is installed', 'good'); });
+  if (ib) ib.addEventListener('click', async () => { if (!installPrompt) return; installPrompt.prompt(); try { await installPrompt.userChoice; } catch (e) {} installPrompt = null; ib.hidden = true; });
+  if (ub) ub.addEventListener('click', () => { if (swWaiting) swWaiting.postMessage('skipWaiting'); else location.reload(); });
+  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  if (standalone && note) note.textContent = 'You\u2019re playing the installed app. Single player works offline; online features need a connection.';
+  else if (note && /iphone|ipad/i.test(navigator.userAgent) && !standalone) note.textContent = 'On iPhone and iPad: tap Share, then \u201cAdd to Home Screen\u201d to install Junction.';
+}
+function splashStep(p) { const b = $('sp-bar'); if (b) b.style.width = Math.round(p * 100) + '%'; }
+function splashDone() {
+  const sp = $('splash'); if (!sp) return;
+  splashStep(1);
+  setTimeout(() => { sp.classList.add('out'); setTimeout(() => { if (sp.parentNode) sp.parentNode.removeChild(sp); booted = true; }, REDUCED_MOTION ? 200 : 650); }, 120);
+}
 function openModal(id) {
   $(id).hidden = false; modalOpen = true;
   if (id === 'm-start') {
@@ -7370,6 +8709,7 @@ function setCusTab(t) {
 }
 /* what's new, sliding by above the weekly tile */
 const NEWS = [
+  {tag: 'Update', title: 'What’s new in ' + VERSION, text: 'Pause menu, share cards, quality and accessibility settings, daily rewards, 50 of everything, and more.', go: 'whatsnew', art: ['store', 'golden']},
   {tag: 'New credits', title: '◎ coins and ✦ stars', text: 'Everyone starts fresh: 2 ◎ for every 3 parcels, and ✦ stars from Frantic cities.', go: 'store', art: ['store', 'golden']},
   {tag: 'New mode', title: 'ISO 1v1', text: 'Challenge a player: live side by side, or a daily duel scored category by category.', go: 'iso', art: ['car', 'rainbowstripe']},
   {tag: 'New designs', title: 'Hundreds of new designs', text: 'At least 36 of everything: cars, houses, roads, stores, lights, roundabouts, bridges, motorways, themes, maps, decorations and panel styles.', go: 'store', art: ['car', 'tidal']},
@@ -7381,10 +8721,12 @@ const NEWS = [
 let newsAt = 0, newsHover = false;
 function renderNews() {
   const tr = $('news-track'); if (!tr) return;
+  const ev = activeEvent();
+  if (ev && !NEWS.some(n => n.go === 'event')) NEWS.unshift({tag: ev.tag, title: ev.title, text: ev.text, go: 'event', art: ['car', COSMETICS['design:car:ghost'] ? 'ghost' : 'galaxy']});
   if (!tr.childElementCount) {
     tr.innerHTML = NEWS.map((n, i) => '<button type="button" class="news-s" data-n="' + i + '"><span class="news-t"><em>' + n.tag + '</em><b>' + n.title + '</b><small>' + n.text + '</small></span><canvas width="' + (n.art === 'seed' ? 120 : 132) + '" height="' + (n.art === 'seed' ? 120 : 88) + '"></canvas></button>').join('');
     $('news-dots').innerHTML = NEWS.map((n, i) => '<button type="button" data-nd="' + i + '" aria-label="' + n.title + '"></button>').join('');
-    tr.querySelectorAll('.news-s').forEach(b => b.addEventListener('click', () => { const n = NEWS[+b.dataset.n]; if (n.go === 'coll') { showMM('custom'); setCusTab('coll'); } else if (n.go === 'iso') { playMode = 'iso'; showMM('play'); } else showMM(n.go); }));
+    tr.querySelectorAll('.news-s').forEach(b => b.addEventListener('click', () => { const n = NEWS[+b.dataset.n]; if (n.go === 'coll') { showMM('custom'); setCusTab('coll'); } else if (n.go === 'whatsnew') openWhatsNew(); else if (n.go === 'event') showMM('quests'); else if (n.go === 'iso') { playMode = 'iso'; showMM('play'); } else showMM(n.go); }));
     $('news-dots').querySelectorAll('[data-nd]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); newsAt = +b.dataset.nd; showNews(); }));
     $('mm-news').addEventListener('mouseenter', () => { newsHover = true; }); $('mm-news').addEventListener('mouseleave', () => { newsHover = false; });
   }
@@ -7396,13 +8738,13 @@ function showNews() {
   document.querySelectorAll('#news-dots [data-nd]').forEach((d, i) => d.setAttribute('aria-pressed', i === newsAt ? 'true' : 'false'));
 }
 setInterval(() => { if (!newsHover && !REDUCED_MOTION && $('m-start') && !$('m-start').hidden && !mmPane) { newsAt = (newsAt + 1) % NEWS.length; showNews(); } }, 6000);
-const MM_TITLES = {play: 'Play', saves: 'Saves', chats: 'Chats', friends: 'Friends', custom: 'Customise', store: 'Store', weekly: 'Weeklys'};
+const MM_TITLES = {play: 'Play', saves: 'Saves', chats: 'Chats', friends: 'Friends', custom: 'Customise', store: 'Store', weekly: 'Weeklys', quests: 'Quests'};
 function showMM(pane) {
   mmPane = pane || null;
   document.querySelectorAll('#m-start [data-mm]').forEach(b => { if (b.matches('.rl-item,.rl-tile,.rl-icon')) b.setAttribute('aria-pressed', b.dataset.mm === mmPane ? 'true' : 'false'); });
   document.querySelectorAll('#m-start .mm-pane').forEach(p => { p.hidden = p.dataset.mm !== mmPane; });
   $('mm-panel').hidden = !mmPane; $('m-start').classList.toggle('has-panel', !!mmPane);
-  $('m-start').classList.toggle('center-pane', ['store', 'weekly', 'chats', 'friends'].includes(mmPane));
+  $('m-start').classList.toggle('center-pane', ['store', 'weekly', 'chats', 'friends', 'quests', 'campaign'].includes(mmPane));
   if (mmPane) { $('mm-ptitle').textContent = MM_TITLES[mmPane] || ''; const pb = $('mm-panel'); pb.classList.remove('slide'); void pb.offsetWidth; pb.classList.add('slide'); }
   const on = window.JunctionOnline;
   if (mmPane === 'play') renderPlay();
@@ -7411,6 +8753,7 @@ function showMM(pane) {
   if (mmPane === 'friends') { if (on && on.renderFriends) on.renderFriends($('mm-friends')); else $('mm-friends').innerHTML = '<p class="mini">Friends need the online service, which isn\u2019t available right now.</p>'; }
   if (mmPane === 'weekly') { renderExpertCard(); renderWeekly(); }
   if (mmPane === 'custom') setCusTab(cusTab);
+  if (mmPane === 'quests') renderQuests();
   renderLook();
 }
 /* The map a seed makes. An Expert city's water comes from genWater() run on that week's seeded stream, so the
@@ -7591,7 +8934,20 @@ function startIso(m) {
   hint(m.kind === 'live' ? 'Go! Same map as ' + m.opp.name + '. Last city standing wins.' : 'Your daily run against ' + m.opp.name + ' \u2014 play at your own pace.');
 }
 const isoClock = sec => { sec = Math.max(0, Math.round(sec)); const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s2 = sec % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s2).padStart(2, '0'); };
+/* watching a friend's live match: their opponent's city and numbers in the match panel */
+let specMatch = null;
+function renderSpecMatch() {
+  const box = $('iso-hud'); if (!box) return;
+  if (!specMatch) { if (spectating) box.hidden = true; return; }
+  box.hidden = false; box.classList.remove('min');
+  $('ih-kind').textContent = 'Live match'; $('ih-vs').textContent = specMatch.name + ' vs ' + specMatch.opp;
+  const o = specMatch, row = (l, b) => '<tr><th>' + l + '</th><td>' + (b === undefined ? '\u2014' : b) + '</td></tr>';
+  $('ih-stats').innerHTML = '<table><tr><th></th><td>' + escH(o.opp) + '</td></tr>' + row('Time', o.sec !== undefined ? isoClock(o.sec) : undefined) + row('Parcels', o.parcels) + row('Week', o.week) + row('Earned', o.earned !== undefined ? '$' + Math.round(o.earned) : undefined) + '</table>' + (o.over ? '<p class="ih-over">' + escH(o.opp) + '\u2019s city has ended.</p>' : '<p class="ih-note">You\u2019re watching ' + escH(o.name) + '\u2019s side.</p>');
+  const cv2 = $('ih-map'); cv2.hidden = !o.city; if (o.city) drawCitySnap(cv2, o.city);
+  $('ih-prop').hidden = true; $('ih-ctl').innerHTML = '';
+}
 function renderIsoHud() {
+  if (specMatch) { renderSpecMatch(); return; }
   const box = $('iso-hud'); if (!box) return;
   const on = !!(iso && diffKey === 'iso' && started && !spectating);
   box.hidden = !on; if (!on) return;
@@ -7624,13 +8980,15 @@ function bindIsoHud() {
   $('iso-hud').addEventListener('click', e => {
     const a = e.target.closest('[data-isoask]'); if (a) { isoAsk(a.dataset.isoask); return; }
     const r = e.target.closest('[data-isoans]'); if (r) { JEvents.emit('isoReply', {ok: r.dataset.isoans === '1'}); iso.prop = null; renderIsoHud(); return; }
-    if (e.target.closest('[data-isofin]')) { if (confirm('Finish your run now? It\u2019s scored as it stands.')) endGame('You finished your run.'); return; }
+    if (e.target.closest('[data-isofin]')) { ask({title: 'Finish your run?', text: 'It\u2019s scored as it stands and sent to your opponent.', ok: 'Finish'}).then(ok => { if (ok) endGame('You finished your run.'); }); return; }
     if (e.target.closest('.ih-head')) $('iso-hud').classList.toggle('min');
   });
   setInterval(() => { if (iso) renderIsoHud(); }, 1000);
 }
 /* the match result, with each category side by side */
 function showIsoResult(r) {
+  lastIsoResult = r;
+  if (r.outcome === 'win') questEvent('iso_win', 1);
   $('ir-kind').textContent = 'ISO 1v1 \u00b7 ' + (r.kind === 'live' ? 'Live' : 'Daily') + ' vs ' + r.oppName;
   $('ir-title').textContent = r.outcome === 'win' ? 'You won!' : r.outcome === 'lose' ? r.oppName + ' won' : 'A draw';
   $('ir-sub').textContent = r.reason || '';
@@ -7643,10 +9001,11 @@ function showIsoResult(r) {
 /* the Main menu button in the game: save the city, then back to the menu with its own background city.
    "Continue last city" brings the saved one back, into the same save slot. */
 let resumeSlot = '';
-function goHome() {
+async function goHome() {
   if (spectating) { if (window.JunctionAPI && window.JunctionAPI.showStart) window.JunctionAPI.showStart(); return; }
   if (iso && diffKey === 'iso' && started && !over) {
-    if (!confirm(iso.kind === 'live' ? 'Leave the match? Your city ends now, so ' + iso.opp.name + ' wins.' : 'End your daily run now? It’s scored as it stands.')) return;
+    const ok = await ask(iso.kind === 'live' ? {title: 'Leave the match?', text: 'Your city ends now, so ' + iso.opp.name + ' wins.', ok: 'Leave', danger: true} : {title: 'End your daily run?', text: 'It\u2019s scored as it stands.', ok: 'End run', danger: true});
+    if (!ok) return;
     endGame(iso.kind === 'live' ? 'You left the match.' : 'You ended your run.');
   }
   const keep = started && !over && !tutorialMode ? curSlot : '';
@@ -7673,14 +9032,18 @@ function bindMainMenu() {
   $('sm-close').addEventListener('click', () => closeModal('m-seedmap'));
   $('sm-play').addEventListener('click', () => { closeModal('m-seedmap'); $('btn-expert').click(); });
   $('m-start').addEventListener('click', e => { if (e.target === $('m-start') && $('m-start').classList.contains('center-pane')) showMM(null); });   // the dimmed backdrop closes the Store or Weeklys
-  bindCrates(); bindIsoHud();
+  bindCrates(); bindIsoHud(); bindAsk(); bindPause(); bindShare();
   document.querySelectorAll('[data-cus]').forEach(b => b.addEventListener('click', () => setCusTab(b.dataset.cus)));
   // the game's HUD hides while the menu shows: follow the menu however it's opened or closed (some paths just hide it)
-  new MutationObserver(() => { const on = !$('m-start').hidden; $('app').classList.toggle('in-menu', on); if (!on) $('app').classList.remove('menu-over'); })
+  new MutationObserver(() => {
+    const on = !$('m-start').hidden; $('app').classList.toggle('in-menu', on); if (!on) $('app').classList.remove('menu-over');
+    if (booted) { fadeFlash(); if (!on && cam.auto && !REDUCED_MOTION) cam.z *= 0.84; }   // a quick fade, and a gentle zoom into a new city
+  })
     .observe($('m-start'), {attributes: true, attributeFilter: ['hidden']});
 }
 /* the seed of the week on its tile */
 function renderMenuTiles() { const t = $('tile-seed'); if (t) { const sd = expertSeed(); t.textContent = sd.name; $('tile-seedwk').textContent = sd.label; } }
+const modalOpenBesides = id => !!document.querySelector('.modal:not([hidden]):not(#' + id + ')');
 function closeModal(id) { if (id === 'm-start') $('app').classList.remove('in-menu'); $(id).hidden = true; modalOpen = !!document.querySelector('.modal:not([hidden])'); }
 function offerUpgrade(grew) {
   lastGrew = grew; rerollLeft = 1; if (!isoLive()) running = false; openModal('m-upgrade'); renderUpgrade();
@@ -7713,14 +9076,106 @@ function renderUpgrade(reroll) {
   const first = document.querySelector('#up-picks .pick'); if (first && first.focus) first.focus();
 }
 function showGameOver(why) {
+  $('over-kicker').textContent = diffKey === 'iso' ? 'Match over' : why && /finished|ended|left/i.test(why) ? 'City closed' : 'Gridlock';
   $('over-why').textContent = why;
-  $('over-score').textContent = score;
-  $('over-best').textContent = 'parcels delivered · best on ' + DIFF.label + ': ' + best;
-  $('over-stats').innerHTML = [['Weeks', week], ['Trips', stats.trips], ['Average wait per trip', stats.avgWait.toFixed(1) + 's'], ['Tow trucks', stats.tows], ['Breakdowns', stats.breakdowns], ['Cars', cars.length]]
-    .concat(stats.ambOk + stats.ambLate + stats.ambFail ? [['Ambulances on time', stats.ambOk + ' of ' + (stats.ambOk + stats.ambLate + stats.ambFail)]] : [])
-    .map(([a, b]) => '<div><span>' + a + '</span><b>' + b + '</b></div>').join('');
+  $('over-score').textContent = score.toLocaleString('en-US');
+  $('over-newbest').hidden = !lastRun.newBest;
+  $('over-best').textContent = lastRun.newBest ? 'Your old best on ' + DIFF.label + ' was ' + lastRun.prevBest.toLocaleString('en-US') + ' parcels.'
+    : lastRun.first ? 'Your first ' + DIFF.label + ' city. Every run from here is a record to beat.' : 'Best on ' + DIFF.label + ': ' + best.toLocaleString('en-US') + ' parcels.';
+  $('over-stats').innerHTML = overStats().map(([a, b]) => '<div><span>' + a + '</span><b>' + b + '</b></div>').join('');
+  const got = ACH.filter(a => ach[a.id] && ach[a.id] >= runT0);
+  $('over-ach').hidden = !got.length;
+  $('over-ach').innerHTML = got.length ? '<h4>Unlocked this run</h4><div class="over-achs">' + got.map(a => '<span class="achchip" title="' + escH(a.hint) + '"><i>\u2605</i>' + escH(a.name) + '</span>').join('') + '</div>' : '';
+  cityPicture($('over-pic'));
   openModal('m-over');
   drawRunChart();
+}
+/* the numbers a finished run is summed up by (the game-over screen and the share card both use them) */
+function overStats() {
+  const sec = Math.round(clock), tm = (Math.floor(sec / 3600) ? Math.floor(sec / 3600) + 'h ' : '') + Math.floor(sec % 3600 / 60) + 'm';
+  return [['Weeks', week], ['Earned', '$' + Math.round(stats.earned || 0).toLocaleString('en-US')], ['Trips', (stats.trips || 0).toLocaleString('en-US')], ['Time', tm], ['Cars', cars.length], ['Tow trucks', stats.tows],
+    ['Avg wait', (stats.avgWait || 0).toFixed(1) + 's'], ['Breakdowns', stats.breakdowns]]
+    .concat(stats.ambOk + stats.ambLate + stats.ambFail ? [['Ambulances on time', stats.ambOk + ' of ' + (stats.ambOk + stats.ambLate + stats.ambFail)]] : []);
+}
+/* a square picture of the whole city, drawn with the game's own renderer into cv2 */
+function cityPicture(cv2) {
+  if (!cv2) return cv2;
+  const keep = {x: cam.x, y: cam.y, z: cam.z, auto: cam.auto}, keepNight = nightOn, keepHeat = showHeat, keepFlow = typeof showFlow !== 'undefined' && showFlow;
+  nightOn = false; showHeat = false; if (typeof showFlow !== 'undefined') showFlow = false;                         // a clear daytime picture
+  const side = Math.min(W, H), wc = (camOrg + camSpan / 2) * CELL;
+  cam.auto = false; cam.z = clamp(side * 0.92 / ((camSpan + 2) * CELL), 0.05, 8); cam.x = wc; cam.y = wc;
+  try {
+    draw();
+    const g = cv2.getContext('2d'), px = Math.min(cv.width, cv.height);
+    g.clearRect(0, 0, cv2.width, cv2.height);
+    g.drawImage(cv, (cv.width - px) / 2, (cv.height - px) / 2, px, px, 0, 0, cv2.width, cv2.height);
+  } catch (e) {}
+  Object.assign(cam, keep); nightOn = keepNight; showHeat = keepHeat; if (typeof showFlow !== 'undefined') showFlow = keepFlow;
+  return cv2;
+}
+/* ---- share cards: a 1200x630 picture of a run, shared with the phone's share sheet, copied, or shown to save */
+function roundPath(g, x, y, w, h, r) { g.beginPath(); if (g.roundRect) g.roundRect(x, y, w, h, r); else g.rect(x, y, w, h); }
+function makeShareCard(o) {
+  const c = document.createElement('canvas'); c.width = 1200; c.height = 630;
+  const g = c.getContext('2d'), pl = uiColours ? uiColours().plate : '#143845', acc = uiColours ? uiColours().accent : '#ffc933';
+  const bg = g.createLinearGradient(0, 0, 1200, 630); bg.addColorStop(0, mixHex(pl, '#ffffff', 0.08)); bg.addColorStop(1, mixHex(pl, '#000000', 0.35));
+  g.fillStyle = bg; g.fillRect(0, 0, 1200, 630);
+  g.fillStyle = 'rgba(255,255,255,.035)'; for (let i = 0; i < 9; i++) { g.beginPath(); g.arc(1000 + Math.cos(i * 0.9) * 160, 330 + Math.sin(i * 1.3) * 200, 70 + i * 22, 0, 6.3); g.fill(); }
+  // the city picture, in a rounded frame
+  if (o.pic) {
+    g.save(); roundPath(g, 60, 75, 480, 480, 28); g.fillStyle = 'rgba(0,0,0,.25)'; g.fill(); g.clip(); g.drawImage(o.pic, 60, 75, 480, 480); g.restore();
+    g.strokeStyle = 'rgba(255,255,255,.35)'; g.lineWidth = 3; roundPath(g, 60, 75, 480, 480, 28); g.stroke();
+  }
+  const ink = '#f2f7f6', x0 = o.pic ? 590 : 70;
+  g.fillStyle = acc; g.font = 'italic 900 34px Overpass, system-ui, sans-serif'; g.textBaseline = 'alphabetic'; g.fillText('JUNCTION', x0, 112);
+  g.fillStyle = 'rgba(242,247,246,.7)'; g.font = '700 16px Overpass, system-ui, sans-serif'; g.fillText((o.kicker || '').toUpperCase(), x0, 142);
+  g.fillStyle = ink; g.font = '900 76px Overpass, system-ui, sans-serif'; g.fillText(String(o.big), x0, 232);
+  g.font = '600 22px Overpass, system-ui, sans-serif'; g.fillStyle = 'rgba(242,247,246,.8)'; g.fillText(o.bigLabel || '', x0, 266);
+  if (o.title) { g.font = '800 26px Overpass, system-ui, sans-serif'; g.fillStyle = ink; g.fillText(o.title, x0, 320); }
+  const st = (o.stats || []).slice(0, 6), cols = 3, cw = (1200 - x0 - 60) / cols;
+  st.forEach(([l, v], i) => {
+    const x = x0 + (i % cols) * cw, y = 360 + Math.floor(i / cols) * 92;
+    roundPath(g, x, y, cw - 14, 76, 14); g.fillStyle = 'rgba(255,255,255,.08)'; g.fill();
+    g.fillStyle = ink; g.font = '800 28px Overpass, system-ui, sans-serif'; g.fillText(String(v), x + 16, y + 38);
+    g.fillStyle = 'rgba(242,247,246,.65)'; g.font = '700 13px Overpass, system-ui, sans-serif'; g.fillText(String(l).toUpperCase(), x + 16, y + 62);
+  });
+  roundPath(g, x0, 560, 1200 - x0 - 60, 44, 22); g.fillStyle = acc; g.fill();
+  g.fillStyle = onColour ? onColour(acc) : '#10262f'; g.font = '800 19px Overpass, system-ui, sans-serif'; g.textBaseline = 'middle'; g.fillText((o.line || 'Can you beat it?') + '  \u00b7  ' + (location.hostname || 'junction'), x0 + 22, 582);
+  return c;
+}
+function dataURLToBlob(u) { const [h, b64] = u.split(','), mime = /data:([^;]+)/.exec(h)[1], bin = atob(b64), arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i); return new Blob([arr], {type: mime}); }
+async function shareCanvas(c, name, text) {
+  const url = c.toDataURL('image/png'), blob = dataURLToBlob(url);
+  try {
+    const file = new File([blob], name + '.png', {type: 'image/png'});
+    if (navigator.share && navigator.canShare && navigator.canShare({files: [file]})) { await navigator.share({files: [file], title: 'Junction', text}); return 'shared'; }
+  } catch (e) { if (e && e.name === 'AbortError') return 'cancelled'; }
+  try {
+    if (navigator.clipboard && window.ClipboardItem) { await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]); toast('Card copied \u2014 paste it anywhere', 'good'); return 'copied'; }
+  } catch (e) {}
+  $('share-img').src = url; openModal('m-share');
+  $('share-save').onclick = () => saveFile(blob, name + '.png').then(ok => toast(ok ? 'Saved' : 'Saving isn\u2019t available here', ok ? 'good' : 'warn'));
+  return 'shown';
+}
+function shareRun() {
+  const st = overStats();
+  const c = makeShareCard({pic: $('over-pic'), kicker: DIFF.label + ' \u00b7 ' + (lastRun.newBest ? 'new personal best' : 'week ' + week), big: score.toLocaleString('en-US'), bigLabel: 'parcels delivered',
+    title: 'Survived ' + week + ' week' + (week === 1 ? '' : 's'), stats: [['Weeks', week], st[1], st[2], st[3], st[4], ['Best', best.toLocaleString('en-US')]], line: 'Can you beat it?'});
+  return shareCanvas(c, 'junction-run-week-' + week, 'I delivered ' + score + ' parcels and survived ' + week + ' weeks in Junction. Can you beat it?');
+}
+function bindShare() {
+  $('btn-share').addEventListener('click', shareRun);
+  $('share-close').addEventListener('click', () => closeModal('m-share'));
+  $('btn-over-home').addEventListener('click', () => { closeModal('m-over'); showStartBest(); openModal('m-start'); });
+  $('ir-share').addEventListener('click', () => { if (lastIsoResult) shareIso(lastIsoResult); });
+}
+let lastIsoResult = null;
+function shareIso(r) {
+  const pic = document.createElement('canvas'); pic.width = pic.height = 480; cityPicture(pic);
+  const mine = r.rows.map(x => [x.label, x.me]);
+  const c = makeShareCard({pic, kicker: 'ISO 1v1 \u00b7 ' + (r.kind === 'live' ? 'live' : 'daily') + ' vs ' + r.oppName, big: r.outcome === 'win' ? 'Won' : r.outcome === 'lose' ? 'Lost' : 'Draw',
+    bigLabel: r.points ? 'points ' + r.points[0] + '\u2013' + r.points[1] : r.reason || '', title: r.outcome === 'win' ? 'Victory over ' + r.oppName : 'Against ' + r.oppName, stats: mine.slice(0, 6), line: r.outcome === 'win' ? 'Think you can take me?' : 'Rematch, anyone?'});
+  return shareCanvas(c, 'junction-iso', (r.outcome === 'win' ? 'I beat ' : 'I played ') + r.oppName + ' in an ISO 1v1 on Junction.');
 }
 
 /* ---------------------------------------------------------------- input */
@@ -7738,7 +9193,7 @@ function citySnap() {
     links: (() => { const o = []; for (let k = 0; k < N; k++) if (lnk[k] && inBox(k)) o.push([k, lnk[k]]); return o; })(),
     special: special.map((v, k) => v ? [k, v === 'light' ? 1 : 2] : null).filter(Boolean),
     b: buildings.map(b => [b.k, b.type === 'store' ? 1 : 0, b.color, isBig(b) ? b.sd : -1]),
-    moto: motorways.map(m => [m.a, m.b]), pal: COLORS.map(c => c.hex)});
+    moto: motorways.map(m => [m.a, m.b]), rail: railSnap(), pal: COLORS.map(c => c.hex)});
 }
 /* draw such a layout into a canvas: water, roads, motorways, junction controls, houses and stores */
 function drawCitySnap(cv2, str) {
@@ -7753,6 +9208,7 @@ function drawCitySnap(cv2, str) {
   for (const t of d.road) { roads.moveTo(X(t), Y(t)); roads.lineTo(X(t), Y(t)); }
   g.strokeStyle = PAL.edge; g.lineWidth = k * 0.78; g.stroke(roads); g.strokeStyle = PAL.road; g.lineWidth = k * 0.62; g.stroke(roads);
   g.strokeStyle = PAL.deck; g.lineWidth = k * 0.4; g.beginPath(); for (const [a, b] of d.moto) { g.moveTo(X(a), Y(a)); g.lineTo(X(b), Y(b)); } g.stroke();
+  if (Array.isArray(d.rail)) { g.strokeStyle = PAL.pave || '#cbc9bd'; g.lineWidth = k * 0.3; g.beginPath(); for (const [a, b] of d.rail) { g.moveTo(X(a), Y(a)); g.lineTo(X(b), Y(b)); } g.stroke(); }
   for (const [t, kind] of d.special) { g.fillStyle = kind === 1 ? '#ff5a4a' : '#48e08a'; g.beginPath(); g.arc(X(t), Y(t), k * 0.24, 0, 6.3); g.fill(); }
   for (const [t, isStore, ci, sd] of d.b) {
     const c = (d.pal && d.pal[ci]) || COLORS[ci].hex;
@@ -7847,7 +9303,16 @@ function bindInput() {
     if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
     if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
     if (k === 'Escape' && !$('m-start').hidden && mmPane && $('menu').hidden) { showMM(null); return; }
-    if (k === 'Escape') { closeInspector(); closeMenu(); toggleCust(false); if (!$('m-help').hidden) closeModal('m-help'); if (!$('m-explain').hidden) closeModal('m-explain'); if (!$('m-feedback').hidden) closeModal('m-feedback'); setTool('select'); return; }
+    if (askResolve) { if (k === 'Enter') { e.preventDefault(); askResolve(true); } else if (k === 'Escape') askResolve(false); return; }
+    if (k.toLowerCase() === 'p' && !$('m-pause').hidden && $('m-help').hidden) { closePause(true); return; }
+    if (k === 'Escape') {
+      const hadOpen = !$('inspect').hidden || !$('menu').hidden || !$('cust-panel').hidden || !$('m-help').hidden || !$('m-explain').hidden || !$('m-feedback').hidden;
+      closeInspector(); closeMenu(); toggleCust(false); if (!$('m-help').hidden) closeModal('m-help'); if (!$('m-explain').hidden) closeModal('m-explain'); if (!$('m-feedback').hidden) closeModal('m-feedback'); setTool('select');
+      if (hadOpen) return;
+      if (!$('m-pause').hidden) closePause(true); else openPause();
+      return;
+    }
+    if (k === 'F2') { e.preventDefault(); if ($('m-start').hidden) toggleFlow(); return; }
     if (modalOpen) return;
     const n = parseInt(k, 10);
     if (n >= 1 && n <= 9) { const t = TOOLS[n - 1]; setTool(t.id === 'signs' ? (isSignTool(tool) ? tool : 'only-forward') : t.id); return; }
@@ -7920,6 +9385,27 @@ function bindInput() {
   $('opt-moto').addEventListener('change', e => { if (e.target.checked !== showMoto) toggleMoto(); });
   $('snd-music').addEventListener('change', e => { audioPrefs.music = e.target.checked; audioWake(); savePrefs(); musicTick(); });
   $('snd-sfx').addEventListener('change', e => { audioPrefs.sfx = e.target.checked; savePrefs(); });
+  $('snd-sfxvol').addEventListener('input', e => { audioPrefs.sfxVol = +e.target.value / 100; audioWake(); });
+  $('snd-sfxvol').addEventListener('change', () => { savePrefs(); sfx('deliver'); });
+  $('snd-ui').addEventListener('change', e => { audioPrefs.ui = e.target.checked; savePrefs(); });
+  $('snd-haptics').addEventListener('change', e => { audioPrefs.haptics = e.target.checked; savePrefs(); if (e.target.checked) haptic('claim'); });
+  $('snd-haptics-wrap').hidden = !navigator.vibrate;
+  // quality
+  document.querySelectorAll('#gfx-pre button').forEach(b => b.addEventListener('click', () => setGfx(Object.assign({}, GFX_PRESETS[b.dataset.gfx]))));
+  document.querySelectorAll('#gfx-shadows button').forEach(b => b.addEventListener('click', () => setGfx({shadows: b.dataset.v})));
+  document.querySelectorAll('#gfx-decor button').forEach(b => b.addEventListener('click', () => setGfx({decor: +b.dataset.v})));
+  document.querySelectorAll('#gfx-cap button').forEach(b => b.addEventListener('click', () => setGfx({cap: +b.dataset.v})));
+  $('gfx-smooth').addEventListener('change', e => setGfx({smooth: e.target.checked}));
+  // accessibility
+  $('acc-scale').addEventListener('input', e => { a11y.scale = +e.target.value; $('acc-scale-v').textContent = a11y.scale + '%'; applyA11y(); });
+  $('acc-scale').addEventListener('change', () => savePrefs(true));
+  $('acc-contrast').addEventListener('change', e => { a11y.contrast = e.target.checked; applyA11y(); savePrefs(true); });
+  document.querySelectorAll('#acc-motion button').forEach(b => b.addEventListener('click', () => { a11y.motion = b.dataset.v; applyA11y(); savePrefs(true); syncA11yUI(); }));
+  $('ver-btn').addEventListener('click', () => { closeMenu(); openWhatsNew(); });
+  $('wn-close').addEventListener('click', () => closeModal('m-whatsnew'));
+  $('daily-claim').addEventListener('click', claimDaily);
+  $('daily-close').addEventListener('click', () => closeModal('m-daily'));
+  $('mm-streak').addEventListener('click', () => { if (dailyPending) openDaily(); else hint('Today’s reward is claimed — come back tomorrow to keep the streak going.'); });
   $('snd-musicvol').addEventListener('input', e => { audioPrefs.musicVol = +e.target.value / 100; audioWake(); musicTick(); });
   $('snd-traffic').addEventListener('input', e => { audioPrefs.traffic = +e.target.value / 100; audioWake(); musicTick(); });
   for (const id of ['snd-musicvol', 'snd-traffic']) $(id).addEventListener('change', () => savePrefs());
@@ -7944,7 +9430,11 @@ function bindInput() {
     const ft = e.target.closest && e.target.closest('[data-focus-tile]');
     if (ft) { const k = +ft.dataset.focusTile; if (nodes[k]) { focusOn(tx(k), ty(k)); sel = {type: 'tile', k}; renderInspector(); refreshUI(); } }
   });
-  $('btn-again').addEventListener('click', () => { closeModal('m-over'); showStartBest(); openModal('m-start'); });
+  $('btn-again').addEventListener('click', () => {                       // the same mode (and save slot) again; a match or the tutorial goes back to the menu
+    closeModal('m-over');
+    if (tutorialMode || diffKey === 'iso' || diffKey === 'expert') { showStartBest(); openModal('m-start'); return; }
+    const dk = diffKey, slot = curSlot; pendingSlot = slot; resetGame(dk); running = true; refreshHud(); layout(); writeSlot();
+  });
   const dp = $('diff-picks'); dp.innerHTML = '';
   for (const k in DIFFS) {
     if (DIFFS[k].expert) continue;
@@ -7991,7 +9481,7 @@ function bindInput() {
   window.addEventListener('beforeunload', saveGame);
   document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(true); });
 }
-function togglePlay() { if (over || modalOpen || spectating) return; if (isoLive()) { isoAsk(running ? 'pause' : 'resume'); return; } running = !running; refreshUI(); }
+function togglePlay() { if (!$('m-pause').hidden) { closePause(true); return; } if (over || modalOpen || spectating) return; if (isoLive()) { isoAsk(running ? 'pause' : 'resume'); return; } running = !running; refreshUI(); }
 function cycleSpeed(d) { if (spectating) return; const s = CFG_SPEEDS; let i = s.indexOf(speed); i = (i + d + s.length) % s.length; if (isoLive()) { isoAsk('speed:' + s[i]); return; } speed = s[i]; refreshUI(); }
 const CFG_SPEEDS = [0.5, 1, 2, 3];
 function toggleMute() { muted = !muted; audioWake(); savePrefs(); refreshUI(); musicTick(); }
@@ -8056,7 +9546,7 @@ function bindLayout() {
   window.addEventListener('resize', () => { if (layDevice() !== layDev) applyLayout(); });
 }
 function savePrefs(noCity) {
-  try { localStorage.setItem(PREFS_KEY, JSON.stringify({muted, nightOn, showGrid, fxOn, colorMode, customHex, showSymbols, tipsOn, notesMode, showMoto, audio: audioPrefs})); } catch (e) {}
+  try { localStorage.setItem(PREFS_KEY, JSON.stringify({muted, nightOn, showGrid, fxOn, colorMode, customHex, showSymbols, tipsOn, notesMode, showMoto, audio: audioPrefs, gfx, a11y})); } catch (e) {}
   if (!noCity && started && !over && !tutorialMode && !spectating && running) saveGame();   // the open city keeps these colours
 }
 function renderNotesUI() {
@@ -8070,10 +9560,13 @@ function syncPrefUI() {
   const set = (id, v) => { const el = $(id); if (el) el.checked = !!v; };
   set('opt-moto', showMoto); set('snd-music', audioPrefs.music); set('snd-sfx', audioPrefs.sfx);
   const sv = (id, v) => { const el = $(id); if (el) el.value = Math.round(v * 100); };
-  sv('snd-musicvol', audioPrefs.musicVol); sv('snd-traffic', audioPrefs.traffic);
+  sv('snd-musicvol', audioPrefs.musicVol); sv('snd-traffic', audioPrefs.traffic); sv('snd-sfxvol', audioPrefs.sfxVol);
+  set('snd-ui', audioPrefs.ui); set('snd-haptics', audioPrefs.haptics);
+  syncGfxUI(); syncA11yUI();
   set('opt-night', nightOn); set('opt-grid', showGrid); set('opt-fx', fxOn); set('opt-symbols', showSymbols); set('opt-tips', tipsOn);
   renderNotesUI();
 }
+let gfxSaved = false;
 function loadPrefs() {
   try {
     const p = JSON.parse(localStorage.getItem(PREFS_KEY));
@@ -8083,7 +9576,20 @@ function loadPrefs() {
       if (p.audio && typeof p.audio === 'object') {
         if (typeof p.audio.music === 'boolean') audioPrefs.music = p.audio.music;
         if (typeof p.audio.sfx === 'boolean') audioPrefs.sfx = p.audio.sfx;
-        for (const k of ['musicVol', 'traffic']) if (isFinite(p.audio[k])) audioPrefs[k] = clamp(+p.audio[k], 0, 1);
+        for (const k of ['musicVol', 'traffic', 'sfxVol']) if (isFinite(p.audio[k])) audioPrefs[k] = clamp(+p.audio[k], 0, 1);
+        for (const k of ['ui', 'haptics']) if (typeof p.audio[k] === 'boolean') audioPrefs[k] = p.audio[k];
+      }
+      if (p.gfx && typeof p.gfx === 'object') {
+        if (['on', 'simple', 'off'].includes(p.gfx.shadows)) gfx.shadows = p.gfx.shadows;
+        if ([1, 0.6, 0.3].includes(+p.gfx.decor)) gfx.decor = +p.gfx.decor;
+        if (typeof p.gfx.smooth === 'boolean') gfx.smooth = p.gfx.smooth;
+        if ([0, 60, 30].includes(+p.gfx.cap)) gfx.cap = +p.gfx.cap;
+        gfx.preset = gfxPresetOf(); gfxSaved = true;
+      }
+      if (p.a11y && typeof p.a11y === 'object') {
+        if (isFinite(p.a11y.scale)) a11y.scale = clamp(Math.round(+p.a11y.scale / 5) * 5, 90, 130);
+        if (typeof p.a11y.contrast === 'boolean') a11y.contrast = p.a11y.contrast;
+        if (['auto', 'reduce', 'full'].includes(p.a11y.motion)) a11y.motion = p.a11y.motion;
       }
       if (typeof p.nightOn === 'boolean') nightOn = p.nightOn;
       if (typeof p.showGrid === 'boolean') showGrid = p.showGrid;
@@ -8095,7 +9601,10 @@ function loadPrefs() {
       if (Array.isArray(p.customHex) && p.customHex.length === COLORS.length && p.customHex.every(h => /^#[0-9a-f]{6}$/i.test(h))) customHex = p.customHex.slice();
     }
   } catch (e) {}
+  // phones start on Balanced
+  if (!gfxSaved) { let phone = false; try { phone = matchMedia('(pointer: coarse)').matches || innerWidth < 820; } catch (e) {} if (phone) Object.assign(gfx, GFX_PRESETS.balanced, {preset: 'balanced'}); }
   applyPalette();
+  applyA11y();
   syncPrefUI();
 }
 /* ------------------------------------------------ settings: colours and symbols */
@@ -8198,7 +9707,22 @@ const UI_THEMES = {
   coral: {label: 'Coral', plate: '#ffe9e3', accent: '#e2553f'},
   ivory: {label: 'Ivory', plate: '#fffaf0', accent: '#8a5a00'},
   sunset: {label: 'Sunset', plate: '#2d1638', accent: '#ffa05c'},
-  galaxy: {label: 'Galaxy', plate: '#140c2e', accent: '#c59bff'}
+  galaxy: {label: 'Galaxy', plate: '#140c2e', accent: '#c59bff'},
+  /* p40 interface themes */
+  teal: {label: 'Teal', plate: '#0f3d3a', accent: '#ffb86b'},
+  olive: {label: 'Olive', plate: '#2f3a24', accent: '#f5d06f'},
+  rust: {label: 'Rust', plate: '#3d2217', accent: '#7fe3ff'},
+  indigo: {label: 'Indigo', plate: '#1c1f4a', accent: '#ffcc4d'},
+  cream: {label: 'Cream', plate: '#fbf6e7', accent: '#2f7a78'},
+  lilac: {label: 'Lilac', plate: '#f1e9fa', accent: '#9a3fb0'},
+  seafoam: {label: 'Sea foam', plate: '#e2f6f0', accent: '#0f6b5a'},
+  stone: {label: 'Stone', plate: '#e9e6df', accent: '#6b4bc4'},
+  ink: {label: 'Ink', plate: '#101418', accent: '#ffd23a'},
+  cherry: {label: 'Cherry', plate: '#4a0f1c', accent: '#ffd1e3'},
+  twilight: {label: 'Twilight', plate: '#262a3f', accent: '#9fd5f2'},
+  honey: {label: 'Honey', plate: '#fff1c9', accent: '#8a4a10'},
+  candyfloss: {label: 'Candy floss', plate: '#ffe1f0', accent: '#1e6fd0'},
+  nebula: {label: 'Nebula', plate: '#1a0f3d', accent: '#ff7ab8'}
 };
 /* p30 panel styles: each is a base style (clean, glass or road sign, maybe frosted) with its own corner radius, edge,
    shadow, sheen and button shape, applied through CSS variables (see applyUiTheme and the v1.11 block in styles.css) */
@@ -8235,7 +9759,23 @@ const PANEL_X = {
   frostglow: {label: 'Frosted glow', base: 'glass', r: 16, ring: 'inset 0 1px 0 rgba(255,255,255,.3),inset 0 0 0 1px rgba(255,255,255,.14)', rings: 'inset 0 1px 0 rgba(255,255,255,.3),inset 0 0 0 1px rgba(255,255,255,.14)', drop: '0 0 0 1px rgba(var(--accent-rgb),.3),0 6px 24px rgba(var(--accent-rgb),.42)', sheen: 'linear-gradient(160deg,rgba(255,255,255,.16),rgba(255,255,255,.04) 45%,rgba(255,255,255,.08))', bgs: 'auto', btn: '', frost: 1},
   aurora: {label: 'Aurora panels', base: 'clean', r: 18, ring: 'inset 0 0 0 1px rgba(var(--accent-rgb),.55)', rings: 'inset 0 0 0 1px rgba(var(--accent-rgb),.55)', drop: '0 0 0 1px rgba(var(--accent-rgb),.3),0 6px 24px rgba(var(--accent-rgb),.42)', sheen: 'linear-gradient(120deg,rgba(77,255,195,.16),rgba(127,90,255,.14) 50%,rgba(47,214,255,.14))', bgs: 'auto', btn: 'pill'},
   gilded: {label: 'Gilded', base: 'sign', r: 14, ring: 'inset 0 0 0 3px var(--plate),inset 0 0 0 4.5px #d4af37,inset 0 0 0 5.5px rgba(255,241,168,.45)', rings: 'inset 0 0 0 1.5px #d4af37', drop: '0 18px 40px rgba(0,0,0,.28),0 4px 10px rgba(0,0,0,.14)', sheen: 'linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,0) 42%)', bgs: 'auto', btn: 'soft'},
-  opal: {label: 'Opal glass', base: 'glass', r: 20, ring: 'inset 0 1px 0 rgba(255,255,255,.3),inset 0 0 0 1px rgba(255,255,255,.14)', rings: 'inset 0 1px 0 rgba(255,255,255,.3),inset 0 0 0 1px rgba(255,255,255,.14)', drop: '0 18px 40px rgba(0,0,0,.28),0 4px 10px rgba(0,0,0,.14)', sheen: 'linear-gradient(135deg,rgba(255,170,220,.18),rgba(170,220,255,.16) 50%,rgba(200,255,210,.14))', bgs: 'auto', btn: 'pill', frost: 1}
+  opal: {label: 'Opal glass', base: 'glass', r: 20, ring: 'inset 0 1px 0 rgba(255,255,255,.3),inset 0 0 0 1px rgba(255,255,255,.14)', rings: 'inset 0 1px 0 rgba(255,255,255,.3),inset 0 0 0 1px rgba(255,255,255,.14)', drop: '0 18px 40px rgba(0,0,0,.28),0 4px 10px rgba(0,0,0,.14)', sheen: 'linear-gradient(135deg,rgba(255,170,220,.18),rgba(170,220,255,.16) 50%,rgba(200,255,210,.14))', bgs: 'auto', btn: 'pill', frost: 1},
+  /* p40 panel styles */
+  softstripe: {label: 'Soft stripes', base: 'clean', r: 18, ring: 'inset 0 0 0 1px var(--line)', rings: 'inset 0 0 0 1px var(--line)', drop: 'var(--shadow)', sheen: 'repeating-linear-gradient(135deg,rgba(var(--ov),.05) 0 8px,rgba(var(--ov),0) 8px 16px)', bgs: 'auto', btn: 'pill'},
+  ringlets: {label: 'Ringlets', base: 'clean', r: 18, ring: 'inset 0 0 0 1px var(--line)', rings: 'inset 0 0 0 1px var(--line)', drop: 'var(--shadow)', sheen: 'radial-gradient(circle,rgba(var(--ov),0) 5px,rgba(var(--ov),.07) 5.5px,rgba(var(--ov),.07) 7px,rgba(var(--ov),0) 7.5px)', bgs: '26px 26px', btn: 'pill'},
+  rainbowtop: {label: 'Rainbow ribbon', base: 'clean', r: 14, ring: 'inset 0 0 0 1px var(--line)', rings: 'inset 0 0 0 1px var(--line)', drop: 'var(--shadow)', sheen: 'linear-gradient(180deg,rgba(0,0,0,0) 4px,var(--plate) 4px),linear-gradient(90deg,#ff6b6b,#ffd23a,#3fd16a,#2f9bff,#8a5bff)', bgs: 'auto', btn: ''},
+  boldline: {label: 'Bold outline', base: 'clean', r: 16, ring: 'inset 0 0 0 3px rgba(var(--accent-rgb),.9)', rings: 'inset 0 0 0 2px rgba(var(--accent-rgb),.9)', drop: '0 1px 2px rgba(0,0,0,.12)', sheen: 'none', bgs: 'auto', btn: 'soft'},
+  innerglow: {label: 'Inner glow', base: 'clean', r: 18, ring: 'inset 0 0 18px rgba(var(--accent-rgb),.35),inset 0 0 0 1px rgba(var(--accent-rgb),.5)', rings: 'inset 0 0 8px rgba(var(--accent-rgb),.55),inset 0 0 0 1px rgba(var(--accent-rgb),.5)', drop: 'var(--shadow)', sheen: 'none', bgs: 'auto', btn: 'pill'},
+  longshadow: {label: 'Long shadow', base: 'clean', r: 14, ring: 'inset 0 0 0 1px var(--line)', rings: 'inset 0 0 0 1px var(--line)', drop: '8px 8px 0 rgba(var(--accent-rgb),.55),0 10px 24px rgba(0,0,0,.18)', sheen: 'none', bgs: 'auto', btn: 'soft'},
+  cushion: {label: 'Cushion', base: 'clean', r: 26, ring: 'inset 0 1px 0 rgba(255,255,255,.3),inset 0 0 0 1px rgba(255,255,255,.14)', rings: 'inset 0 1px 0 rgba(255,255,255,.3),inset 0 0 0 1px rgba(255,255,255,.14)', drop: '0 18px 40px rgba(0,0,0,.28),0 4px 10px rgba(0,0,0,.14)', sheen: 'linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,0) 42%)', bgs: 'auto', btn: 'pill'},
+  stacked: {label: 'Stacked cards', base: 'clean', r: 16, ring: 'inset 0 0 0 1px var(--line)', rings: 'inset 0 0 0 1px var(--line)', drop: '0 12px 0 -6px rgba(0,0,0,.18),0 14px 30px rgba(0,0,0,.22)', sheen: 'none', bgs: 'auto', btn: ''},
+  honeycomb: {label: 'Honeycomb', base: 'clean', r: 16, ring: 'inset 0 0 0 1px var(--line)', rings: 'inset 0 0 0 1px var(--line)', drop: 'var(--shadow)', sheen: 'radial-gradient(circle at 50% 50%,rgba(var(--ov),.07) 0 6px,rgba(var(--ov),0) 7px),radial-gradient(circle at 0 0,rgba(var(--ov),.07) 0 6px,rgba(var(--ov),0) 7px)', bgs: '28px 28px', btn: 'pill'},
+  stripesign: {label: 'Striped sign', base: 'sign', r: 14, ring: 'inset 0 0 0 3px var(--plate),inset 0 0 0 4.5px var(--keyline)', rings: 'inset 0 0 0 1.5px var(--keyline)', drop: 'var(--shadow)', sheen: 'repeating-linear-gradient(135deg,rgba(var(--ov),.05) 0 8px,rgba(var(--ov),0) 8px 16px)', bgs: 'auto', btn: ''},
+  ripples: {label: 'Ripples', base: 'clean', r: 20, ring: 'inset 0 0 0 1px var(--line)', rings: 'inset 0 0 0 1px var(--line)', drop: 'var(--shadow)', sheen: 'repeating-radial-gradient(circle at 50% 50%,rgba(var(--ov),.05) 0 3px,rgba(var(--ov),0) 3px 10px)', bgs: 'auto', btn: 'pill'},
+  velvet: {label: 'Velvet', base: 'clean', r: 18, ring: 'inset 0 0 0 1px rgba(var(--accent-rgb),.55)', rings: 'inset 0 0 0 1px rgba(var(--accent-rgb),.55)', drop: '0 24px 50px rgba(0,0,0,.35),0 8px 16px rgba(0,0,0,.18)', sheen: 'linear-gradient(180deg,rgba(var(--accent-rgb),0) 35%,rgba(var(--accent-rgb),.15))', bgs: 'auto', btn: 'pill'},
+  stripeglass: {label: 'Striped glass', base: 'glass', r: 18, ring: 'inset 0 1px 0 rgba(255,255,255,.3),inset 0 0 0 1px rgba(255,255,255,.14)', rings: 'inset 0 1px 0 rgba(255,255,255,.3),inset 0 0 0 1px rgba(255,255,255,.14)', drop: '0 18px 40px rgba(0,0,0,.28),0 4px 10px rgba(0,0,0,.14)', sheen: 'repeating-linear-gradient(135deg,rgba(var(--ov),.05) 0 8px,rgba(var(--ov),0) 8px 16px)', bgs: 'auto', btn: 'pill'},
+  candyglass: {label: 'Candy glass', base: 'glass', r: 20, ring: 'inset 0 1px 0 rgba(255,255,255,.3),inset 0 0 0 1px rgba(255,255,255,.14)', rings: 'inset 0 1px 0 rgba(255,255,255,.3),inset 0 0 0 1px rgba(255,255,255,.14)', drop: '0 0 0 3px rgba(var(--accent-rgb),.32),var(--shadow)', sheen: 'linear-gradient(135deg,rgba(255,120,180,.16),rgba(120,200,255,.14))', bgs: 'auto', btn: 'pill', frost: 1},
+  prism: {label: 'Prism glass', base: 'glass', r: 20, ring: 'inset 0 1px 0 rgba(255,255,255,.3),inset 0 0 0 1px rgba(255,255,255,.14)', rings: 'inset 0 1px 0 rgba(255,255,255,.3),inset 0 0 0 1px rgba(255,255,255,.14)', drop: '0 0 0 1px rgba(var(--accent-rgb),.3),0 6px 24px rgba(var(--accent-rgb),.42)', sheen: 'linear-gradient(120deg,rgba(255,80,80,.14),rgba(255,210,58,.12) 25%,rgba(63,209,106,.12) 50%,rgba(47,155,255,.14) 75%,rgba(138,91,255,.14))', bgs: 'auto', btn: 'pill', frost: 1}
 };
 const UI_STYLES = ['clean', 'glass', 'sign'].concat(Object.keys(PANEL_X));
 let uiTheme = {preset: 'petrol', style: 'clean', frost: false, plate: '', btn: '', accent: ''};
@@ -8352,7 +9892,8 @@ const DESIGNS = {
   round:  {label: 'Roundabout designs', one: 'roundabout design', items: {standard: ['Standard', 0], stone: ['Paved', 30], garden: ['Garden', 35], sundial: ['Sundial', 40], pond: ['Lily pond', 40], fountain: ['Fountain', 55], statue: ['Statue', 0, 'A', 'round5']}},
   bridge: {label: 'Bridge designs', one: 'bridge design', items: {standard: ['Stone', 0], wood: ['Wooden', 30], rope: ['Rope bridge', 35], steel: ['Steel truss', 40],
            brick: ['Brick arch', 35], glass: ['Glass', 45], suspension: ['Suspension', 55], rainbow: ['Rainbow', 30, 'R'], covered: ['Covered', 0, 'A', 'cities10']}},
-  moto:   {label: 'Motorway designs', one: 'motorway design', items: {standard: ['Blue deck', 0], concrete: ['Concrete', 30], ivy: ['Ivy', 35], lights: ['Night lights', 40], sunset: ['Sunset', 45], glass: ['Glass', 45], rainbow: ['Rainbow', 30, 'R'], skyline: ['Skyline', 0, 'A', 'moto3']}}
+  moto:   {label: 'Motorway designs', one: 'motorway design', items: {standard: ['Blue deck', 0], concrete: ['Concrete', 30], ivy: ['Ivy', 35], lights: ['Night lights', 40], sunset: ['Sunset', 45], glass: ['Glass', 45], rainbow: ['Rainbow', 30, 'R'], skyline: ['Skyline', 0, 'A', 'moto3']}},
+  drone:  {label: 'Drone designs', one: 'drone design', items: {standard: ['Standard', 0]}}
 };
 /* v1.9: new designs. 'U' is unique (only from mystery crates); 'R' items are the daily specials, priced in ✦ */
 Object.assign(DESIGNS.car.items, {police: ['Police', 60], galaxy: ['Galaxy', 0, 'U']});
@@ -8366,6 +9907,24 @@ Object.assign(DESIGNS.moto.items, {aurora: ['Aurora', 0, 'U']});
 for (const cat in GEN) for (const [k, n, pr, cur] of GEN[cat]) DESIGNS[cat].items[k] = cur ? [n, pr, cur] : [n, pr];
 const SPECIAL_R = {'car:gold': 200, 'house:castle': 250, 'road:gold': 150, 'store:crystal': 300, 'bridge:rainbow': 200, 'moto:rainbow': 150};
 for (const k in SPECIAL_R) { const [c, i] = k.split(':'); DESIGNS[c].items[i][1] = SPECIAL_R[k]; }
+/* p52 */
+/* ---- profile looks: a banner behind your name, a frame round your avatar, and a title. Bought like any look. */
+const BANNERS = {
+  sunrise: ['Sunrise', 30, 'linear-gradient(120deg,#ff8a5c,#ffd23a)'], ocean: ['Ocean', 30, 'linear-gradient(120deg,#1a7ca6,#7fe3ff)'], forest: ['Forest', 30, 'linear-gradient(120deg,#2e7d32,#93c47d)'],
+  candy: ['Candy', 35, 'linear-gradient(120deg,#ff6fb5,#ffd1e3)'], royal: ['Royal', 40, 'linear-gradient(120deg,#221a4c,#8a5bd6)'], ember: ['Ember', 40, 'linear-gradient(120deg,#3a1f18,#ff6a2b)'],
+  dusk: ['Dusk', 35, 'linear-gradient(120deg,#2b1b3d,#e3527a 60%,#ffcf5c)'], mint: ['Mint', 30, 'linear-gradient(120deg,#16a2b8,#bff0dc)'], slate: ['Slate', 25, 'linear-gradient(120deg,#3a4652,#9fb3c2)'],
+  neon: ['Neon', 55, 'linear-gradient(120deg,#0b0f1f,#22e6ff 55%,#ff3df2)'], lava: ['Lava', 60, 'linear-gradient(120deg,#2a1714,#ff5a1a 55%,#ffc23a)'], rainbow: ['Rainbow', 70, 'linear-gradient(120deg,#ff4d4d,#ff9f1a,#ffd23a,#3fd16a,#2f9bff,#8a5bff)'],
+  aurora: ['Aurora', 0, 'linear-gradient(120deg,#0e1b2e,#3dffb0 40%,#7a5bff 80%)', 'U'], galaxy: ['Galaxy', 0, 'radial-gradient(circle at 30% 30%,#c59bff,#1a0f3d 60%)', 'U'], gold: ['Gold leaf', 0, 'linear-gradient(120deg,#8f6d10,#fff1a8 50%,#d4af37)', 'U']
+};
+const FRAMES = {
+  ring: ['Ring', 25, '#ffffff'], gold: ['Gold', 45, '#d4af37'], teal: ['Teal', 25, '#16a2b8'], rose: ['Rose', 25, '#e3799d'], mint: ['Mint', 25, '#4fd1a5'], violet: ['Violet', 30, '#8a5bd6'],
+  neon: ['Neon', 55, '#22e6ff'], ember: ['Ember', 45, '#ff6a2b'], laurel: ['Laurel', 60, '#7cb342'], crown: ['Crown', 0, '#ffd23a', 'U'], halo: ['Halo', 0, '#fff1a8', 'U'], prism: ['Prism', 0, 'conic', 'U']
+};
+const TITLES = {
+  pusher: ['Parcel Pusher', 25], planner: ['City Planner', 30], royalty: ['Roundabout Royalty', 40], whisperer: ['Traffic Whisperer', 40], mogul: ['Motorway Mogul', 40], builder: ['Bridge Builder', 30],
+  owl: ['Night Owl', 30], speed: ['Speed Demon', 35], zen: ['Zen Master', 35], tycoon: ['Tycoon', 45], gridlock: ['Gridlock Breaker', 55], mayor: ['Mayor', 60],
+  legend: ['Junction Legend', 0, 'U'], ghost: ['Phantom Driver', 0, 'U'], champion: ['Champion', 0, 'A', 'p1000']
+};
 const COSMETICS = {
   'ui:ocean': [50, 'Ocean theme'], 'ui:aurora': [0, 'Aurora theme', 'U'], 'ui:molten': [0, 'Molten theme', 'U'],
   'map:lunar': [0, 'Lunar map', 'U'], 'map:volcano': [0, 'Volcano map', 'U'], 'decor:crystal': [0, 'Crystals', 'U'],
@@ -8379,6 +9938,67 @@ const COSMETICS = {
   'decor:cactus': [30, 'Cacti'], 'decor:blossom': [35, 'Blossom trees'], 'decor:palm': [35, 'Palms'], 'decor:snowpine': [45, 'Snowy pines'],
   'decor:mushroom': [55, 'Mushrooms'], 'decor:pumpkin': [60, 'Pumpkins']
 };
+/* p40: more interface themes, map themes, decorations and panel styles */
+Object.assign(COSMETICS, {
+  'ui:teal': [30, 'Teal theme'],
+  'ui:olive': [30, 'Olive theme'],
+  'ui:rust': [35, 'Rust theme'],
+  'ui:indigo': [35, 'Indigo theme'],
+  'ui:cream': [30, 'Cream theme'],
+  'ui:lilac': [45, 'Lilac theme'],
+  'ui:seafoam': [35, 'Sea foam theme'],
+  'ui:stone': [25, 'Stone theme'],
+  'ui:ink': [25, 'Ink theme'],
+  'ui:cherry': [45, 'Cherry theme'],
+  'ui:twilight': [50, 'Twilight theme'],
+  'ui:honey': [50, 'Honey theme'],
+  'ui:candyfloss': [0, 'Candy floss theme', 'U'],
+  'ui:nebula': [0, 'Nebula theme', 'U'],
+  'map:poppyfield': [30, 'Poppy field map'],
+  'map:daisymeadow': [30, 'Daisy meadow map'],
+  'map:rosegarden': [40, 'Rose garden map'],
+  'map:lemongrove': [35, 'Lemon grove map'],
+  'map:apiary': [35, 'Apiary map'],
+  'map:oakwood': [30, 'Oak wood map'],
+  'map:gelato': [50, 'Gelato map'],
+  'map:teagarden': [35, 'Tea garden map'],
+  'map:pebblebeach': [30, 'Pebble beach map'],
+  'map:plaza': [35, 'Fountain plaza map'],
+  'map:donutshop': [55, 'Donut shop map'],
+  'map:yuletide': [60, 'Yuletide map'],
+  'map:abyss': [0, 'Abyss map', 'U'],
+  'map:wispmarsh': [0, 'Wisp marsh map', 'U'],
+  'decor:poppy': [30, 'Poppies'],
+  'decor:daisy': [25, 'Daisies'],
+  'decor:rosebush': [35, 'Rose bushes'],
+  'decor:lemontree': [30, 'Lemon trees'],
+  'decor:beehive': [35, 'Beehives'],
+  'decor:acorn': [25, 'Acorns'],
+  'decor:icecream': [45, 'Ice creams'],
+  'decor:teacup': [35, 'Teacups'],
+  'decor:cairn': [25, 'Pebble stacks'],
+  'decor:donut': [45, 'Donuts'],
+  'decor:bauble': [50, 'Baubles'],
+  'decor:fountain': [55, 'Fountains'],
+  'decor:jellyfish': [0, 'Jellyfish', 'U'],
+  'decor:wisp': [0, 'Wisps', 'U'],
+  'decor:ghostlight': [55, 'Ghost lights'],
+  'style:softstripe': [30, 'Soft stripes panels'],
+  'style:ringlets': [35, 'Ringlets panels'],
+  'style:rainbowtop': [40, 'Rainbow ribbon panels'],
+  'style:boldline': [25, 'Bold outline panels'],
+  'style:innerglow': [35, 'Inner glow panels'],
+  'style:longshadow': [30, 'Long shadow panels'],
+  'style:cushion': [35, 'Cushion panels'],
+  'style:stacked': [30, 'Stacked cards panels'],
+  'style:honeycomb': [35, 'Honeycomb panels'],
+  'style:stripesign': [35, 'Striped sign panels'],
+  'style:ripples': [45, 'Ripples panels'],
+  'style:velvet': [45, 'Velvet panels'],
+  'style:stripeglass': [50, 'Striped glass panels'],
+  'style:candyglass': [0, 'Candy glass panels', 'U'],
+  'style:prism': [0, 'Prism glass panels', 'U']
+});
 /* p30: more interface themes, map themes, decorations and panel styles */
 Object.assign(COSMETICS, {
   'ui:lagoon': [35, 'Lagoon theme'],
@@ -8488,7 +10108,25 @@ Object.assign(COSMETICS, {
   'style:opal': [0, 'Opal glass panels', 'U']
 });
 for (const cat in DESIGNS) for (const k in DESIGNS[cat].items) { const [n, pr, cur, achId] = DESIGNS[cat].items[k]; if (pr || cur) COSMETICS['design:' + cat + ':' + k] = [pr, n + ' ' + DESIGNS[cat].one, cur || '#', achId]; }
+Object.assign(DESIGNS.car.items, {season_bronze: ['Bronze season', 0, 'S'], season_silver: ['Silver season', 0, 'S'], season_gold: ['Gold season', 0, 'S'], season_platinum: ['Platinum season', 0, 'S'], season_diamond: ['Diamond season', 0, 'S']});
+for (const k of ['season_bronze', 'season_silver', 'season_gold', 'season_platinum', 'season_diamond']) COSMETICS['design:car:' + k] = [0, DESIGNS.car.items[k][0] + ' car design', 'S'];
+for (const k in BANNERS) COSMETICS['banner:' + k] = BANNERS[k][3] ? [BANNERS[k][1], BANNERS[k][0] + ' banner', BANNERS[k][3]] : [BANNERS[k][1], BANNERS[k][0] + ' banner'];
+for (const k in FRAMES) COSMETICS['frame:' + k] = FRAMES[k][3] ? [FRAMES[k][1], FRAMES[k][0] + ' frame', FRAMES[k][3]] : [FRAMES[k][1], FRAMES[k][0] + ' frame'];
+for (const k in TITLES) COSMETICS['title:' + k] = TITLES[k][2] ? [TITLES[k][1], TITLES[k][0] + ' title', TITLES[k][2], TITLES[k][3]] : [TITLES[k][1], TITLES[k][0] + ' title'];
 for (const id in COSMETICS) { const c = COSMETICS[id]; if (!c[2] || c[2] === '#') c[0] = newPrice(c[0]); }
+/* ---- seasonal events: a themed fortnight with its own designs, quests and news. Dates are month/day, local time. */
+const EVENTS = [
+  {id: 'halloween', name: 'Halloween', start: [10, 18], end: [10, 31], map: 'spooky', decor: 'pumpkin', items: ['design:car:ghost', 'design:store:batwing', 'decor:ghostlight', 'title:ghost'],
+   tag: 'Event', title: 'Halloween in Junction', text: 'Ghost cars, bat-wing stores and ghost lights in the Store until October 31, plus three spooky quests.',
+   quests: [['deliver', 300, 'Deliver 300 parcels on the Spooky map', {c: 120}, 'spooky'], ['build_light', 6, 'Light up 6 junctions in one city', {c: 150}], ['survive', 8, 'Survive to week 8 in the dark', {item: 'design:car:ghost'}]]}
+];
+function activeEvent(d) {
+  const x = d || new Date(), m = x.getMonth() + 1, day = x.getDate();
+  return EVENTS.find(e => (m > e.start[0] || (m === e.start[0] && day >= e.start[1])) && (m < e.end[0] || (m === e.end[0] && day <= e.end[1]))) || null;
+}
+const EVENT_ITEMS = new Set(EVENTS.flatMap(e => e.items));
+const eventOf = id => EVENTS.find(e => e.items.includes(id));
+const eventWhen = e => new Date(2000, e.start[0] - 1, e.start[1]).toLocaleDateString('en-US', {month: 'long', day: 'numeric'}) + '\u2013' + new Date(2000, e.end[0] - 1, e.end[1]).toLocaleDateString('en-US', {day: 'numeric'});
 /* every library colour is its own item (standard #500-700, premium ones rare); the Unique group only comes from crates */
 const COLOUR_PRICE = {}, UNIQUE_COLS = new Set();
 for (const g of COLOR_LIBRARY) g.cols.forEach(([n, h, pr], i) => {
@@ -8497,11 +10135,12 @@ for (const g of COLOR_LIBRARY) g.cols.forEach(([n, h, pr], i) => {
 });
 const colourName = hex => LIB_NAME[hex] || hueName(hex);
 const colourPrice = hex => hex in COLOUR_PRICE ? COLOUR_PRICE[hex] : 700;
-let jb = {v: 4, bucks: 0, toward: 0, rbucks: 0, rtoward: 0, owned: {}, hired: {}, designs: {}, rot: null, daily: null}, jbFirstRun = false, buyPending = null;
+let jb = {v: 4, bucks: 0, toward: 0, rbucks: 0, rtoward: 0, owned: {}, hired: {}, designs: {}, rot: null, daily: null, prof: {banner: '', frame: '', title: '', pins: []}, quests: null}, jbFirstRun = false, buyPending = null;
 const design = cat => (jb.designs && DESIGNS[cat] && DESIGNS[cat].items[jb.designs[cat]]) ? jb.designs[cat] : 'standard';
 const storeDesign = () => design('store');
 function itemInfo(id) {                                // [price, name] for anything that can be bought
   if (id.startsWith('colour:')) { const h = id.slice(7); return [colourPrice(h), colourName(h).replace(/^./, c => c.toUpperCase()) + ' colour', UNIQUE_COLS.has(h) ? 'U' : '#']; }
+  if (/^(banner|frame|title):$/.test(id)) return [0, 'Default', '#'];
   const c = COSMETICS[id]; return c ? [c[0], c[1], c[2] || '#', c[3]] : null;
 }
 const ownsColour = hex => { const id = 'colour:' + String(hex).toLowerCase(); return !!jb.owned[id] || (jb.hired[id] || 0) > Date.now(); };
@@ -8511,10 +10150,45 @@ const owns = id => {
   if (id.startsWith('colour:')) return ownsColour(id.slice(7));
   const c = COSMETICS[id]; if (!c) return true;
   if (c[2] === 'A') return !!(typeof ach !== 'undefined' && ach[c[3]]);
+  if (c[2] === 'S') return !!jb.owned[id];
   return !!jb.owned[id];
 };
 const hiredLeft = id => Math.max(0, (jb.hired[id] || 0) - Date.now());
-function saveShop() { try { localStorage.setItem(SHOP_KEY, JSON.stringify(jb)); } catch (e) {} }
+function saveShop() { try { localStorage.setItem(SHOP_KEY, JSON.stringify(jb)); } catch (e) {} shopDirty = true; }
+let shopDirty = false;
+setInterval(() => { if (shopDirty) { shopDirty = false; JEvents.emit('shop', {}); } }, 4000);
+function cleanProf(p) {
+  p = p && typeof p === 'object' ? p : {};
+  return {banner: BANNERS[p.banner] ? p.banner : '', frame: FRAMES[p.frame] ? p.frame : '', title: TITLES[p.title] ? p.title : '', pins: Array.isArray(p.pins) ? p.pins.filter(id => ACH.some(a => a.id === id)).slice(0, 3) : []};
+}
+/* what's worth keeping with your account (B1): balances, what you own and wear, your streak, quests and profile look */
+function shopSnapshot() {
+  return {v: 4, bucks: jb.bucks, toward: jb.toward, rbucks: jb.rbucks, owned: Object.keys(jb.owned), hired: jb.hired, designs: jb.designs, streak: jb.streak || null, prof: jb.prof, quests: jb.quests || null};
+}
+/* merge what the account holds into this browser: the higher balance wins, owned items are the union, the longer streak stays */
+function mergeShop(d) {
+  if (!d || typeof d !== 'object') return false;
+  let changed = false;
+  for (const k of ['bucks', 'rbucks']) { const v = Math.max(0, Math.floor(+d[k] || 0)); if (v > jb[k]) { jb[k] = v; changed = true; } }
+  if (jb.bucks === Math.floor(+d.bucks || 0) && +d.toward > (jb.toward || 0)) jb.toward = clamp(Math.floor(+d.toward), 0, PARCELS_PER_BUCK - 1);
+  for (const id of Array.isArray(d.owned) ? d.owned : Object.keys(d.owned || {})) if ((COSMETICS[id] || /^colour:#[0-9a-f]{6}$/.test(id)) && !jb.owned[id]) { jb.owned[id] = 1; changed = true; }
+  if (d.hired && typeof d.hired === 'object') for (const k in d.hired) if (/^colour:#[0-9a-f]{6}$/.test(k) && +d.hired[k] > (jb.hired[k] || 0) && +d.hired[k] > Date.now()) { jb.hired[k] = +d.hired[k]; changed = true; }
+  if (d.designs && typeof d.designs === 'object') for (const c in DESIGNS) if (!jb.designs[c] && DESIGNS[c].items[d.designs[c]] && owns('design:' + c + ':' + d.designs[c])) { jb.designs[c] = d.designs[c]; changed = true; }
+  if (d.streak && typeof d.streak === 'object' && (+d.streak.n || 0) > ((jb.streak && jb.streak.n) || 0)) { jb.streak = {last: String(d.streak.last || ''), n: Math.floor(+d.streak.n)}; checkDaily(); changed = true; }
+  const p = cleanProf(d.prof); if ((!jb.prof.banner && p.banner) || (!jb.prof.frame && p.frame) || (!jb.prof.title && p.title) || (!jb.prof.pins.length && p.pins.length)) { jb.prof = {banner: jb.prof.banner || p.banner, frame: jb.prof.frame || p.frame, title: jb.prof.title || p.title, pins: jb.prof.pins.length ? jb.prof.pins : p.pins}; changed = true; }
+  if (d.quests && typeof d.quests === 'object' && (!jb.quests || (d.quests.day === (jb.quests || {}).day && JSON.stringify(d.quests).length > JSON.stringify(jb.quests).length))) { jb.quests = d.quests; changed = true; }
+  if (changed) { saveShop(); renderBucks(); renderLook(); renderStreak(); if (typeof applyProfLook === 'function') applyProfLook(); }
+  return changed;
+}
+/* the profile look you wear */
+const prof = () => jb.prof || cleanProf(null);
+function setProf(o) { jb.prof = cleanProf(Object.assign({}, jb.prof, o)); saveShop(); applyProfLook(); renderLook(); JEvents.emit('prof', {}); }
+function applyProfLook() { const el = $('acct-banner'); if (el) el.style.background = bannerCSS(prof().banner); }
+const bannerCSS = k => BANNERS[k] ? BANNERS[k][2] : 'linear-gradient(120deg,rgba(255,255,255,.08),rgba(255,255,255,.02))';
+const frameCSS = k => FRAMES[k] ? (FRAMES[k][2] === 'conic' ? 'conic-gradient(#ff4d4d,#ffd23a,#3fd16a,#2f9bff,#8a5bff,#ff4d4d)' : FRAMES[k][2]) : '';
+const titleOf = k => TITLES[k] ? TITLES[k][0] : '';
+/* achievements you can pin (the ones you have) */
+const pinnable = () => ACH.filter(a => ach[a.id]).map(a => ({id: a.id, name: a.name, hint: a.hint}));
 function loadShop() {
   let d = null; try { d = JSON.parse(localStorage.getItem(SHOP_KEY)); } catch (e) {}
   if (!d || typeof d !== 'object') { jbFirstRun = true; return; }
@@ -8523,6 +10197,9 @@ function loadShop() {
   const strs = a => Array.isArray(a) ? a.filter(x => typeof x === 'string') : [];
   if (d.rot && typeof d.rot === 'object') { const c = d.rot.crates || {}; jb.rot = {h: +d.rot.h || 0, n: +d.rot.n || 0, items: strs(d.rot.items), cols: strs(d.rot.cols), crates: {colour: +c.colour || 0, item: +c.item || 0, object: +c.object || 0}}; }
   if (d.daily && typeof d.daily === 'object') jb.daily = {d: +d.daily.d || 0, id: typeof d.daily.id === 'string' ? d.daily.id : ''};
+  if (d.streak && typeof d.streak === 'object') jb.streak = {last: String(d.streak.last || ''), n: Math.max(0, Math.floor(+d.streak.n || 0))};
+  jb.prof = cleanProf(d.prof);
+  if (d.quests && typeof d.quests === 'object') jb.quests = d.quests;
   jb.owned = {}; const old = d.owned && typeof d.owned === 'object' ? d.owned : {};
   for (const k in old) if (COSMETICS[k] || /^colour:#[0-9a-f]{6}$/.test(k)) jb.owned[k] = 1;
   jb.hired = {}; if (d.hired && typeof d.hired === 'object') for (const k in d.hired) if (/^colour:#[0-9a-f]{6}$/.test(k) && +d.hired[k] > Date.now()) jb.hired[k] = +d.hired[k];
@@ -8572,7 +10249,9 @@ function purchase(id, kind, fn) {
   const info = itemInfo(id); if (!info) return;
   const name = info[1];
   if (info[2] === 'A') { const a = ACH.find(x => x.id === info[3]); hint(name + ' can’t be bought — earn the “' + achName(info[3]) + '” achievement to unlock it' + (a ? ': ' + a.hint.toLowerCase() + '.' : '.')); return; }
+  if (info[2] === 'C') { hint(name + ' is a campaign reward \u2014 finish its chapter in Campaign to unlock it.'); return; }
   if (info[2] === 'U') { hint(name + ' is unique — it only comes out of mystery crates in the Store.'); return; }
+  if (info[2] === 'S') { hint(name + ' is a ranked season reward: finish a season in that division.'); return; }
   if (!inStock(id)) { hint(name + ' isn’t in the Store right now. The Store restocks every hour (new stock in ' + fmtLeft(HOUR_MS - Date.now() % HOUR_MS) + ')' + (info[2] === 'R' ? ' and has one special item a day.' : '.') + ' Crates can have it too.'); buyPending = null; renderLook(); return; }
   const price = kind === 'hire' ? HIRE_PRICE : info[0], rare = kind !== 'hire' && info[2] === 'R';
   const sym = rare ? RCUR : CUR, have = rare ? jb.rbucks : jb.bucks;
@@ -8592,7 +10271,7 @@ function purchase(id, kind, fn) {
   buyPending = null; if (rare) jb.rbucks -= price; else jb.bucks -= price;
   if (kind === 'hire') { jb.hired[id] = Math.max(Date.now(), jb.hired[id] || 0) + HIRE_MS; toast('Hired ' + name + ' for 3 hours (◎' + HIRE_PRICE + ')', 'good'); }
   else { jb.owned[id] = 1; delete jb.hired[id]; toast('Bought ' + name + ' for ' + sym + price, 'good'); }
-  saveShop(); sfx('upgrade'); renderBucks(); if (fn) fn(); renderLook();
+  saveShop(); sfx('upgrade'); renderBucks(); if (fn) fn(); renderLook(); questEvent('store', 1);
 }
 /* buy-then-run, used where an item is picked directly (it simply runs if you already own it) */
 function buyThen(id, fn) { if (!id || owns(id)) { fn(); return; } purchase(id, 'buy', fn); }
@@ -8613,15 +10292,154 @@ function checkHires() {
 }
 setInterval(() => { if (typeof jb !== 'undefined') { checkHires(); if (!$('menu').hidden || !$('cust-panel').hidden || (!$('m-start').hidden && mmPane === 'store')) renderLook(true); } }, 15000);
 
+/* ---- the daily reward: the first open each day earns coins that grow with the streak; day 7 adds a free Object crate */
+const DAILY_REWARDS = [20, 30, 40, 50, 75, 100, 150];
+const dayStamp = d => { const x = d || new Date(); return x.getFullYear() + '-' + (x.getMonth() + 1) + '-' + x.getDate(); };
+let dailyPending = null;
+function checkDaily() {
+  const st = jb.streak || {last: '', n: 0}, today = dayStamp(), y = new Date(); y.setDate(y.getDate() - 1);
+  if (st.last === today) { dailyPending = null; renderStreak(); return; }
+  dailyPending = {n: st.last === dayStamp(y) ? st.n + 1 : 1};
+  renderStreak();
+}
+const streakDay = n => ((Math.max(1, n) - 1) % 7) + 1;           // 1..7, cycling
+function renderStreak() {
+  const el = $('mm-streak'); if (!el) return;
+  const st = jb.streak || {last: '', n: 0}, n = dailyPending ? dailyPending.n : st.n, day = n ? streakDay(n) : 0;
+  el.classList.toggle('due', !!dailyPending);
+  el.innerHTML = '<small>' + (dailyPending ? 'Daily reward ready' : n ? 'Day ' + day + ' of 7 \u00b7 ' + n + ' day streak' : 'Daily reward') + '</small><span class="pips">' +
+    [1, 2, 3, 4, 5, 6, 7].map(i => '<i class="' + (i < day || (i === day && !dailyPending) ? 'd' : i === day ? 'a' : '') + (i === 7 ? ' crate' : '') + '" title="' + (i === 7 ? 'Object crate + \u25ce150' : '\u25ce' + DAILY_REWARDS[i - 1]) + '"></i>').join('') + '</span>';
+}
+function openDaily() {
+  if (!dailyPending) return;
+  const n = dailyPending.n, day = streakDay(n), coins = DAILY_REWARDS[day - 1];
+  $('daily-title').textContent = n > 1 ? 'Day ' + day + ' \u2014 ' + n + ' days running!' : 'Welcome back!';
+  $('daily-sub').textContent = 'Today: \u25ce' + coins + (day === 7 ? ' and a free Object crate' : '') + '. Come back tomorrow for day ' + (day % 7 + 1) + '.';
+  $('daily-strip').innerHTML = [1, 2, 3, 4, 5, 6, 7].map(i => '<div class="dd' + (i < day ? ' d' : i === day ? ' a' : '') + '"><b>' + (i === 7 ? '\ud83c\udf81' : '\u25ce' + DAILY_REWARDS[i - 1]) + '</b><span>Day ' + i + '</span></div>').join('');
+  $('daily-got').hidden = true; $('daily-claim').hidden = false; $('daily-claim').disabled = false;
+  openModal('m-daily');
+}
+function claimDaily() {
+  if (!dailyPending) return;
+  const n = dailyPending.n, day = streakDay(n), coins = DAILY_REWARDS[day - 1];
+  jb.bucks += coins; jb.streak = {last: dayStamp(), n}; dailyPending = null; saveShop(); renderBucks(); renderStreak();
+  sfx('claim'); haptic('claim'); confetti();
+  $('daily-claim').hidden = true;
+  const got = $('daily-got'); got.hidden = false; got.innerHTML = '<b>+\u25ce' + coins + '</b>' + (day === 7 ? '<span>and your Object crate\u2026</span>' : '<span>See you tomorrow</span>');
+  setTimeout(() => { closeModal('m-daily'); if (day === 7) openCrate('object', true, true); }, day === 7 ? 1300 : 1600);
+}
+/* a little celebration: paper falling over the screen */
+function confetti() {
+  const box = $('confetti'); if (!box || REDUCED_MOTION) return;
+  const cols = ['#ffc933', '#43d17a', '#2f7de1', '#ff6fb5', '#8a5bd6', '#ff8a3c'];
+  for (let i = 0; i < 48; i++) { const p = document.createElement('i'); p.style.cssText = 'left:' + (Math.random() * 100) + '%;background:' + cols[i % cols.length] + ';animation-delay:' + (Math.random() * 0.5) + 's;animation-duration:' + (1.3 + Math.random() * 0.9) + 's;transform:rotate(' + (Math.random() * 360) + 'deg)'; box.append(p); }
+  setTimeout(() => { box.innerHTML = ''; }, 2600);
+}
+/* ---- quests (B2): three a day and three a week, picked from the date like the Store, with one free reroll a day.
+   Progress is kept with the shop data (so it syncs with the account). Rewards are coins, stars or a crate. */
+const QUEST_TYPES = {
+  deliver:     {text: (n, m) => 'Deliver ' + n + ' parcels' + (m ? ' in ' + DIFFS[m].label : ''), daily: [60, 100, 150], weekly: [500, 800, 1200], modes: ['', '', 'chill', 'standard', 'frantic', 'zen']},
+  trips:       {text: n => 'Make ' + n + ' trips', daily: [40, 60], weekly: [300, 500]},
+  build_round: {text: n => 'Build ' + n + ' roundabouts in one city', daily: [2, 3], weekly: [5, 7], city: true},
+  build_light: {text: n => 'Place ' + n + ' traffic lights in one city', daily: [2, 3], weekly: [5, 7], city: true},
+  build_moto:  {text: n => 'Build ' + n + ' motorway' + (n === 1 ? '' : 's') + ' in one city', daily: [1, 2], weekly: [3, 4], city: true},
+  survive:     {text: (n, m) => 'Survive to week ' + n + (m ? ' in ' + DIFFS[m].label : ''), daily: [4, 5, 6], weekly: [8, 10, 12], city: true, modes: ['', '', 'standard', 'frantic']},
+  earn:        {text: n => 'Earn $' + n.toLocaleString('en-US') + ' in one city', daily: [1500, 2500], weekly: [6000, 10000], city: true},
+  iso_win:     {text: n => 'Win ' + (n === 1 ? 'an ISO 1v1 match' : n + ' ISO 1v1 matches'), daily: [1], weekly: [2, 3]},
+  crate:       {text: n => 'Open ' + (n === 1 ? 'a mystery crate' : n + ' mystery crates'), daily: [1], weekly: [3]},
+  store:       {text: n => 'Buy ' + (n === 1 ? 'something' : n + ' things') + ' in the Store', daily: [1], weekly: [2]}
+};
+const Q_REWARDS = {daily: [{c: 40}, {c: 60}, {c: 80}, {s: 3}, {crate: 'colour'}], weekly: [{c: 150}, {c: 220}, {c: 300}, {s: 8}, {crate: 'item'}, {crate: 'object'}]};
+const isoWeekKey = () => isoWeek(new Date()).key;
+function makeQuest(kind, seed, used) {
+  const r = seededRand(seed), types = Object.keys(QUEST_TYPES).filter(t => !used.includes(t));
+  const t = types[Math.floor(r() * types.length)], T = QUEST_TYPES[t], n = T[kind][Math.floor(r() * T[kind].length)];
+  const m = T.modes ? T.modes[Math.floor(r() * T.modes.length)] : '', rw = Q_REWARDS[kind][Math.floor(r() * Q_REWARDS[kind].length)];
+  return {id: kind + ':' + t + ':' + n + ':' + (m || '-') + ':' + (seed >>> 0).toString(36), kind, type: t, n, mode: m, reward: rw, p: 0, done: false, claimed: false};
+}
+function ensureQuests() {
+  const day = dayStamp(), wk = isoWeekKey(), dn = Math.floor(Date.now() / DAY_MS), wn = strHash(wk);
+  let q = jb.quests && typeof jb.quests === 'object' ? jb.quests : null, dirty = false;
+  if (!q) { q = {day: '', week: '', daily: [], weekly: [], event: [], rerollDay: ''}; dirty = true; }
+  if (q.week !== wk) { q.week = wk; q.weekly = []; const used = []; for (let i = 0; i < 3; i++) { const x = makeQuest('weekly', wn + i * 13, used); used.push(x.type); q.weekly.push(x); } dirty = true; }
+  if (q.day !== day) { q.day = day; q.daily = []; const used = q.weekly.map(x => x.type); for (let i = 0; i < 3; i++) { const x = makeQuest('daily', dn * 31 + i * 7, used); used.push(x.type); q.daily.push(x); } dirty = true; }
+  const ev = activeEvent(), evId = ev ? ev.id + '-' + new Date().getFullYear() : '';
+  if ((q.eventId || '') !== evId) { q.eventId = evId; q.event = ev ? ev.quests.map(([t, n, text, reward, map], i) => ({id: 'event:' + evId + ':' + i, kind: 'event', type: t, n, text, mode: '', map: map || '', reward, p: 0, done: false, claimed: false})) : []; dirty = true; }
+  jb.quests = q; if (dirty) saveShop();
+  return q;
+}
+const questText = x => x.text || QUEST_TYPES[x.type].text(x.n, x.mode);
+const qRewardText = rw => rw.c ? CUR + rw.c : rw.s ? RCUR + rw.s : rw.item ? (COSMETICS[rw.item] ? COSMETICS[rw.item][1] : 'a design') : CRATES[rw.crate].name;
+let cityQ = {round: 0, light: 0, moto: 0};              // what this city has built, for the "in one city" quests
+const questsActive = () => started && !over && !tutorialMode && !spectating && !demoMode && diffKey !== 'iso';
+/* something happened: type is deliver | trips | build_round | build_light | build_moto | survive | earn | iso_win | crate | store */
+function questEvent(type, amount, mode) {
+  if (typeof jb === 'undefined' || !jb) return;
+  const q = ensureQuests(); let changed = false, finished = [];
+  const inCity = ['build_round', 'build_light', 'build_moto', 'survive', 'earn'].includes(type);
+  for (const x of q.daily.concat(q.weekly, q.event)) {
+    if (x.done || x.type !== type) continue;
+    if (x.mode && x.mode !== (mode || diffKey)) continue;
+    if (x.map && mapPrefs.theme !== x.map) continue;
+    const np = inCity ? Math.max(x.p, amount) : x.p + amount;
+    if (np === x.p) continue;
+    x.p = Math.min(np, x.n); changed = true;
+    if (x.p >= x.n) { x.done = true; finished.push(x); }
+  }
+  if (changed) saveShop();
+  for (const x of finished) { toast('Quest complete: ' + questText(x) + ' \u2014 claim ' + qRewardText(x.reward) + ' in Quests', 'good'); sfx('claim'); }
+  if (finished.length) renderQuestBadge();
+  if (changed && mmPane === 'quests') renderQuests();
+}
+function claimQuest(id) {
+  const q = ensureQuests(), x = q.daily.concat(q.weekly, q.event).find(y => y.id === id);
+  if (!x || !x.done || x.claimed) return;
+  x.claimed = true; const rw = x.reward;
+  if (rw.c) jb.bucks += rw.c; if (rw.s) jb.rbucks += rw.s; if (rw.item && COSMETICS[rw.item]) jb.owned[rw.item] = 1;
+  saveShop(); renderBucks(); sfx('claim'); haptic('claim'); confetti();
+  toast('Claimed ' + qRewardText(rw), 'good');
+  renderQuests(); renderQuestBadge();
+  if (rw.crate) setTimeout(() => openCrate(rw.crate, true, true), 350);
+}
+function rerollQuest(id) {
+  const q = ensureQuests();
+  if (q.rerollDay === dayStamp()) { hint('You\u2019ve used today\u2019s free reroll. Another tomorrow.'); return; }
+  for (const list of [q.daily, q.weekly]) {
+    const i = list.findIndex(x => x.id === id); if (i < 0) continue;
+    if (list[i].done) { hint('That one\u2019s already done.'); return; }
+    const used = list.map(x => x.type); list[i] = makeQuest(list[i].kind, (Date.now() + i * 977) >>> 0, used);
+    q.rerollDay = dayStamp(); saveShop(); renderQuests(); toast('New quest: ' + questText(list[i]), 'good'); return;
+  }
+}
+const questClaimable = () => { const q = ensureQuests(); return q.daily.concat(q.weekly, q.event).filter(x => x.done && !x.claimed).length; };
+function renderQuestBadge() { const n = questClaimable(); document.querySelectorAll('.q-badge').forEach(el => { el.textContent = n; el.hidden = !n; }); }
+function renderQuests() {
+  const box = $('mm-quests'); if (!box) return;
+  const q = ensureQuests(), now = Date.now();
+  const left = ms => { const h = Math.floor(ms / 36e5), d = Math.floor(h / 24); return d >= 1 ? d + 'd ' + (h % 24) + 'h' : h >= 1 ? h + 'h ' + Math.floor(ms % 36e5 / 6e4) + 'm' : Math.max(1, Math.floor(ms / 6e4)) + 'm'; };
+  const dayLeft = DAY_MS - (now - new Date(new Date().toDateString()).getTime());
+  const wkEnd = isoWeek(new Date()).sun; const weekLeft = new Date(wkEnd.getUTCFullYear(), wkEnd.getUTCMonth(), wkEnd.getUTCDate() + 1).getTime() - now;
+  const row = x => '<div class="q-row' + (x.done ? (x.claimed ? ' claimed' : ' done') : '') + '"><div class="q-t"><b>' + questText(x) + '</b><small>' + (x.claimed ? 'Claimed' : x.done ? 'Complete!' : x.p.toLocaleString('en-US') + ' / ' + x.n.toLocaleString('en-US')) + '</small>' +
+    '<span class="q-bar"><i style="width:' + Math.round(Math.min(1, x.p / x.n) * 100) + '%"></i></span></div><div class="q-r"><em class="q-reward">' + qRewardText(x.reward) + '</em>' +
+    (x.done && !x.claimed ? '<button class="bigbtn" type="button" data-qclaim="' + x.id + '">Claim</button>' : x.claimed ? '<span class="q-tick">\u2713</span>' : x.kind !== 'event' ? '<button class="act small" type="button" data-qreroll="' + x.id + '" title="Swap for another">\u21bb</button>' : '') + '</div></div>';
+  const ev = activeEvent();
+  box.innerHTML = '<p class="mini">Quests reward \u25ce coins, \u2726 stars and crates. One free reroll a day' + (q.rerollDay === dayStamp() ? ' (used today)' : '') + '.</p>' +
+    (ev && q.event.length ? '<h3 class="q-h ev">' + ev.name + ' <small>' + eventWhen(ev) + '</small></h3>' + q.event.map(row).join('') : '') +
+    '<h3 class="q-h">Daily <small>new in ' + left(dayLeft) + '</small></h3>' + q.daily.map(row).join('') +
+    '<h3 class="q-h">Weekly <small>new in ' + left(weekLeft) + '</small></h3>' + q.weekly.map(row).join('');
+  box.querySelectorAll('[data-qclaim]').forEach(b => b.onclick = () => claimQuest(b.dataset.qclaim));
+  box.querySelectorAll('[data-qreroll]').forEach(b => b.onclick = () => rerollQuest(b.dataset.qreroll));
+  renderQuestBadge();
+}
 /* ---- the hourly Store: 6 items and 6 colours every hour, one special item (✦) a day, and three mystery crates.
    Each hour's stock is shuffled from the hour itself, so everyone's Store is alike, with things you don't own first. */
 const HOUR_MS = 3600e3, DAY_MS = 86400e3;
-const RARITY = {standard: 'Standard', rare: 'Rare', unique: 'Unique', special: 'Special', ach: 'Achievement'};
-function rarityOf(id) { const i = itemInfo(id); if (!i) return 'standard'; return i[2] === 'A' ? 'ach' : i[2] === 'R' ? 'special' : i[2] === 'U' ? 'unique' : i[0] >= 750 ? 'rare' : 'standard'; }
+const RARITY = {standard: 'Standard', rare: 'Rare', unique: 'Unique', special: 'Special', ach: 'Achievement', camp: 'Campaign'};
+function rarityOf(id) { const i = itemInfo(id); if (!i) return 'standard'; return i[2] === 'C' ? 'camp' : i[2] === 'A' || i[2] === 'S' ? 'ach' : i[2] === 'R' ? 'special' : i[2] === 'U' ? 'unique' : i[0] >= 750 ? 'rare' : 'standard'; }
 const CRATES = {
   colour: {name: 'Colour crate', price: 150, holds: 'a colour', test: id => id.startsWith('colour:')},
-  item:   {name: 'Item crate', price: 200, holds: 'a theme, map, panel style or decoration', test: id => /^(ui|style|map|decor):/.test(id)},
-  object: {name: 'Object crate', price: 250, holds: 'a design for cars, houses, roads, stores, lights, roundabouts, bridges or motorways', test: id => id.startsWith('design:')}
+  item:   {name: 'Item crate', price: 200, holds: 'a theme, map, panel style, decoration, banner, frame or title', test: id => /^(ui|style|map|decor|banner|frame|title):/.test(id)},
+  object: {name: 'Object crate', price: 250, holds: 'a design for cars, houses, roads, stores, lights, roundabouts, bridges, motorways or drones', test: id => id.startsWith('design:')}
 };
 const CRATE_MAX = 3, CRATE_ODDS = [['standard', 70], ['rare', 25], ['unique', 5]];
 const allShopIds = () => Object.keys(COSMETICS).concat(Object.keys(COLOUR_PRICE).map(h => 'colour:' + h));
@@ -8630,7 +10448,7 @@ function ensureRotation() {
   const h = Math.floor(Date.now() / HOUR_MS), d = Math.floor(Date.now() / DAY_MS);
   let dirty = false;
   if (!jb.rot || jb.rot.h !== h || jb.rot.n !== 6) {
-    const pool = allShopIds().filter(id => rarityOf(id) === 'standard' || rarityOf(id) === 'rare');
+    const pool = allShopIds().filter(id => (rarityOf(id) === 'standard' || rarityOf(id) === 'rare') && !EVENT_ITEMS.has(id));
     const pick = (list, n, salt) => { const q = shuffleSeeded(list, h * 7919 + salt); return q.filter(id => !owns(id)).concat(q.filter(id => owns(id))).slice(0, n); };
     jb.rot = {h, n: 6, items: pick(pool.filter(id => !id.startsWith('colour:')), 6, 1), cols: pick(pool.filter(id => id.startsWith('colour:')), 6, 2),
               crates: jb.rot && jb.rot.h === h ? jb.rot.crates : {colour: 0, item: 0, object: 0}};
@@ -8642,17 +10460,17 @@ function ensureRotation() {
   }
   if (dirty) saveShop();
 }
-function inStock(id) { ensureRotation(); return jb.rot.items.includes(id) || jb.rot.cols.includes(id) || jb.daily.id === id; }
+function inStock(id) { ensureRotation(); if (EVENT_ITEMS.has(id)) { const e = eventOf(id); return !!(e && activeEvent() === e); } return jb.rot.items.includes(id) || jb.rot.cols.includes(id) || jb.daily.id === id; }
 const crateLeft = kind => { ensureRotation(); return Math.max(0, CRATE_MAX - (jb.rot.crates[kind] || 0)); };
-const crateNew = kind => allShopIds().filter(id => CRATES[kind].test(id) && ['standard', 'rare', 'unique'].includes(rarityOf(id)) && !owns(id));
+const crateNew = kind => allShopIds().filter(id => CRATES[kind].test(id) && ['standard', 'rare', 'unique'].includes(rarityOf(id)) && !owns(id) && (!EVENT_ITEMS.has(id) || activeEvent() === eventOf(id)));
 /* two taps (like buying), then the crate shakes open and shows what was inside */
 let crateKind = '', crateGot = '';
-function openCrate(kind, sure) {
+function openCrate(kind, sure, free) {
   const C = CRATES[kind]; if (!C) return;
-  if (!crateLeft(kind)) { hint('You’ve opened ' + CRATE_MAX + ' ' + C.name.toLowerCase() + 's this hour. More in ' + fmtLeft(HOUR_MS - Date.now() % HOUR_MS) + '.'); return false; }
+  if (!free && !crateLeft(kind)) { hint('You’ve opened ' + CRATE_MAX + ' ' + C.name.toLowerCase() + 's this hour. More in ' + fmtLeft(HOUR_MS - Date.now() % HOUR_MS) + '.'); return false; }
   const left = crateNew(kind);
   if (!left.length) { hint('You already own everything a ' + C.name.toLowerCase() + ' can hold.'); return false; }
-  if (jb.bucks < C.price) { hint(C.name + 's cost ◎' + C.price + ' — you have ◎' + jb.bucks + '. You earn ' + BUCKS_EACH + ' ◎ for every ' + PARCELS_PER_BUCK + ' parcels delivered.'); return false; }
+  if (!free && jb.bucks < C.price) { hint(C.name + 's cost ◎' + C.price + ' — you have ◎' + jb.bucks + '. You earn ' + BUCKS_EACH + ' ◎ for every ' + PARCELS_PER_BUCK + ' parcels delivered.'); return false; }
   const nowMs = performance.now(), pid = 'crate:' + kind;
   if (!sure && (!buyPending || buyPending.id !== pid || nowMs - buyPending.t > 4000)) {
     buyPending = {id: pid, kind: 'buy', t: nowMs}; hint('Open a ' + C.name.toLowerCase() + ' for ◎' + C.price + '? Tap again to confirm.'); renderLook();
@@ -8664,13 +10482,13 @@ function openCrate(kind, sure) {
   for (const [t, w] of CRATE_ODDS) { if (roll < w) { tier = t; break; } roll -= w; }
   let got = '';
   for (const t of [tier, 'rare', 'standard', 'unique']) { const l = left.filter(id => rarityOf(id) === t); if (l.length) { got = l[Math.floor(Math.random() * l.length)]; break; } }
-  jb.bucks -= C.price; jb.rot.crates[kind] = (jb.rot.crates[kind] || 0) + 1;
+  if (!free) { jb.bucks -= C.price; jb.rot.crates[kind] = (jb.rot.crates[kind] || 0) + 1; }
   jb.owned[got] = 1; delete jb.hired[got];
-  saveShop(); renderBucks(); renderLook(); showCrate(kind, got);
+  saveShop(); renderBucks(); renderLook(); showCrate(kind, got); questEvent('crate', 1);
   return true;
 }
 function showCrate(kind, id) {
-  crateKind = kind; crateGot = id;
+  crateKind = kind; crateGot = id; haptic('crate');
   const m = $('m-crate'), box = $('crate-box'), prize = $('crate-prize'), r = rarityOf(id), info = itemInfo(id);
   m.querySelector('.crate-card').className = 'card plate crate-card k-' + kind;
   box.hidden = false; prize.hidden = true; box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake');
@@ -8698,6 +10516,7 @@ function showCrate(kind, id) {
 }
 function shopItemById(id) {
   if (id.startsWith('colour:')) return null;
+  if (!COSMETICS[id]) return null;
   const cat = id.startsWith('design:') ? id.split(':')[1] : id.split(':')[0];
   return shopItems(cat).find(x => x.id === id) || null;
 }
@@ -8712,7 +10531,10 @@ function collIds(cat) { return cat === 'colour' ? Object.keys(COLOUR_PRICE).map(
 function howToGet(id) {
   const i = itemInfo(id); if (!i) return 'Free';
   if (owns(id)) return 'Owned';
-  if (i[2] === 'A') return '\ud83c\udfc6 ' + achName(i[3]);
+  if (i[2] === 'A') return '🏆 ' + achName(i[3]);
+  if (i[2] === 'S') return 'Ranked season reward';
+  if (EVENT_ITEMS.has(id)) { const e = eventOf(id); return e.name + ' event · ' + eventWhen(e) + (activeEvent() === e ? ' · in the Store now' : ''); }
+  if (i[2] === 'C') return 'Campaign reward';
   if (i[2] === 'U') return 'Crates only';
   if (i[2] === 'R') return 'Daily special \u00b7 ✦' + i[0];
   return (inStock(id) ? 'In the Store now \u00b7 ' + CUR : 'Store or crates \u00b7 ' + CUR) + i[0];
@@ -8759,6 +10581,8 @@ function renderStore(box, light) {
       return '<button type="button" class="crate-s k-' + k + (n && !none ? '' : ' spent') + '" data-act="crate" data-kind="' + k + '"><span class="crate-ico"><i></i></span><b>' + C.name + '</b><small>' + C.holds + '</small>' +
         '<span class="crate-foot"><span class="lock' + (conf ? ' confirm' : '') + '">' + (conf ? 'Tap to open' : CUR + C.price) + '</span><em>' + (none ? 'All owned' : n + ' of ' + CRATE_MAX + ' left') + '</em></span></button>';
     }).join('') + '</div>');
+  const ev = activeEvent();
+  if (ev) parts.push('<h3 class="shop-h ev-h">' + ev.name + ' event <small>until ' + eventWhen(ev).split('–')[0].split(' ')[0] + ' ' + ev.end[1] + ' · these are only sold during the event</small></h3><div class="shopgrid st-items">' + ev.items.map(shopItemById).filter(Boolean).map(it => storeCard(it, canvases)).join('') + '</div>');
   const sp = jb.daily.id && shopItemById(jb.daily.id);
   if (sp) parts.push('<h3 class="shop-h">Daily special <small>costs ✦, from Frantic cities · a new one in ' + dLeft + '</small></h3><div class="shopgrid st-items st-special">' + storeCard(sp, canvases) + '</div>');
   parts.push('<h3 class="shop-h">This hour’s items</h3><div class="shopgrid st-items">' + jb.rot.items.map(shopItemById).filter(Boolean).map(it => storeCard(it, canvases)).join('') + '</div>');
@@ -8802,6 +10626,9 @@ function designPreview(g, cat, key, w, h) {
       const P = new Path2D(); P.moveTo(-10, h * 0.75); P.bezierCurveTo(w * 0.35, h * 0.75, w * 0.55, h * 0.2, w + 10, h * 0.25);
       g.save(); g.translate(SUN.x * 6, SUN.y * 6); g.strokeStyle = PAL.sh; g.lineWidth = 16; g.lineCap = 'round'; g.stroke(P); g.restore();
       paintMoto(P, P, null);
+    } else if (cat === 'drone') {
+      g.setTransform(3, 0, 0, 3, w / 2, h / 2 + 2);
+      drawDrone({id: 1, x: 0, y: 0, ang: -0.5, load: 1, color: 2, st: 'out'}, 1, true);
     } else if (cat === 'light') {
       g.setTransform(2, 0, 0, 2, w / 2, h / 2);
       const P = new Path2D(); P.moveTo(-40, 0); P.lineTo(40, 0); P.moveTo(0, -30); P.lineTo(0, 30); paintRoadPath(P, false, true);
@@ -8853,6 +10680,12 @@ function shopItems(cat) {
   if (DESIGNS[cat]) for (const k in DESIGNS[cat].items) out.push({id: 'design:' + cat + ':' + k, name: DESIGNS[cat].items[k][0], active: design(cat) === k,
     apply: () => setDesign(cat, k), canvas: [120, 80, c => designPreview(c.getContext('2d'), cat, k, 120, 80)]});
   if (cat === 'colour') for (const g of COLOR_LIBRARY) for (const [n, h] of g.cols) out.push({id: 'colour:' + h, name: n, hex: h, group: g.group});
+  if (cat === 'banner') { out.push({id: 'banner:', name: 'No banner', active: !prof().banner, apply: () => setProf({banner: ''}), html: '<span class="tp-prev bn-prev" style="background:' + bannerCSS('') + '"></span>'});
+    for (const k in BANNERS) out.push({id: 'banner:' + k, name: BANNERS[k][0], active: prof().banner === k, apply: () => setProf({banner: k}), html: '<span class="tp-prev bn-prev" style="background:' + BANNERS[k][2] + '"></span>'}); }
+  if (cat === 'frame') { out.push({id: 'frame:', name: 'No frame', active: !prof().frame, apply: () => setProf({frame: ''}), html: '<span class="fr-prev"><i class="av"></i></span>'});
+    for (const k in FRAMES) out.push({id: 'frame:' + k, name: FRAMES[k][0], active: prof().frame === k, apply: () => setProf({frame: k}), html: '<span class="fr-prev"><i class="av f-' + k + '" style="--fr:' + frameCSS(k) + '"></i></span>'}); }
+  if (cat === 'title') { out.push({id: 'title:', name: 'No title', active: !prof().title, apply: () => setProf({title: ''}), html: '<span class="ttl-prev"><em>\u2014</em></span>'});
+    for (const k in TITLES) out.push({id: 'title:' + k, name: TITLES[k][0], active: prof().title === k, apply: () => setProf({title: k}), html: '<span class="ttl-prev"><em>' + TITLES[k][0] + '</em></span>'}); }
   return out.map(it => { const info = itemInfo(it.id); it.price = info ? info[0] : 0; it.rare = !!info && info[2] === 'R'; return it; });
 }
 function setDesign(cat, k) {
@@ -8869,7 +10702,8 @@ const slotShown = f => slotValue(f) || ({plate: uiColours().plate, btn: uiColour
 function setSlot(f, hex) { if (COLOUR_SLOTS.find(s => s[0] === f)[2] === 'ui') setUi({[f]: hex}); else setMap({[f]: hex}); }
 
 const SHOP_CATS = [['ui', 'Interface themes'], ['style', 'Panel styles'], ['map', 'Map themes'], ['decor', 'Decorations'], ['car', 'Car designs'], ['house', 'House designs'],
-  ['road', 'Road designs'], ['store', 'Store designs'], ['light', 'Traffic light designs'], ['round', 'Roundabout designs'], ['bridge', 'Bridge designs'], ['moto', 'Motorway designs'], ['colour', 'Colours']];
+  ['road', 'Road designs'], ['store', 'Store designs'], ['light', 'Traffic light designs'], ['round', 'Roundabout designs'], ['bridge', 'Bridge designs'], ['moto', 'Motorway designs'], ['drone', 'Drone designs'],
+  ['banner', 'Profile banners'], ['frame', 'Avatar frames'], ['title', 'Titles'], ['colour', 'Colours']];
 function priceTag(id, price, kind) {
   const conf = buyPending && buyPending.id === id && buyPending.kind === (kind || 'buy'), info = itemInfo(id), rare = !!info && info[2] === 'R' && kind !== 'hire';
   if (kind === 'hire') return '<span class="lock hire' + (conf ? ' confirm' : '') + '">' + (conf ? 'Tap to hire' : 'Hire 3h ◎' + HIRE_PRICE) + '</span>';
@@ -9233,6 +11067,7 @@ let simAcc = 0, fitCheck = 0;
 const MOVERS = () => [cars, trucks, ambs];
 function snapPrev() { for (const L of MOVERS()) for (const o of L) { o.px = o.x; o.py = o.y; o.pa = o.ang; } }
 function drawBetween(alpha) {
+  if (!gfx.smooth) alpha = 1;
   const moved = [];
   if (alpha < 1) for (const L of MOVERS()) for (const o of L) {
     if (o.px === undefined) continue;
@@ -9246,6 +11081,7 @@ function drawBetween(alpha) {
 }
 function frame(now) {
   requestAnimationFrame(frame);
+  if (gfx.cap && now - last < 1000 / gfx.cap - 1.5) return;      // a frame cap: skip until it's time (the clock catches up next frame)
   const real = Math.min(0.1, (now - last) / 1000); last = now;
   animT += real;
   let alpha = 1;
@@ -9270,7 +11106,7 @@ function frame(now) {
   if (accMini > 0.25) { accMini = 0; drawMini(); }
   if (accIns > 0.25 && sel) { accIns = 0; renderInspector(); }
   accLife += real;
-  if (accLife > 1) { lifeTick(accLife); accLife = 0; checkAch(); }
+  if (accLife > 1) { lifeTick(accLife); accLife = 0; checkAch(); replayTick(); campaignTick(); }
   accLifeSave += real;
   if (accLifeSave > 20) { accLifeSave = 0; if (lifeDirty) saveLife(); }
 }
@@ -9317,20 +11153,29 @@ function demoCam(dt) {
   cam.y = cxw + Math.cos(demoT * 0.033) * span * CELL * 0.12;
 }
 function boot() {
+  splashStep(0.15);
   loadShop();
   loadUiTheme();
   loadMap();
   loadModes();
   loadPrefs();
   grantInUse(); renderLook();
+  splashStep(0.45);
   buildToolbars(); bindInput(); showTab('city');
   applyLayout(); bindLayout();
   startDemo();
   layout();
+  splashStep(0.8);
   showStartBest();
   $('btn-resume').hidden = !hasSave();
   openModal('m-start');
   requestAnimationFrame(t2 => { last = t2; frame(t2); });
+  for (const id of ['ver', 'ver-foot', 'wn-ver']) { const el = $(id); if (el) el.textContent = VERSION; }
+  setupApp();
+  labelIconButtons(); checkDaily(); ensureQuests(); renderQuestBadge(); applyProfLook();
+  const ready = document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve();
+  Promise.race([ready, new Promise(r => setTimeout(r, 2500))]).then(() => requestAnimationFrame(splashDone));
+  setTimeout(() => { if (dailyPending && !$('m-start').hidden && !modalOpenBesides('m-start')) openDaily(); }, 2600);
 }
 boot();
 if (typeof window !== 'undefined' && (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || /[?&]debug\b/.test(location.search))) window.__JUNCTION = {update, resetGame, placeRoad, placePark, placeDepot, eraseAt, rebuildNet, planRoute, draw, saveGame, loadGame,
@@ -9338,6 +11183,8 @@ if (typeof window !== 'undefined' && (location.hostname === 'localhost' || locat
   get stats() { return stats; }, get score() { return score; }, get inv() { return inv; }, get road() { return road; }, get water() { return water; }, get org() { return org; },
   get span() { return span; }, idx, cx, cy, CFG, get perks() { return perks; }, get depots() { return depots; }, get parks() { return parks; }, get special() { return special; },
   addCar, refreshHud, renderInspector, offerUpgrade, renderShop, doBuy, offerOf, money: () => money, renderPerks, renderGoals, drawMini, endGame, get rush() { return rush; }, get rain() { return rain; }, get breakdownTimer() { return breakdownTimer; }, serialize, validSave, importCity, exportCity, saveFile, sampleRun, drawRunChart, upgradeJunction, spawnAmb, tryCloseRoad, closeTile, closureSafe, troubleSpots, get ambs() { return ambs; }, get closed() { return closed; }, checkGoals, GOALS, rewardText, bestFor, setScore(v) { score = v; }, setMoney(v) { money = v; }, get goalsDone() { return goalsDone; }, undo, redo, get redoStack() { return redoStack; }, get cam() { return cam; }, select(o) { sel = o; }, get sign() { return sign; }, set running(v) { running = v; }, get week() { return week; }, tow, applyTool, setTool, get motorways() { return motorways; }, linked, dispatch,
+  placeRail, linkRail, stepRail, eraseRail, rebuildRail, makeBusRoute, removeBusRoute, syncDrones, stepTransport, drawDrone, drawRail, drawTransport, drawDrones, designPreview, transportSave, finishTransportLoad, TR, TRC, DESIGNS, GEN, shopItems,
+  rail: () => rail, rlnk: () => rlnk, trains: () => trains, busRoutes: () => busRoutes, drones: () => drones, stations: () => stations, xingT: () => xingT, clock: () => clock, setInv(k, v) { inv[k] = v; }, setPerk(k, v) { perks[k] = v; },
   stepTo, layRoad, get lnk() { return lnk; }, get tool() { return tool; }, nearestRoadTo, get undoStack() { return undoStack; }, get netVer() { return netVer; }, set undoGroup(v) { undoGroup = v; }, get pathCache() { return pathCache; }, buildPaths};
 /* ---------------------------------------------------------------- online bridge
    online.js (a module, loaded after this file) drives cloud saves, the leaderboard and live viewing
@@ -9395,7 +11242,11 @@ if (typeof window !== 'undefined' && (location.hostname === 'localhost' || locat
       if (spectating) this.spectate.exit(); else { running = false; }
       showStartBest(); $('btn-resume').hidden = !hasSave(); openModal('m-start'); refreshUI();
     },
-    toast, openModal, closeModal, renderCollection, setIsoPending, openIsoPane() { openModal('m-start'); showMM('play'); playMode = 'iso'; renderPlay(); },
+    toast, openModal, closeModal, renderCollection, ask, makeShareCard, shareCanvas, haptic, get version() { return VERSION; },
+    shopSnapshot, mergeShop, prof, setProf, pinnable, bannerCSS, frameCSS, titleOf, questEvent, get questClaimable() { return questClaimable(); },
+    grantItem(id) { if (!COSMETICS[id] || jb.owned[id]) return false; jb.owned[id] = 1; saveShop(); renderLook(); return true; },
+    isoSpectate(v) { specMatch = v; renderSpecMatch(); },
+    profOptions() { return {banners: shopItems('banner').filter(it => owns(it.id)), frames: shopItems('frame').filter(it => owns(it.id)), titles: shopItems('title').filter(it => owns(it.id))}; }, setIsoPending, openIsoPane() { openModal('m-start'); showMM('play'); playMode = 'iso'; renderPlay(); },
     startIso, showIsoResult, showMenuPane(p) { if ($('m-start').hidden) openModal('m-start'); showMM(p); }, get menuOpen() { return !$('m-start').hidden; },
     get iso() { return iso && diffKey === 'iso' ? {id: iso.id, kind: iso.kind, over} : null; },
     isoOpp(st) { if (!iso) return; iso.oppSt = st; renderIsoHud(); },
@@ -9442,3 +11293,1680 @@ if (typeof window !== 'undefined' && (location.hostname === 'localhost' || locat
     }
   };
 })();
+
+/* ---------------------------------------------------------------- traffic flow view: buttons and API */
+(function () {
+  const fb = $('btn-flow'); if (fb) fb.addEventListener('click', () => toggleFlow());
+  const fc = $('flow-close'); if (fc) fc.addEventListener('click', () => toggleFlow(false));
+  const fp = $('flow-panel'); if (fp) fp.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-flow-jump]'); if (b) { const [x, y] = b.dataset.flowJump.split(',').map(Number); focusOn(x, y); } });
+  if (window.__JUNCTION) Object.assign(window.__JUNCTION, {flowTick, drawFlow, flowSpots, renderFlowPanel, toggleFlow, drawFlowChart, flowOn: () => showFlow, flowData: () => ({edges: flowEdges, nodes: flowNodes, max: flowMax})});
+  if (window.JunctionAPI) window.JunctionAPI.flow = {toggle: toggleFlow, on: () => showFlow, spots: flowSpots};
+})();
+
+/* ===== p51 guides: the first time a player opens ISO 1v1, Weeklys, the Store, a crate, Chats or Friends, a short
+   guide of two or three animated cards (same look as the tutorial intro). Each shows once; the flags live in
+   localStorage under junction-guides-v1 and "Replay guides" in Settings clears them. The triggers wrap showMM,
+   renderPlay and openCrate rather than editing them. ===== */
+const GUIDES_KEY = 'junction-guides-v1';
+const GUIDE_NAMES = {iso: 'ISO 1v1', weekly: 'Weeklys', store: 'The Store', crate: 'Mystery crates', chats: 'Chats', friends: 'Friends'};
+const GUIDES = {
+  iso: [
+    {t: 'Challenge a player', b: 'ISO 1v1 puts two players on the <b>same map</b>. Send a challenge to a friend or to any username, live or daily, and it waits on their Play menu until they answer.'},
+    {t: 'Live: same time, same speed', b: 'Both cities run at once, at the same speed. Pausing or changing speed only happens when <b>both of you agree</b>. The last city standing wins.'},
+    {t: 'Daily: your own pace', b: 'Each of you plays the map within 24 hours, pausing and speeding up as you like. A point for each category you win: time survived, parcels, money, trips and fewest tow trucks.'}
+  ],
+  weekly: [
+    {t: 'One map a week', b: 'Every ISO week has one seed, and everyone plays the <b>same map</b>: an Expert Survival city, tougher than Frantic. Your best run goes on the leaderboard.'},
+    {t: 'Top 3 and the map', b: 'The three best runs of the week sit on this pane; tap one to see that city. The seed map shows the whole map before you start, so you can plan your roads.'}
+  ],
+  store: [
+    {t: 'A fresh Store every hour', b: 'The Store restocks on the hour with <b>6 items and 6 colours</b>. You earn \u25ce coins in any city, 2 for every 3 parcels. Tap an item once for its price, again to buy.'},
+    {t: 'The daily special', b: 'One special a day costs <b>\u2726 stars</b> instead of coins. Stars come only from <b>Frantic</b> cities, 1 for every parcel delivered.'},
+    {t: 'Mystery crates', b: 'Crates hold a random colour, item or object, and can hold <b>unique</b> things that are never for sale. Colour \u25ce150, item \u25ce200, object \u25ce250, up to 3 of each per hour.'}
+  ],
+  crate: [
+    {t: 'Three kinds of crate', b: 'A <b>colour crate</b> (\u25ce150) holds a colour; an <b>item crate</b> (\u25ce200) a theme, map, panel style or decoration; an <b>object crate</b> (\u25ce250) a design for cars, houses, roads, stores and the rest. You can open 3 of each per hour.'},
+    {t: 'What\u2019s inside', b: '70% standard, 25% rare, 5% unique, and uniques only ever come from crates. A crate never gives you something you already own.'}
+  ],
+  chats: [
+    {t: 'Your chats', b: 'Conversations are listed on the left and the open chat sits on the right, like a messaging app. New messages show a badge on the Chats icon in the menu.'},
+    {t: 'Tap a name', b: 'Tap a name to open their profile: records, a challenge to ISO 1v1, and the block or report options. Messages reach friends and anyone who has messaged you.'}
+  ],
+  friends: [
+    {t: 'Add by username', b: 'Type a username and tap Add; they are on your list straight away. Tap a friend to see their records and whether they are online.'},
+    {t: 'Records, head-to-head, Watch live', b: 'A friend\u2019s page shows their best runs and your ISO <b>head-to-head</b> record, and lets you challenge or message them. When they are playing, <b>Watch live</b> shows their city as it runs.'}
+  ]
+};
+let gdKey = '', gdCard = 0, gdRaf = 0, gdT0 = 0;
+function guideFlags() { try { return JSON.parse(localStorage.getItem(GUIDES_KEY) || '{}') || {}; } catch (e) { return {}; } }
+function guideSeen(k) { return !!guideFlags()[k]; }
+function markGuide(k) { try { const f = guideFlags(); f[k] = true; localStorage.setItem(GUIDES_KEY, JSON.stringify(f)); } catch (e) {} }
+function maybeGuide(k) {
+  const m = $('m-guide'); if (!GUIDES[k] || !m || !m.hidden || guideSeen(k)) return false;
+  markGuide(k); openGuide(k); return true;
+}
+function openGuide(k) {
+  gdKey = k; gdCard = 0; openModal('m-guide'); renderGuide();
+  cancelAnimationFrame(gdRaf); gdT0 = performance.now();
+  const loop = now => { if ($('m-guide').hidden) return; drawGuide((now - gdT0) / 1000); gdRaf = requestAnimationFrame(loop); };
+  gdRaf = requestAnimationFrame(loop);
+}
+function closeGuide() { if ($('m-guide').hidden) return; closeModal('m-guide'); cancelAnimationFrame(gdRaf); }
+function renderGuide() {
+  const cards = GUIDES[gdKey] || [], c = cards[gdCard]; if (!c) return;
+  $('gd-stage').innerHTML = '<canvas id="gd-cv" width="560" height="250"></canvas><em class="gd-k">' + GUIDE_NAMES[gdKey] + ' \u2013 ' + (gdCard + 1) + ' of ' + cards.length + '</em><h3>' + c.t + '</h3><p>' + c.b + '</p>';
+  $('gd-dots').innerHTML = cards.map((_, i) => '<i class="' + (i === gdCard ? 'a' : i < gdCard ? 'd' : '') + '"></i>').join('');
+  $('gd-back').disabled = gdCard === 0;
+  $('gd-next').textContent = gdCard === cards.length - 1 ? 'Got it' : 'Next';
+  const nx = $('gd-next'); if (nx) nx.focus();
+}
+/* the illustrations: simple rounded shapes and the real car and store artwork, animated by t (frozen under reduced motion) */
+function drawGuide(t) {
+  const cv2 = $('gd-cv'); if (!cv2) return;
+  if (REDUCED_MOTION) t = 1.2;
+  const g = cv2.getContext('2d'), W2 = cv2.width, H2 = cv2.height, keepSun = Object.assign({}, SUN), keepAnim = animT;
+  SUN.x = 0.55; SUN.y = 0.8; SUN.a = 1; animT = t;
+  const dk = theme === 'dark', ink = dk ? '#eef4f7' : '#12303f', soft = dk ? 'rgba(238,244,247,.62)' : 'rgba(18,48,63,.62)', plate = dk ? 'rgba(255,255,255,.1)' : 'rgba(255,255,255,.7)', line = dk ? 'rgba(255,255,255,.18)' : 'rgba(18,48,63,.14)';
+  const gold = '#ffc933', green = '#43d17a', blue = '#2f9bff', pink = '#ff6b8b', purple = '#8a5bff';
+  g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = PAL.land2; g.fillRect(0, 0, W2, H2);
+  const box = (x, y, w, h, r, c, st) => { rr_(g, x, y, w, h, r); g.fillStyle = c; g.fill(); if (st) { g.strokeStyle = st; g.lineWidth = 1.5; g.stroke(); } };
+  const dot = (x, y, r, c) => { g.fillStyle = c; g.beginPath(); g.arc(x, y, r, 0, 6.3); g.fill(); };
+  const txt = (s_, x, y, sz, c, w, al) => { g.fillStyle = c || ink; g.font = (w || 800) + ' ' + sz + 'px Overpass, system-ui, sans-serif'; g.textAlign = al || 'center'; g.textBaseline = 'middle'; g.fillText(s_, x, y); };
+  const pill = (s_, x, y, c, fg, sz) => { g.font = '800 ' + (sz || 13) + 'px Overpass, system-ui, sans-serif'; const w = g.measureText(s_).width + 22; box(x - w / 2, y - 13, w, 26, 13, c); txt(s_, x, y + 1, sz || 13, fg || '#12303f'); return w; };
+  const avatar = (x, y, r, c, ch) => { dot(x, y, r, c); txt(ch, x, y + 1, r * 1.1, '#fff'); };
+  const car = (x, y, a, color, z) => withCtx(g, () => { g.setTransform(z, 0, 0, z, x, y); drawCar({x: 0, y: 0, ang: a, da: a, color, up: {cap: 0, spd: 0, load: 0, fuel: 0}, van: false, load: 0, state: 'parked', v: 0, id: 3 + color, brake: false, broken: 0, stopT: 0}); g.setTransform(1, 0, 0, 1, 0, 0); });
+  const store = (x, y, z, color) => withCtx(g, () => { const b = {type: 'store', k: idx(6, 6), sd: 2, ends: 0, tier: 1, lvl: 0, pins: 2 + Math.floor(t) % 4, color, face: sdFace(2), acc: 0, park: 0, docks: []}; g.setTransform(z, 0, 0, z, x - bX(b) * z, y - bY(b) * z); drawStore(b); g.setTransform(1, 0, 0, 1, 0, 0); });
+  const clock = (x, y, r, ang, c) => { dot(x, y, r, plate); g.strokeStyle = line; g.lineWidth = 2; g.beginPath(); g.arc(x, y, r, 0, 6.3); g.stroke(); g.strokeStyle = c || ink; g.lineWidth = 3; g.lineCap = 'round'; g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(ang - 1.5708) * r * 0.62, y + Math.sin(ang - 1.5708) * r * 0.62); g.stroke(); dot(x, y, 2.5, c || ink); };
+  const pointer = (x, y, down) => { dot(x + 1.5, y + 2.5, down ? 9 : 11, 'rgba(0,0,0,.18)'); dot(x, y, down ? 9 : 11, '#f4f2ec'); g.strokeStyle = 'rgba(0,0,0,.25)'; g.lineWidth = 1.5; g.beginPath(); g.arc(x, y, down ? 9 : 11, 0, 6.3); g.stroke(); if (down) { g.strokeStyle = gold; g.lineWidth = 2.5; g.beginPath(); g.arc(x, y, 16, 0, 6.3); g.stroke(); } };
+  const ease = u => 1 - Math.pow(1 - Math.max(0, Math.min(1, u)), 3);
+  const bob = Math.sin(t * 2) * 4, k = gdKey, i = gdCard;
+  if (k === 'iso') {
+    if (i === 0) {                                         // two cars face to face, a VS badge between them
+      car(W2 * 0.3, H2 * 0.5 + bob, 0, 0, 3.6); car(W2 * 0.7, H2 * 0.5 - bob, Math.PI, 2, 3.6);
+      dot(W2 / 2, H2 / 2, 30 + Math.sin(t * 4) * 1.5, gold); txt('VS', W2 / 2, H2 / 2 + 2, 24, '#4a3400');
+      txt('You', W2 * 0.3, H2 * 0.5 + 44, 14, soft); txt('Them', W2 * 0.7, H2 * 0.5 + 44, 14, soft);
+    } else if (i === 1) {                                  // two cities, one clock each, always in step; a pause that needs two ticks
+      for (const [x, c] of [[W2 * 0.3, 0], [W2 * 0.7, 2]]) { box(x - 95, 22, 190, 150, 16, plate, line); store(x - 30, 100, 1.1, c); clock(x + 55, 70, 24, t * 1.4, c ? blue : pink); }
+      const ph = (t * 0.5) % 3, ask = ph > 1, both = ph > 2;
+      const w = pill(both ? 'Paused' : 'Pause?', W2 / 2, 206, both ? gold : plate, both ? '#4a3400' : ink);
+      dot(W2 / 2 - w / 2 - 22, 206, 11, ask ? green : line); txt('\u2713', W2 / 2 - w / 2 - 22, 207, 14, '#fff');
+      dot(W2 / 2 + w / 2 + 22, 206, 11, both ? green : line); txt('\u2713', W2 / 2 + w / 2 + 22, 207, 14, '#fff');
+    } else {                                               // the five categories, a point each, ticked off one at a time
+      const cats = ['Time', 'Parcels', 'Money', 'Trips', 'Tows'], mine = [1, 0, 1, 1, 0], n = Math.floor((t * 1.3) % 8), gap = W2 / 5.6;
+      let a = 0, b = 0;
+      cats.forEach((cn, j) => {
+        const x = W2 / 2 + (j - 2) * gap, on = j < n, you = mine[j]; if (on) { if (you) a++; else b++; }
+        box(x - 44, 96, 88, 40, 12, on ? (you ? gold : purple) : plate, on ? '' : line); txt(cn, x, 117, 14, on ? (you ? '#4a3400' : '#fff') : soft);
+        if (on) dot(x, you ? 70 : 164, 9, you ? gold : purple);
+      });
+      txt('You ' + a, W2 * 0.25, 34, 20, ink); txt(b + ' Them', W2 * 0.75, 34, 20, ink);
+      txt('24 h', W2 / 2, 36, 13, soft); g.strokeStyle = line; g.lineWidth = 4; g.beginPath(); g.arc(W2 / 2, 36, 18, 0, 6.3); g.stroke(); g.strokeStyle = green; g.lineCap = 'round'; g.beginPath(); g.arc(W2 / 2, 36, 18, -1.5708, -1.5708 + ((t * 0.25) % 1) * 6.283); g.stroke();
+      txt('A point for every category you win', W2 / 2, 212, 13, soft, 700);
+    }
+  } else if (k === 'weekly') {
+    if (i === 0) {                                         // one seed, three identical map thumbnails, one each for three players
+      box(W2 / 2 - 110, 18, 220, 46, 14, plate, line); txt('This week\u2019s seed', W2 / 2, 33, 12, soft, 700); txt('MARIGOLD HARBOUR', W2 / 2, 51, 14, ink);
+      const hi = Math.floor(t * 0.9) % 3;
+      for (let j = 0; j < 3; j++) {
+        const x = W2 / 2 + (j - 1) * 150, y = 150, w = 112, h = 82, on = j === hi;
+        box(x - w / 2 - 4, y - h / 2 - 4, w + 8, h + 8, 14, on ? gold : 'rgba(0,0,0,0)');
+        box(x - w / 2, y - h / 2, w, h, 10, dk ? '#2d3a2f' : '#cfe6b8');
+        box(x - w / 2 + 10, y - h / 2 + 10, 34, 24, 8, dk ? '#1f2a22' : '#b9d8a0'); box(x + 6, y + 6, 40, 22, 8, dk ? '#1f2a22' : '#b9d8a0');
+        box(x + w / 2 - 22, y - h / 2, 22, h, 0, dk ? '#3a5a7a' : '#8fd0e8');
+        g.strokeStyle = '#f4f2ec'; g.lineWidth = 4; g.lineCap = 'round'; g.beginPath(); g.moveTo(x - w / 2 + 14, y + 20); g.lineTo(x - 10, y + 20); g.lineTo(x - 10, y - 14); g.lineTo(x + 24, y - 14); g.stroke();
+        dot(x - w / 2 + 14, y + 20, 5, pink); dot(x + 24, y - 14, 5, pink);
+        avatar(x, y + h / 2 + 20, 11, [blue, pink, green][j], ['A', 'B', 'C'][j]);
+      }
+      txt('Same map for everyone', W2 / 2, 236, 13, soft, 700);
+    } else {                                               // the podium, and the seed map beside it
+      const u = ease(t * 0.6), hs = [70, 100, 50], order = [1, 0, 2], cols = [gold, '#c9ced2', '#d9915a'];
+      order.forEach((p_, j) => { const x = W2 * 0.33 + (j - 1) * 70, h = hs[p_] * u; box(x - 28, 200 - h, 56, h, 10, cols[p_]); txt(String(p_ + 1), x, 200 - h + 18, 16, '#4a3400'); avatar(x, 200 - h - 20, 13, [blue, pink, green][p_], ['A', 'B', 'C'][p_]); });
+      g.strokeStyle = line; g.lineWidth = 2; g.beginPath(); g.moveTo(W2 * 0.12, 201); g.lineTo(W2 * 0.55, 201); g.stroke();
+      txt('Top 3 this week', W2 * 0.33, 230, 13, soft, 700);
+      const mx = W2 * 0.76, my = 118, w = 150, h = 110;
+      box(mx - w / 2, my - h / 2, w, h, 12, dk ? '#2d3a2f' : '#cfe6b8', line);
+      box(mx - w / 2 + 12, my - h / 2 + 12, 44, 30, 8, dk ? '#1f2a22' : '#b9d8a0'); box(mx + 10, my + 10, 50, 28, 8, dk ? '#1f2a22' : '#b9d8a0'); box(mx + w / 2 - 28, my - h / 2, 28, h, 0, dk ? '#3a5a7a' : '#8fd0e8');
+      for (let j = 0; j < 4; j++) dot(mx - 50 + j * 32, my - 12 + (j % 2) * 40, 5, [pink, blue, green, gold][j]);
+      const px = mx + Math.cos(t * 1.2) * 34, py = my + Math.sin(t * 1.2) * 22; pointer(px, py, false);
+      txt('Seed map', mx, 190, 13, soft, 700); pill('Tap to see a run', mx, 220, plate, ink, 12);
+    }
+  } else if (k === 'store' || k === 'crate') {
+    const crates = () => {                                 // three crates, their prices, one lid lifting at a time
+      const names = ['Colour', 'Item', 'Object'], price = ['\u25ce150', '\u25ce200', '\u25ce250'], cols = ['#ff8ab0', '#6cc6ff', '#ffc933'], on = Math.floor(t * 0.8) % 3;
+      for (let j = 0; j < 3; j++) {
+        const x = W2 / 2 + (j - 1) * 150, y = 128 + (j === on ? -4 : 0), lift = j === on ? 6 + Math.sin(t * 5) * 2 : 0;
+        dot(x + 3, y + 36, 42, 'rgba(0,0,0,.16)');
+        box(x - 40, y - 10, 80, 50, 12, cols[j]); box(x - 40, y - 10, 80, 50, 12, 'rgba(0,0,0,.12)');
+        box(x - 40, y - 10, 80, 22, 10, cols[j]); box(x - 6, y - 12, 12, 54, 6, 'rgba(255,255,255,.35)');
+        box(x - 46, y - 24 - lift, 92, 22, 10, cols[j]); box(x - 46, y - 24 - lift, 92, 22, 10, 'rgba(255,255,255,.2)');
+        if (lift) { dot(x, y - 30 - lift, 8 + Math.sin(t * 6) * 2, 'rgba(255,255,255,.55)'); txt('?', x, y - 30 - lift, 15, ink); }
+        txt(names[j] + ' crate', x, y + 62, 13, ink); txt(price[j], x, y + 82, 13, soft, 700);
+      }
+      txt('3 of each per hour', W2 / 2, 236, 13, soft, 700);
+    };
+    if (k === 'store' && i === 0) {                        // the store, a clock, and the hour's six items and six colours
+      store(W2 * 0.2, 118, 1.5, 1); clock(W2 * 0.5, 84, 30, t * 0.9, ink); txt('restocks on the hour', W2 * 0.5, 134, 12, soft, 700);
+      const gen = Math.floor(t * 0.9 / 6.283);
+      for (let j = 0; j < 6; j++) { const x = W2 * 0.68 + (j % 3) * 42, y = 62 + Math.floor(j / 3) * 42, c = ['#ff8ab0', '#6cc6ff', '#ffc933', '#7ff0c8', '#c59bff', '#ff9f6a'][(j + gen) % 6]; box(x - 16, y - 16, 32, 32, 9, plate, line); dot(x, y, 9, c); }
+      txt('6 items', W2 * 0.68 + 42, 136, 12, soft, 700);
+      for (let j = 0; j < 6; j++) { const x = W2 * 0.68 - 8 + j * 25, c = ['#e0483e', '#2f7de1', '#43d17a', '#ffc933', '#8a5bff', '#ff6fb5'][(j + gen * 2) % 6]; dot(x, 168, 9, c); }
+      txt('6 colours', W2 * 0.68 + 54, 192, 12, soft, 700);
+      pill('\u25ce 2 for every 3 parcels', W2 * 0.2, 214, plate, ink, 12);
+    } else if (k === 'store' && i === 1) {                 // the star coin, a special tag, and where stars come from
+      const y = H2 * 0.46 + bob, gr = g.createRadialGradient(W2 * 0.35 - 12, y - 12, 4, W2 * 0.35, y, 44); gr.addColorStop(0, '#efe0ff'); gr.addColorStop(1, '#9a6bff');
+      for (let j = 0; j < 5; j++) { const a = t * 0.8 + j * 1.2566, r_ = 58 + Math.sin(t * 3 + j) * 4; dot(W2 * 0.35 + Math.cos(a) * r_, y + Math.sin(a) * r_ * 0.6, 3 + (j % 2), 'rgba(255,255,255,.7)'); }
+      dot(W2 * 0.35 + 3, y + 5, 44, 'rgba(0,0,0,.15)'); g.fillStyle = gr; g.beginPath(); g.arc(W2 * 0.35, y, 44, 0, 6.3); g.fill(); txt('\u2726', W2 * 0.35, y + 2, 40, '#3a1f7a');
+      box(W2 * 0.58, 50, 190, 120, 16, plate, line); txt('Daily special', W2 * 0.58 + 95, 76, 15, ink); box(W2 * 0.58 + 30, 92, 130, 36, 10, 'rgba(154,107,255,.18)'); txt('\u2726 ' + (8 + Math.floor(t * 0.3) % 3 * 2), W2 * 0.58 + 95, 111, 16, '#7a4fd1');
+      txt('one a day', W2 * 0.58 + 95, 148, 12, soft, 700);
+      pill('\u2726 come from Frantic cities', W2 / 2, 214, '#ff6f61', '#fff', 12);
+    } else if (k === 'store' || i === 0) crates();
+    else {                                                 // the odds, and never a duplicate
+      const w = 420, x0 = W2 / 2 - w / 2, y = 86, segs = [[70, '#8fb6c9', 'Standard 70%'], [25, '#8a5bff', 'Rare 25%'], [5, gold, 'Unique 5%']];
+      let x = x0; g.save(); rr_(g, x0, y, w, 34, 12); g.clip();
+      segs.forEach(([p_, c, l]) => { const sw = w * p_ / 100; g.fillStyle = c; g.fillRect(x, y, sw, 34); if (p_ > 10) txt(l, x + sw / 2, y + 18, 13, '#fff'); x += sw; });
+      g.restore(); txt('Unique 5%', x0 + w - 8, y + 54, 13, '#b08a00', 800, 'right');
+      const mu = (t * 0.22) % 1, mx = x0 + w * mu; g.strokeStyle = ink; g.lineWidth = 3; g.lineCap = 'round'; g.beginPath(); g.moveTo(mx, y - 10); g.lineTo(mx, y + 44); g.stroke(); dot(mx, y - 14, 6, ink);
+      const seen = [pink, blue, green, purple], got = Math.floor(t * 0.7) % 5;
+      txt('Already yours', W2 * 0.3, 164, 12, soft, 700); for (let j = 0; j < 4; j++) { box(W2 * 0.3 + (j - 1.5) * 38 - 15, 182, 30, 30, 9, plate, line); dot(W2 * 0.3 + (j - 1.5) * 38, 197, 8, seen[j]); }
+      txt('From a crate', W2 * 0.72, 164, 12, soft, 700); box(W2 * 0.72 - 20, 177, 40, 40, 11, gold); dot(W2 * 0.72, 197, 10, got < 4 ? ['#ff9f6a', '#7ff0c8', '#c59bff', '#6cc6ff'][got] : '#ffffff');
+      txt('never a duplicate', W2 * 0.72, 234, 12, soft, 700);
+    }
+  } else if (k === 'chats') {
+    if (i === 0) {                                         // the list on the left, the open chat on the right, bubbles arriving
+      box(24, 20, 170, 210, 14, plate, line);
+      [['M', 'maya', blue], ['J', 'jonah', green], ['R', 'rae', pink]].forEach(([ch, n, c], j) => { const y = 48 + j * 56; if (!j) box(34, y - 20, 150, 44, 10, 'rgba(255,201,51,.2)'); avatar(56, y, 13, c, ch); txt(n, 80, y - 5, 13, ink, 800, 'left'); txt(j ? 'see you there' : 'nice run!', 80, y + 11, 11, soft, 600, 'left'); });
+      box(212, 20, 324, 210, 14, plate, line); avatar(238, 44, 11, blue, 'M'); txt('maya', 256, 45, 13, ink, 800, 'left');
+      const msgs = [['nice run!', 0], ['thanks, that bridge saved me', 1], ['rematch tonight?', 0], ['you\u2019re on', 1]], n = Math.floor((t * 0.9) % 6);
+      msgs.forEach(([m, me], j) => { if (j >= n) return; const u = ease((t * 0.9 % 6 - j) * 3), y = 76 + j * 36; g.font = '700 13px Overpass, system-ui, sans-serif'; const w = g.measureText(m).width + 24; const x = me ? 520 - w : 226; g.globalAlpha = u; box(x, y - 2 + (1 - u) * 6, w, 28, 12, me ? gold : (dk ? 'rgba(255,255,255,.14)' : '#ffffff')); txt(m, x + w / 2, y + 13 + (1 - u) * 6, 13, me ? '#4a3400' : ink, 700); g.globalAlpha = 1; });
+      dot(170, 48, 8, pink); txt('2', 170, 49, 10, '#fff');
+    } else {                                               // tapping the name at the top opens their profile
+      const ph = (t * 0.7) % 3, down = ph > 1 && ph < 1.25, open = ease(ph - 1.1);
+      box(60, 20, 440, 44, 14, plate, line); avatar(88, 42, 13, blue, 'M'); txt('maya', 112, 43, 15, ink, 800, 'left'); dot(168, 43, 4, green); txt('online', 177, 44, 11, green, 700, 'left');
+      if (open > 0) {
+        g.globalAlpha = open; const y = 74 + (1 - open) * 10;
+        box(60, y, 440, 150, 14, plate, line); avatar(100, y + 36, 20, blue, 'M'); txt('maya', 134, y + 30, 18, ink, 800, 'left'); txt('Best: 1,284 parcels \u00b7 week 9', 134, y + 50, 12, soft, 700, 'left');
+        [['Records', plate, ink], ['Challenge', gold, '#4a3400'], ['Block', plate, ink], ['Report', plate, ink]].forEach(([l, c, fg], j) => pill(l, 125 + j * 102, y + 112, c, fg, 12));
+        g.globalAlpha = 1;
+      }
+      pointer(150 + (ph < 1 ? (1 - ease(ph)) * 120 : 0), 58 + (ph < 1 ? (1 - ease(ph)) * 90 : 0), down);
+    }
+  } else if (k === 'friends') {
+    if (i === 0) {                                         // typing a username into the Add box, and the friend appearing
+      const name = 'maya_k', ph = (t * 0.9) % 6, nch = Math.min(name.length, Math.floor(ph * 2)), added = ph > 4, u = ease((ph - 4) * 2);
+      box(60, 36, 330, 44, 12, plate, line); txt(nch ? name.slice(0, nch) : 'Add a friend by username', 76, 58, 14, nch ? ink : soft, 700, 'left');
+      if (nch && nch < name.length && Math.floor(t * 3) % 2) { g.font = '700 14px Overpass, system-ui, sans-serif'; g.textAlign = 'left'; const cw = g.measureText(name.slice(0, nch)).width; box(78 + cw, 48, 2, 20, 1, ink); }
+      box(400, 36, 100, 44, 12, added ? green : gold); txt(added ? '\u2713' : 'Add', 450, 59, 15, added ? '#fff' : '#4a3400');
+      pointer(450 + (ph > 3.5 ? 0 : (1 - ease((ph - 3) * 2)) * 60), 58 + (ph > 3.5 ? 0 : (1 - ease((ph - 3) * 2)) * 80), ph > 3.6 && ph < 4.1);
+      if (u > 0) { g.globalAlpha = u; box(60, 110 + (1 - u) * 10, 440, 54, 12, plate, line); avatar(90, 137 + (1 - u) * 10, 15, blue, 'M'); txt('maya_k', 116, 137 + (1 - u) * 10, 15, ink, 800, 'left'); dot(430, 137 + (1 - u) * 10, 5, green); txt('online', 442, 138 + (1 - u) * 10, 12, soft, 700, 'left'); g.globalAlpha = 1; }
+      txt('Friend added', W2 / 2, 206, 13, added ? green : 'rgba(0,0,0,0)', 800);
+    } else {                                               // records, the head-to-head score, and Watch live
+      box(30, 22, 250, 206, 14, plate, line); avatar(60, 50, 16, blue, 'M'); txt('maya_k', 86, 50, 17, ink, 800, 'left');
+      txt('Records', 48, 88, 12, soft, 700, 'left');
+      [['Standard', 1284, blue], ['Frantic', 611, pink], ['Expert', 402, purple]].forEach(([l, v, c], j) => { const y = 108 + j * 34, u = ease(t * 0.7 - j * 0.2); txt(l, 48, y, 12, ink, 700, 'left'); box(120, y - 7, 106, 14, 7, dk ? 'rgba(255,255,255,.1)' : 'rgba(0,0,0,.07)'); box(120, y - 7, 106 * (v / 1400) * u, 14, 7, c); txt(String(Math.round(v * u)), 266, y, 11, soft, 700, 'right'); });
+      box(300, 22, 230, 96, 14, plate, line); txt('Head-to-head', 415, 44, 12, soft, 700); txt('3', 365, 82, 30, gold); txt('\u2013', 415, 82, 22, soft); txt('2', 465, 82, 30, ink); txt('you', 365, 106, 10, soft, 700); txt('them', 465, 106, 10, soft, 700);
+      box(300, 134, 230, 94, 14, plate, line); const pl = 0.5 + 0.5 * Math.sin(t * 4); dot(330, 160, 6 + pl * 2, green); dot(330, 160, 12 + pl * 4, 'rgba(67,209,122,' + (0.3 - pl * 0.2).toFixed(2) + ')'); txt('Playing now', 346, 160, 13, ink, 800, 'left');
+      pill('Watch live', 415, 200, gold, '#4a3400', 13);
+    }
+  }
+  animT = keepAnim; Object.assign(SUN, keepSun); g.setTransform(1, 0, 0, 1, 0, 0);
+}
+/* the triggers: wrap the menu functions rather than editing them (function declarations are reassignable bindings) */
+const _showMM0 = showMM;
+showMM = function (pane) { _showMM0(pane); if (pane === 'weekly' || pane === 'store' || pane === 'chats' || pane === 'friends') maybeGuide(pane); };
+const _renderPlay0 = renderPlay;
+renderPlay = function () { _renderPlay0(); if (playMode === 'iso' && mmPane === 'play' && $('m-start') && !$('m-start').hidden) maybeGuide('iso'); };
+const _openCrate0 = openCrate;
+openCrate = function (kind, sure, free) { if (!free && CRATES[kind] && !guideSeen('crate') && maybeGuide('crate')) return false; return _openCrate0(kind, sure, free); };
+{
+  const nx = $('gd-next'), bk = $('gd-back'), rg = $('btn-guides');
+  if (nx) nx.addEventListener('click', () => { if (gdCard < (GUIDES[gdKey] || []).length - 1) { gdCard++; renderGuide(); } else closeGuide(); });
+  if (bk) bk.addEventListener('click', () => { if (gdCard > 0) { gdCard--; renderGuide(); } });
+  if (rg) rg.addEventListener('click', () => { try { localStorage.removeItem(GUIDES_KEY); } catch (e) {} toast('Guides reset: each one shows again the next time you open its section.', 'good'); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('m-guide') && !$('m-guide').hidden) { e.stopPropagation(); closeGuide(); } }, true);
+}
+
+
+/* ===== p62 replays and living cities =====
+   C5: one compact frame (citySnap) per city day goes into replayFrames; the game-over screen plays them back with a
+   slow camera and can record a .webm. C7: houses grow past the villa with lifetime deliveries and busy stores become
+   malls; big cities get four named districts; pedestrians stroll the pavements; snow, fog and heatwaves join the rain;
+   windows and street lamps light up at night. Hooks wrap drawOutside / drawNight / resetGame / showGameOver. ===== */
+
+/* ---------------------------------------------------------------- C5 recording */
+function replayTick() {
+  if (!started || over || demoMode || spectating || tutorialMode) return;
+  const d = Math.floor(clock / CFG.dayLengthSeconds);
+  if (d === replayDay) return;
+  replayDay = d; replayPush();
+}
+function replayPush() {
+  replayFrames.push({t: Math.round(clock), score, week, snap: citySnap()});
+  if (replayFrames.length > 240) { const keep = replayFrames.length - 120; replayFrames = replayFrames.filter((f, i) => i >= keep || i % 2 === 0); }   // thin the older half
+}
+/* what the save keeps: the last 120 frames, trimmed from the front to stay under 300 KB */
+function replayStore() {
+  const out = replayFrames.slice(-120); let tot = 0;
+  for (const f of out) tot += f.snap.length + 48;
+  while (out.length > 3 && tot > 300000) tot -= out.shift().snap.length + 48;
+  return out;
+}
+
+/* ---------------------------------------------------------------- C5 playback */
+const RP_S = 720, rp = {open: false, t: 0, dur: 20, playing: false, speed: 1, raf: 0, last: 0, rec: null, card: null, cardT: 0, drag: false, cache: new Map()};
+function rpFrameCanvas(i) {
+  let c = rp.cache.get(i);
+  if (!c) {
+    c = document.createElement('canvas'); c.width = c.height = RP_S; drawCitySnap(c, replayFrames[i].snap); rp.cache.set(i, c);
+    if (rp.cache.size > 6) rp.cache.delete(rp.cache.keys().next().value);
+  }
+  return c;
+}
+function openReplay() {
+  if (replayFrames.length < 2) { toast('Not enough of this city was recorded for a replay yet', 'warn'); return false; }
+  rp.cache.clear(); rp.t = 0; rp.speed = 1; rp.dur = clamp(replayFrames.length * 0.35, 12, 60); rp.playing = true; rp.open = true; rp.rec = null; rp.card = null; rp.cardT = 0; rp.drag = false;
+  openModal('m-replay'); rpMarks(); rpSetBusy(false);
+  const sv = $('rp-save'); if (sv) sv.hidden = typeof MediaRecorder === 'undefined' || !$('rp-cv').captureStream;
+  cancelAnimationFrame(rp.raf); rp.last = performance.now();
+  const loop = now => { if (!rp.open) return; const dt = Math.min(0.1, (now - rp.last) / 1000); rp.last = now; rpStep(dt); rp.raf = requestAnimationFrame(loop); };
+  rp.raf = requestAnimationFrame(loop);
+  rpDraw(0); rpSync();
+  return true;
+}
+function closeReplay() {
+  if (!rp.open) return;
+  rp.open = false; cancelAnimationFrame(rp.raf);
+  if (rp.rec && rp.rec.state !== 'inactive') { try { rp.rec.stop(); } catch (e) {} }
+  rp.rec = null; rp.card = null; rp.cache.clear(); closeModal('m-replay');
+}
+function rpStep(dt) {
+  if (rp.playing) {
+    rp.t += dt * rp.speed;
+    if (rp.t >= rp.dur) { rp.t = rp.dur; if (rp.rec) rp.cardT += dt; else rp.playing = false; }
+  }
+  rpDraw(rp.t);
+  if (rp.rec && rp.cardT >= 2) rpFinishRec();
+  rpSync();
+}
+const rpFrameAt = t => { const n = replayFrames.length; return n > 1 ? clamp(t / rp.dur, 0, 1) * (n - 1) : 0; };
+/* the picture: a slow push-in from 1.15x to 1.03x with a gentle drift, crossfading frame to frame (neither under reduced motion) */
+function rpDraw(t) {
+  const cv2 = $('rp-cv'); if (!cv2 || !replayFrames.length) return;
+  const g = cv2.getContext('2d'), n = replayFrames.length, S = RP_S;
+  const p = rpFrameAt(t), i = Math.min(n - 1, Math.floor(p)), u = p - i, j = Math.min(n - 1, i + 1);
+  const k = clamp(t / rp.dur, 0, 1), z = 1.15 - 0.12 * (1 - Math.pow(1 - k, 3));
+  const dr = REDUCED_MOTION ? 0 : 1, dx = Math.sin(t * 0.21) * 9 * dr, dy = Math.cos(t * 0.17) * 7 * dr;
+  g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.fillStyle = PAL.land; g.fillRect(0, 0, S, S);
+  g.translate(S / 2 + dx, S / 2 + dy); g.scale(z, z); g.translate(-S / 2, -S / 2);
+  const cross = !REDUCED_MOTION && j !== i && u > 0;
+  g.drawImage(rpFrameCanvas(cross || u < 0.5 ? i : j), 0, 0);
+  if (cross) { g.globalAlpha = u; g.drawImage(rpFrameCanvas(j), 0, 0); g.globalAlpha = 1; }
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  const f = replayFrames[u >= 0.5 ? j : i], cap = 'Week ' + f.week + ' \u00b7 ' + f.score.toLocaleString('en-US') + ' parcel' + (f.score === 1 ? '' : 's');
+  g.font = '800 26px Overpass, system-ui, sans-serif'; g.textAlign = 'left'; g.textBaseline = 'middle';
+  const w = g.measureText(cap).width + 40;
+  roundPath(g, 24, S - 70, w, 46, 23); g.fillStyle = 'rgba(10,22,30,.62)'; g.fill();
+  g.fillStyle = '#f2f7f6'; g.fillText(cap, 44, S - 46);
+  if (rp.card && rp.cardT > 0) {                                                   // the final two seconds of a recording: the run card
+    const a = clamp(rp.cardT / 0.4, 0, 1), h = S * 630 / 1200;
+    g.globalAlpha = a; g.fillStyle = '#0b1a22'; g.fillRect(0, 0, S, S); g.drawImage(rp.card, 0, (S - h) / 2, S, h); g.globalAlpha = 1;
+  }
+}
+function rpSync() {
+  const n = replayFrames.length; if (!n) return;
+  const f = replayFrames[Math.min(n - 1, Math.round(rpFrameAt(rp.t)))];
+  const cap = $('rp-cap'); if (cap) cap.textContent = 'Week ' + f.week + ' \u00b7 ' + f.score.toLocaleString('en-US') + ' parcel' + (f.score === 1 ? '' : 's') + (rp.rec ? ' \u00b7 recording\u2026' : '');
+  const bar = $('rp-bar'); if (bar && !rp.drag) bar.value = String(Math.round(clamp(rp.t / rp.dur, 0, 1) * 1000));
+  const pl = $('rp-play'); if (pl) pl.textContent = rp.playing ? 'Pause' : rp.t >= rp.dur ? 'Replay' : 'Play';
+  const sp = $('rp-speed'); if (sp) sp.textContent = rp.speed + '\u00d7';
+}
+/* week ticks under the scrub bar, labelled when there is room */
+function rpMarks() {
+  const box = $('rp-marks'); if (!box) return;
+  const n = replayFrames.length, every = Math.max(1, Math.ceil(replayFrames[n - 1].week / 8));
+  let h = '', last = -1;
+  replayFrames.forEach((f, i) => { if (f.week === last) return; last = f.week; const x = n > 1 ? i / (n - 1) * 100 : 0; h += '<i style="left:' + x.toFixed(2) + '%"></i>' + ((f.week - 1) % every === 0 ? '<b style="left:' + x.toFixed(2) + '%">W' + f.week + '</b>' : ''); });
+  box.innerHTML = h;
+}
+function rpSetBusy(on) { for (const id of ['rp-bar', 'rp-play', 'rp-speed', 'rp-save']) { const el = $(id); if (el) el.disabled = !!on; } }
+/* record the replay at 1x through captureStream + MediaRecorder (webm, vp9 if the browser has it), then the run card for 2 s */
+function rpExport() {
+  if (!rp.open || rp.rec || typeof MediaRecorder === 'undefined') return false;
+  const cv2 = $('rp-cv'); if (!cv2 || !cv2.captureStream) return false;
+  const mime = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].find(m => { try { return MediaRecorder.isTypeSupported(m); } catch (e) { return false; } }) || '';
+  const st = overStats();
+  rp.card = makeShareCard({pic: $('over-pic'), kicker: DIFF.label + ' \u00b7 ' + (lastRun.newBest ? 'new personal best' : 'week ' + week), big: score.toLocaleString('en-US'), bigLabel: 'parcels delivered',
+    title: 'Survived ' + week + ' week' + (week === 1 ? '' : 's'), stats: [['Weeks', week], st[1], st[2], st[3], st[4], ['Best', best.toLocaleString('en-US')]], line: 'Can you beat it?'});
+  let rec; const chunks = [];
+  try { rec = new MediaRecorder(cv2.captureStream(30), mime ? {mimeType: mime, videoBitsPerSecond: 5e6} : undefined); } catch (e) { toast('Video recording isn\u2019t available here', 'warn'); return false; }
+  rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+  rec.onstop = () => {
+    const wasOpen = rp.open && rp.rec === rec; rp.rec = null; rp.card = null; rp.cardT = 0; rp.playing = false; rpSetBusy(false); rpSync();
+    if (!wasOpen) return;
+    const blob = new Blob(chunks, {type: mime || 'video/webm'});
+    if (!blob.size) { toast('The recording came out empty', 'warn'); return; }
+    saveFile(blob, 'junction-replay.webm').then(ok => toast(ok ? 'Replay saved as junction-replay.webm' : 'Saving isn\u2019t available here', ok ? 'good' : 'warn'));
+  };
+  rp.rec = rec; rp.t = 0; rp.speed = 1; rp.playing = true; rp.cardT = 0; rpSetBusy(true); rpDraw(0);
+  try { rec.start(250); } catch (e) { rp.rec = null; rp.card = null; rpSetBusy(false); toast('Video recording isn\u2019t available here', 'warn'); return false; }
+  rpSync(); return true;
+}
+function rpFinishRec() { const r = rp.rec; if (r && r.state === 'recording') { try { r.stop(); } catch (e) { rp.rec = null; rp.card = null; rpSetBusy(false); } } }
+{
+  const on = (id, ev, fn) => { const el = $(id); if (el) el.addEventListener(ev, fn); };
+  on('btn-replay', 'click', () => openReplay());
+  on('rp-close', 'click', closeReplay);
+  on('rp-play', 'click', () => { if (rp.rec) return; if (!rp.playing && rp.t >= rp.dur) rp.t = 0; rp.playing = !rp.playing; rpSync(); });
+  on('rp-speed', 'click', () => { if (rp.rec) return; rp.speed = rp.speed === 1 ? 2 : 1; rpSync(); });
+  on('rp-save', 'click', () => rpExport());
+  on('rp-bar', 'pointerdown', () => { rp.drag = true; });
+  on('rp-bar', 'input', e => { if (rp.rec) return; rp.t = (+e.target.value / 1000) * rp.dur; rp.playing = false; rpDraw(rp.t); rpSync(); });
+  on('rp-bar', 'change', e => { rp.drag = false; if (rp.rec) return; rp.t = (+e.target.value / 1000) * rp.dur; rpDraw(rp.t); rpSync(); });
+  document.addEventListener('pointerup', () => { rp.drag = false; });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && rp.open) { e.stopPropagation(); closeReplay(); } }, true);
+}
+const _sGO62 = showGameOver;
+showGameOver = function (why) {
+  if (started && !demoMode && !spectating && !tutorialMode && (!replayFrames.length || clock - replayFrames[replayFrames.length - 1].t > 5)) replayPush();   // the closing frame
+  _sGO62(why);
+  const b = $('btn-replay'); if (b) b.hidden = replayFrames.length < 3;
+};
+
+/* ---------------------------------------------------------------- C7.1 growth tiers */
+function houseTier(b) { const d = b.delivered || 0; return d >= 300 ? 3 : d >= 150 ? 2 : d >= 60 ? 1 : 0; }
+function isMall(b) { return (b.served || 0) >= 400 && storeDesign() === 'standard'; }
+/* in the house's own frame (front at +y): 1 townhouse, 2 apartments, 3 tower. Rounded blocks, more windows each
+   step, the house colour on the trim and the door, the glyph on the roof */
+function drawHouseTier(b, col, tier) {
+  const dark = shade(col, -0.45), trim = shade(col, -0.18), wall = PAL.roofBase, wall2 = shade(PAL.roofBase, -0.08), wall3 = shade(PAL.roofBase, 0.06);
+  if (tier === 1) {
+    rr(-12, -14, 24, 17.5, 3); ctx.fillStyle = wall; ctx.fill();
+    rr(-12, -14, 24, 3.4, 3); ctx.fillStyle = trim; ctx.fill(); ctx.fillStyle = 'rgba(0,0,0,.1)'; sfr(-12, -10.6, 24, 0.7);
+    ctx.fillStyle = 'rgba(0,0,0,.07)'; sfr(-0.35, -10.6, 0.7, 14);                                     // the party wall
+    for (const wy of [-8.4, -3.6]) for (let i = 0; i < 4; i++) win(-10 + i * 5.6 + (i > 1 ? 1.2 : 0), wy, 2.6, 2);
+    for (const dx of [-6.5, 5.5]) { rr(dx - 1.4, 0.2, 2.8, 3.3, 0.6); ctx.fillStyle = dark; ctx.fill(); }
+    ctx.fillStyle = '#4a4f54'; ctx.fillRect(7.2, -13.4, 2.4, 2.6);
+    if (showSymbols) glyph(COLORS[b.color].glyph, 0, -12.3, 2, 'rgba(255,255,255,.92)');
+  } else if (tier === 2) {
+    rr(-12, -14, 24, 17.5, 3); ctx.fillStyle = wall2; ctx.fill();
+    rr(-12, -14, 24, 2.4, 3); ctx.fillStyle = trim; ctx.fill();
+    rr(-8, -16.5, 16, 20, 3); ctx.fillStyle = wall; ctx.fill();                                           // the taller middle block
+    rr(-8, -16.5, 16, 2.6, 3); ctx.fillStyle = trim; ctx.fill(); ctx.fillStyle = 'rgba(0,0,0,.1)'; sfr(-8, -13.9, 16, 0.6);
+    for (const wy of [-11.2, -6.6, -2]) for (let i = 0; i < 3; i++) win(-5.4 + i * 4.2, wy, 2.4, 1.9);
+    for (const wx of [-11.2, 8.8]) for (const wy of [-8.6, -4]) win(wx, wy, 2.4, 1.9);
+    rr(-2.2, 0, 4.4, 3.5, 0.8); ctx.fillStyle = dark; ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,.3)'; ctx.fillRect(-0.15, 0.2, 0.3, 3.2);
+    ctx.fillStyle = '#9aa3a8'; rr(2.5, -15.5, 4, 2.8, 0.8); ctx.fill();                                   // plant room
+    if (showSymbols) glyph(COLORS[b.color].glyph, 0, -15.2, 1.8, 'rgba(255,255,255,.92)');
+  } else {
+    rr(-12, -14, 24, 17.5, 3); ctx.fillStyle = wall2; ctx.fill();
+    rr(-12, -14, 24, 2.2, 3); ctx.fillStyle = trim; ctx.fill();
+    rr(-7, -19, 14, 22.5, 3); ctx.fillStyle = wall3; ctx.fill();                                          // the tower
+    ctx.fillStyle = 'rgba(0,0,0,.08)'; sfr(5.2, -19, 1.8, 22.5);
+    rr(-7, -19, 14, 2.6, 3); ctx.fillStyle = col; ctx.fill();
+    for (let r = 0; r < 4; r++) for (let i = 0; i < 3; i++) win(-5.3 + i * 3.9, -15.4 + r * 4.1, 2.2, 1.8);
+    for (const wx of [-11.2, 8.8]) for (const wy of [-9, -4.4]) win(wx, wy, 2.4, 1.9);
+    rr(-2.2, 0, 4.4, 3.5, 0.8); ctx.fillStyle = dark; ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,.3)'; ctx.fillRect(-0.15, 0.2, 0.3, 3.2);
+    ctx.fillStyle = '#9aa3a8'; rr(-4, -18.2, 5, 2.4, 0.8); ctx.fill();
+    ctx.fillStyle = '#ff5a4a'; ctx.beginPath(); ctx.arc(3.5, -17.2, 0.9, 0, 6.3); ctx.fill();                   // the aircraft light
+    if (showSymbols) glyph(COLORS[b.color].glyph, 0, -11.2, 1.7, 'rgba(255,255,255,.92)');
+  }
+}
+
+/* ---------------------------------------------------------------- C7.2 district names */
+function districtNames() {
+  const st = buildings.find(b => b.type === 'store'), key = st ? st.k : 0;
+  if (key === distKey && distNames) return distNames;
+  distKey = key; const pool = DISTRICT_NAMES.slice(), out = [];
+  for (let i = 0; i < 4; i++) out.push(pool.splice(Math.floor(hash01(key, 11 + i) * pool.length), 1)[0]);
+  return distNames = out;
+}
+/* soft pills at the four quadrant centres of a city 16+ tiles across, at low zoom only, fading in as you zoom out */
+function drawDistricts(vr) {
+  if (span < 16 || cam.z >= 1.1 || demoMode || distOff) return;
+  const a = clamp((1.1 - cam.z) / 0.3, 0, 1) * 0.9; if (a <= 0.02) return;
+  const names = districtNames(), q = camSpan * CELL / 4, x0 = camOrg * CELL, fs = 13 / cam.z, pad = 9 / cam.z, h = 22 / cam.z;
+  ctx.save(); ctx.globalAlpha = a; ctx.font = '800 ' + fs.toFixed(2) + 'px Overpass, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (let i = 0; i < 4; i++) {
+    const cx_ = x0 + q * (i % 2 ? 3 : 1), cy_ = x0 + q * (i < 2 ? 1 : 3);
+    if (cx_ < vr.x0 - 120 || cx_ > vr.x1 + 120 || cy_ < vr.y0 - 40 || cy_ > vr.y1 + 40) continue;
+    const w = ctx.measureText(names[i]).width + pad * 2;
+    rr(cx_ - w / 2, cy_ - h / 2, w, h, h / 2); ctx.fillStyle = theme === 'dark' ? 'rgba(10,22,30,.6)' : 'rgba(255,255,255,.72)'; ctx.fill();
+    ctx.fillStyle = PAL.ink; ctx.fillText(names[i], cx_, cy_ + 0.6 / cam.z);
+  }
+  ctx.restore();
+}
+const _dO62 = drawOutside;
+drawOutside = function (vr) { _dO62(vr); drawDistricts(vr); };
+const _cP62 = cityPicture;                                                       // no labels in the game-over picture and share card
+cityPicture = function (cv2) { distOff = true; try { return _cP62(cv2); } finally { distOff = false; } };
+
+/* ---------------------------------------------------------------- C7.3 pedestrians
+   A fixed pool of PED_MAX walkers (no allocation per frame). Each spawns on a lane leaving a house's road node and
+   strolls along the pavement (roadWidth/2 + 3 off the centre line), turns onto a random lane at junctions and leaves
+   after 20-40 s. Off when decoration is below 0.6 or the camera is too far out to see them. Math.random, never
+   rand(): the seeded expert sim must not notice them. */
+function pedsOn() { return gfx.decor >= 0.6 && cam.z >= 0.8 && !spectating; }
+function pedSpawn(p) {
+  let h = null;
+  for (let tries = 0; tries < 4 && !h; tries++) { const b = buildings[Math.floor(Math.random() * buildings.length)]; if (b && b.type === 'house' && b.acc >= 0 && nodes[b.acc]) h = b; }
+  if (!h) return false;
+  const nd = nodes[h.acc]; let n = 0;
+  for (const e of nd.outs) if (!e.dead && !e.fast) n++;
+  if (!n) return false;
+  let pick = Math.floor(Math.random() * n), e = null;
+  for (const o of nd.outs) if (!o.dead && !o.fast && pick-- === 0) { e = o; break; }
+  p.on = true; p.e = e; p.s = e.r0 + Math.random() * Math.max(1, e.stop - e.r0); p.side = Math.random() < 0.5 ? 1 : -1; p.dir = Math.random() < 0.5 ? 1 : -1;
+  p.spd = 7 + Math.random() * 5; p.life = 20 + Math.random() * 20; p.col = Math.floor(Math.random() * PED_COLS.length);
+  pedN++; return true;
+}
+function pedPose(p) { const e = p.e, off = p.side * (CFG.roadWidth / 2 + 3); p.x = e.ax + e.ux * p.s + e.nx * off; p.y = e.ay + e.uy * p.s + e.ny * off; }
+function stepPeds(dt) {
+  if (!pedsOn()) { if (pedN) { for (const p of peds) p.on = false; pedN = 0; } return; }
+  pedSpawnT -= dt;
+  if (pedSpawnT <= 0 && pedN < PED_MAX && buildings.length) { pedSpawnT = 0.35; for (const p of peds) if (!p.on) { pedSpawn(p); break; } }
+  for (const p of peds) {
+    if (!p.on) continue;
+    p.life -= dt; const e = p.e;
+    if (p.life <= 0 || e.dead) { p.on = false; pedN--; continue; }
+    p.s += p.spd * p.dir * dt;
+    if (p.s > e.stop || p.s < e.r0) {                                                // at the end of the lane: turn onto another, or come back
+      const nd = nodes[p.dir > 0 ? e.b : e.a]; let n = 0, nx = null;
+      if (nd) for (const o of nd.outs) if (!o.dead && !o.fast && o !== e && !(o.a === e.b && o.b === e.a)) n++;
+      if (n) { let pick = Math.floor(Math.random() * n); for (const o of nd.outs) if (!o.dead && !o.fast && o !== e && !(o.a === e.b && o.b === e.a) && pick-- === 0) { nx = o; break; } }
+      if (nx) { p.e = nx; p.dir = 1; p.s = nx.r0 + 0.1; }
+      else { p.dir = -p.dir; p.side = -p.side; p.s = clamp(p.s, e.r0, e.stop); }
+    }
+    pedPose(p);
+  }
+}
+/* two-pixel walkers: a coloured body dot and a darker head a touch ahead; one fill per colour, one for the heads */
+function drawPeds() {
+  if (!pedN || !pedsOn()) return;
+  const vr = viewRect(), m = 8;
+  for (let c = 0; c < PED_COLS.length; c++) {
+    let any = false; ctx.beginPath();
+    for (const p of peds) { if (!p.on || p.col !== c || p.x < vr.x0 - m || p.x > vr.x1 + m || p.y < vr.y0 - m || p.y > vr.y1 + m) continue; any = true; ctx.moveTo(p.x + 1.7, p.y); ctx.arc(p.x, p.y, 1.7, 0, 6.3); }
+    if (any) { ctx.fillStyle = PED_COLS[c]; ctx.fill(); }
+  }
+  ctx.beginPath();
+  for (const p of peds) { if (!p.on || p.x < vr.x0 - m || p.x > vr.x1 + m || p.y < vr.y0 - m || p.y > vr.y1 + m) continue; const hx = p.x + p.e.ux * p.dir * 0.55, hy = p.y + p.e.uy * p.dir * 0.55; ctx.moveTo(hx + 1, hy); ctx.arc(hx, hy, 1, 0, 6.3); }
+  ctx.fillStyle = '#3a3230'; ctx.fill();
+}
+
+/* ---------------------------------------------------------------- C7.4 weather */
+function startWeather(kind, secs) {
+  if (!WEATHER_START[kind]) return false;
+  weather.kind = kind; weather.t = secs || 60 + Math.random() * 30; weatherSeen[kind] = true;
+  toast(kind === 'snow' && perks.plough ? 'Snow \u2014 the ploughs are out, so the roads stay clear' : WEATHER_START[kind], 'warn');
+  return true;
+}
+function weatherTick(dt) {
+  weather.amt += ((weather.t > 0 ? 1 : 0) - weather.amt) * Math.min(1, dt * 0.5);
+  if (weather.t > 0) { weather.t -= dt; if (weather.t <= 0) { weather.t = 0; toast(WEATHER_END[weather.kind] || 'The weather has cleared'); } }
+  else if (weather.amt < 0.02 && weather.kind !== 'clear') { weather.kind = 'clear'; weather.amt = 0; }
+  if (spectating || demoMode || tutorialMode || !started || over || !(diffKey === 'standard' || diffKey === 'frantic')) return;
+  weatherTimer -= dt;
+  if (weatherTimer <= 0) {
+    weatherTimer = 240 + Math.random() * 180;
+    if (weather.t > 0 || rain.t > 0) return;
+    const r = Math.random(), winter = mapPrefs && mapPrefs.theme === 'winter';
+    const kind = winter && r < 0.5 ? 'snow' : r < 0.25 ? 'snow' : r < 0.5 ? 'fog' : r < 0.75 ? 'heat' : '';
+    if (kind) startWeather(kind);
+  }
+}
+/* screen-space: drifting flakes, a white veil with slow banks, a warm tint */
+function drawWeather() {
+  const a = weather.amt; if (a < 0.03 || weather.kind === 'clear') return;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if (weather.kind === 'snow') {
+    ctx.fillStyle = 'rgba(225,235,245,' + (0.08 * a).toFixed(3) + ')'; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = 'rgba(255,255,255,' + (0.85 * a).toFixed(3) + ')'; ctx.beginPath();
+    const n = Math.round(rainDrops.length * Math.max(0.4, gfx.decor)), t = REDUCED_MOTION ? 4 : animT;
+    for (let i = 0; i < n; i++) {
+      const d = rainDrops[i], X = ((d.x * W + Math.sin(t * 0.8 + i) * 16 + t * 6 * d.s) % W + W) % W, Y = ((d.y + t * 0.07 * d.s) % 1) * H, r = 0.9 + d.s * 1.2;
+      ctx.moveTo(X + r, Y); ctx.arc(X, Y, r, 0, 6.3);
+    }
+    ctx.fill();
+  } else if (weather.kind === 'fog') {
+    const gr = ctx.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, 'rgba(236,241,246,' + (0.44 * a).toFixed(3) + ')'); gr.addColorStop(1, 'rgba(236,241,246,' + (0.3 * a).toFixed(3) + ')');
+    ctx.fillStyle = gr; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = 'rgba(255,255,255,' + (0.13 * a).toFixed(3) + ')'; const t = REDUCED_MOTION ? 0 : animT;
+    for (let i = 0; i < 4; i++) { const X = ((i * 0.27 + t * 0.012 * (1 + i * 0.3)) % 1) * W, Y = (0.2 + i * 0.2) * H; ctx.beginPath(); ctx.ellipse(X, Y, W * 0.35, H * 0.12, 0, 0, 6.3); ctx.fill(); }
+  } else if (weather.kind === 'heat') {
+    ctx.fillStyle = 'rgba(255,160,60,' + (0.12 * a).toFixed(3) + ')'; ctx.fillRect(0, 0, W, H);
+    const gr = ctx.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, 'rgba(255,230,150,' + (0.16 * a).toFixed(3) + ')'); gr.addColorStop(1, 'rgba(255,230,150,0)');
+    ctx.fillStyle = gr; ctx.fillRect(0, 0, W, H);
+  }
+}
+
+/* ---------------------------------------------------------------- C7.5 night lights */
+function lampGlow() {
+  if (lampSprite) return lampSprite;
+  const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+  const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,226,160,.6)'); gr.addColorStop(0.35, 'rgba(255,214,140,.22)'); gr.addColorStop(1, 'rgba(255,214,140,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return lampSprite = c;
+}
+/* warm windows on houses, cooler shop fronts on stores, lamp heads with a cached glow at junction corners: in
+   view only, each kind batched into one path, all under 'lighter' */
+function drawCityLights(vr, na) {
+  if (na < 0.3) return;
+  const a = clamp((na - 0.3) / 0.4, 0, 1), m = 60, x0 = vr.x0 - m, x1 = vr.x1 + m, y0 = vr.y0 - m, y1 = vr.y1 + m;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  ctx.beginPath(); let any = false;
+  for (const b of buildings) {
+    if (b.type !== 'house') continue;
+    const x = tx(b.k), y = ty(b.k); if (x < x0 || x > x1 || y < y0 || y > y1) continue;
+    const th = b.face || 0, flip = Math.abs(Math.sin(th)) > 0.5, tier = houseTier(b), rows = tier ? (tier === 1 ? 2 : 3) : 1, cols = tier ? 3 : 2, w = flip ? 1.8 : 2.6, h = flip ? 2.6 : 1.8;
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+      if (hash01(b.k, 40 + r * 4 + c) > 0.72) continue;                                        // a few rooms are dark
+      const q = rot(x, y, th, (c - (cols - 1) / 2) * 5.4, tier ? -9.5 + r * 4.4 : 1.7);
+      rrp(q.x - w / 2, q.y - h / 2, w, h, 0.6); any = true;
+    }
+  }
+  if (any) { ctx.fillStyle = 'rgba(255,196,110,' + (0.6 * a).toFixed(3) + ')'; ctx.fill(); }
+  ctx.beginPath(); any = false;
+  for (const b of buildings) {
+    if (b.type !== 'store') continue;
+    const x = bX(b), y = bY(b); if (x < x0 || x > x1 || y < y0 || y > y1) continue;
+    const th = b.face || 0, flip = Math.abs(Math.sin(th)) > 0.5;
+    if (isBig(b)) { const [Bx, By, Bw, Bh] = STORE_BOX[Math.min(3, b.tier || 0)], q = rot(x, y, th, Bx + Bw / 2, By + Bh - 9.5), L = Bw - 14; rrp(q.x - (flip ? 1.4 : L / 2), q.y - (flip ? L / 2 : 1.4), flip ? 2.8 : L, flip ? L : 2.8, 1.2); }
+    else { const q = rot(x, y, th, 0, 1.1); rrp(q.x - (flip ? 1 : 7), q.y - (flip ? 7 : 1), flip ? 2 : 14, flip ? 14 : 2, 0.8); }
+    any = true;
+  }
+  if (any) { ctx.fillStyle = 'rgba(200,232,255,' + (0.42 * a).toFixed(3) + ')'; ctx.fill(); }
+  const sp = lampGlow(); ctx.globalAlpha = a; ctx.beginPath(); any = false;
+  for (const nd of nodeList) {
+    if (!nd.junction) continue;
+    const x = tx(nd.k), y = ty(nd.k); if (x < x0 || x > x1 || y < y0 || y > y1) continue;
+    for (const [lx, ly] of [[13, 13], [-13, -13]]) { ctx.drawImage(sp, x + lx - 16, y + ly - 16, 32, 32); ctx.moveTo(x + lx + 1.1, y + ly); ctx.arc(x + lx, y + ly, 1.1, 0, 6.3); any = true; }
+  }
+  if (any) { ctx.fillStyle = 'rgba(255,240,200,.9)'; ctx.fill(); }
+  ctx.restore();
+}
+const _dN62 = drawNight;
+drawNight = function (vr, na) { _dN62(vr, na); drawCityLights(vr, na); };
+
+/* ---------------------------------------------------------------- resets and the API */
+const _rg62 = resetGame;
+resetGame = function (dk) {
+  _rg62(dk);
+  replayFrames = []; replayDay = -1;
+  weather = {kind: 'clear', t: 0, amt: 0}; weatherTimer = 240 + Math.random() * 180; weatherSeen = {};
+  for (const p of peds) p.on = false; pedN = 0; distKey = -1; distNames = null;
+};
+if (window.JunctionAPI) window.JunctionAPI.replay = {frames: () => replayFrames, open: openReplay, close: closeReplay, exportVideo: rpExport};
+if (window.__JUNCTION) Object.assign(window.__JUNCTION, {resetGame: (...a) => resetGame(...a), replayTick, replayPush, replayStore, openReplay, closeReplay, rpExport, rp, replayFramesNow: () => replayFrames, setReplayFrames(v) { replayFrames = v; },
+  weatherNow: () => weather, setWeather(v) { weather = v; }, startWeather, weatherTick, weatherSeenNow: () => weatherSeen, carVmax, lightDemand, groupOf, houseTier, isMall, drawDistricts, districtNames, stepPeds, drawPeds, peds, pedNow: () => pedN,
+  drawCityLights, nightAmount, setClock(v) { clock = v; }, clockNow: () => clock, gfx, loadGameCore, UPGRADES, showGameOverNow: (...a) => showGameOver(...a)});
+
+
+/* ===== p60 Campaign: three chapters of ten handmade levels. CAMP_LEVELS is plain data, so more can be added.
+   A level is an ordinary city built by resetGame on a seeded stream (Math.random is swapped for the level's seed for
+   the length of the reset, so rand() stays seeded the way an Expert city's does), then the rules go on top: budget,
+   starting roads and stock, banned tools, a fixed map size, and for some levels a hand-laid layout. The goal is
+   checked once a second from frame(). Progress lives in localStorage under junction-campaign-v1 and
+   JunctionAPI.campaign exposes snapshot/merge for account sync. The game's own functions are wrapped here, never
+   edited: resetGame (restarts re-apply the level), saveGame/writeSlot (no slots), JEvents.emit (no leaderboards),
+   endGame (mode bests and the autosave are left alone), growMap (fixed maps), setTool/refreshUI (banned tools). ===== */
+const CAMP_KEY = 'junction-campaign-v1', CAMP_NEED = 20;                  // stars in a chapter that open the next one
+const CAMP_CHAPTERS = [
+  {n: 1, name: 'First Streets', blurb: 'The basics at an easy pace: stores, houses, bridges, lights and roundabouts.', unlock: 'design:car:trophy', tint: '#2ea56a'},
+  {n: 2, name: 'Growing Pains', blurb: 'Standard pace with a catch on every level: no lights, no roundabouts, tiny budgets, rivers and one-way loops.', unlock: 'design:house:mayor', tint: '#2f6fd1'},
+  {n: 3, name: 'Gridlock', blurb: 'Frantic parcels, tight budgets, no motorways, and stores that must never pile up.', unlock: 'design:round:medal', tint: '#c8352a'}
+];
+/* id, name, blurb, seed, rules {diff, budget?, roads?, inv?, banned?, span?, noGrow?}, goal {type, n, byWeek?, maxOverflow?}, stars, extras {layout?, unlock?}
+   stars: for parcels/keepCalm/allGoals goals the weeks to finish by for 1, 2 and 3 stars (the first is the deadline);
+   for survive goals [0, parcels for 2 stars, parcels for 3 stars] counted when the target week arrives. */
+const L_ = (id, name, blurb, seed, rules, goal, stars, x) => Object.assign({id, ch: +id.split('-')[0], n: +id.split('-')[1], name, blurb, seed, rules, goal, stars}, x || {});
+const CAMP_LEVELS = [
+  /* chapter 1: First Streets */
+  L_('1-1', 'Corner Shop', 'One store, a few houses and all the time in the world. Join the houses to the shop and let the parcels roll.', 11001, {diff: 'chill', budget: 60}, {type: 'parcels', n: 30}, [6, 4, 3]),
+  L_('1-2', 'Two Streets', 'A second colour arrives early. Keep the two routes apart and both shops stay happy.', 11002, {diff: 'chill', budget: 60}, {type: 'parcels', n: 60}, [7, 5, 4]),
+  L_('1-3', 'Across the Water', 'A river runs through the middle and both pairs sit on opposite banks. Three bridges to start; spend them well.', 11003, {diff: 'standard', inv: {bridge: 3}, span: 12}, {type: 'parcels', n: 80}, [8, 6, 5], {layout: 'river'}),
+  L_('1-4', 'Hold the Line', 'Nothing fancy: keep the city running to week 5. The more parcels by then, the more stars.', 11004, {diff: 'standard'}, {type: 'survive', n: 5}, [0, 80, 130]),
+  L_('1-5', 'Pocket Money', 'No cash and twelve tiles of road. Short, direct streets until the money comes in.', 11005, {diff: 'standard', budget: 0, roads: 12}, {type: 'parcels', n: 70}, [8, 6, 5]),
+  L_('1-6', 'Lights On', 'Two traffic lights and no roundabouts. Find the junction that queues and put a light on it.', 11006, {diff: 'standard', inv: {light: 2}, banned: ['round']}, {type: 'parcels', n: 120}, [9, 7, 6]),
+  L_('1-7', 'Round and Round', 'Two roundabouts and no lights. Nobody has to stop if you place them right.', 11007, {diff: 'standard', inv: {round: 2}, banned: ['light']}, {type: 'parcels', n: 120}, [9, 7, 6]),
+  L_('1-8', 'Small Town', 'The town never grows past its walls. Make every tile count to week 6.', 11008, {diff: 'standard', span: 12, noGrow: true}, {type: 'survive', n: 6}, [0, 100, 160]),
+  L_('1-9', 'Box Ticker', 'Tick off six of the city goals: lots, bays, roundabouts, a motorway, upgrades. Your choice which.', 11009, {diff: 'standard'}, {type: 'allGoals', n: 6}, [9, 7, 6]),
+  L_('1-10', 'Main Street', 'Chapter finale. Two hundred parcels on a standard city, and the Trophy car is yours.', 11010, {diff: 'standard'}, {type: 'parcels', n: 200}, [11, 9, 8], {unlock: 'design:car:trophy'}),
+  /* chapter 2: Growing Pains */
+  L_('2-1', 'Blackout', 'No traffic lights at all. Roundabouts and signs have to carry the busy junctions.', 12001, {diff: 'standard', banned: ['light']}, {type: 'parcels', n: 150}, [10, 8, 7]),
+  L_('2-2', 'Straight Through', 'No roundabouts. Lights, signs and a clever layout only.', 12002, {diff: 'standard', banned: ['round']}, {type: 'parcels', n: 150}, [10, 8, 7]),
+  L_('2-3', 'Shoestring', 'Ten tiles of road and not a cent. Every parcel pays for the next tile.', 12003, {diff: 'standard', budget: 0, roads: 10}, {type: 'parcels', n: 130}, [10, 8, 7]),
+  L_('2-4', 'River Town', 'A river down the middle and three pairs that all need to cross it. Three bridges, no motorways.', 12004, {diff: 'standard', inv: {bridge: 3}, banned: ['moto'], span: 14}, {type: 'parcels', n: 110}, [9, 7, 6], {layout: 'riverTown'}),
+  L_('2-5', 'One Way Only', 'A ring road and two pairs, with no lights or roundabouts. One-way signs keep the loop flowing.', 12005, {diff: 'standard', roads: 8, inv: {sign: 6}, banned: ['light', 'round'], span: 12}, {type: 'parcels', n: 100}, [9, 7, 6], {layout: 'ring'}),
+  L_('2-6', 'Slow Lane', 'No motorways. Two hundred and twenty parcels on surface streets alone.', 12006, {diff: 'standard', banned: ['moto']}, {type: 'parcels', n: 220}, [12, 10, 8]),
+  L_('2-7', 'Keep Calm', 'No store may ever hold more than 8 parcels. One pile-up and the level is lost.', 12007, {diff: 'standard'}, {type: 'keepCalm', n: 150, maxOverflow: 8}, [10, 8, 7]),
+  L_('2-8', 'Island Hop', 'The red store sits on an island in a lake. Four bridges, or the long way round.', 12008, {diff: 'standard', inv: {bridge: 4}, banned: ['moto'], span: 16}, {type: 'parcels', n: 120}, [10, 8, 7], {layout: 'island'}),
+  L_('2-9', 'Sign Language', 'Signs only: no lights, roundabouts or motorways. Eight signs to start.', 12009, {diff: 'standard', inv: {sign: 8}, banned: ['light', 'round', 'moto']}, {type: 'parcels', n: 180}, [11, 9, 8]),
+  L_('2-10', 'City Limits', 'Chapter finale. A town that never grows, for nine weeks. The Mayor\u2019s hall waits at the end.', 12010, {diff: 'standard', span: 14, noGrow: true}, {type: 'survive', n: 9}, [0, 220, 320], {unlock: 'design:house:mayor'}),
+  /* chapter 3: Gridlock */
+  L_('3-1', 'Frantic Start', 'Welcome to Frantic: parcels come fast and stores lose patience sooner. One hundred and fifty parcels.', 13001, {diff: 'frantic'}, {type: 'parcels', n: 150}, [9, 7, 6]),
+  L_('3-2', 'Fast Lane Closed', 'Frantic pace and no motorways. Keep the long trips short.', 13002, {diff: 'frantic', banned: ['moto']}, {type: 'parcels', n: 200}, [11, 9, 8]),
+  L_('3-3', 'Empty Wallet', 'Frantic, broke, and ten tiles of road. Earn your way out.', 13003, {diff: 'frantic', budget: 0, roads: 10}, {type: 'parcels', n: 150}, [10, 8, 7]),
+  L_('3-4', 'Under Six', 'No store may hold more than 6 parcels at a Frantic pace. Stay ahead of every pile.', 13004, {diff: 'frantic'}, {type: 'keepCalm', n: 120, maxOverflow: 6}, [10, 8, 7]),
+  L_('3-5', 'Bare Junctions', 'No lights, no roundabouts, Frantic parcels. Layout is everything.', 13005, {diff: 'frantic', banned: ['light', 'round']}, {type: 'parcels', n: 200}, [11, 9, 8]),
+  L_('3-6', 'Marathon', 'Ten weeks of Frantic. The parcels delivered by then decide the stars.', 13006, {diff: 'frantic'}, {type: 'survive', n: 10}, [0, 300, 420]),
+  L_('3-7', 'Crossroads', 'Four pairs whose straight routes all cross in the middle. No motorways to go over the top.', 13007, {diff: 'frantic', banned: ['moto'], span: 14}, {type: 'parcels', n: 160}, [10, 8, 7], {layout: 'cross'}),
+  L_('3-8', 'Eight and No Lights', 'Two hundred parcels, never more than 8 waiting anywhere, and no traffic lights.', 13008, {diff: 'frantic', banned: ['light']}, {type: 'keepCalm', n: 200, maxOverflow: 8}, [11, 9, 8]),
+  L_('3-9', 'Everything at Once', 'Ten city goals at a Frantic pace. Build wide and tick them off.', 13009, {diff: 'frantic'}, {type: 'allGoals', n: 10}, [12, 10, 9]),
+  L_('3-10', 'Gridlock', 'The finale. Twelve weeks of Frantic with no cash and no motorways. The Medal roundabout is the prize.', 13010, {diff: 'frantic', budget: 0, banned: ['moto']}, {type: 'survive', n: 12}, [0, 400, 560], {unlock: 'design:round:medal'})
+];
+const CAMP_INV_NAMES = {bridge: 'bridge', light: 'traffic light', round: 'roundabout', sign: 'sign', moto: 'motorway', park: 'lot', depot: 'bay', road: 'road'};
+const CAMP_BAN_NAMES = {light: 'traffic lights', round: 'roundabouts', moto: 'motorways', sign: 'signs', park: 'parking lots', depot: 'waiting bays', road: 'roads'};
+/* hand-laid maps: tile coordinates are relative to org, the way the tutorial lays its pairs */
+function campWipe(clearWater) {
+  for (const b of buildings) for (const t of bTiles(b)) bAt[t] = -1;
+  buildings = []; cars = []; trucks = [];
+  if (clearWater) water.fill(0);
+}
+function campStamp(x, y, rad) {
+  const X = org + x, Y = org + y;
+  for (let r = Math.floor(Y - rad); r <= Math.ceil(Y + rad); r++) for (let c = Math.floor(X - rad); c <= Math.ceil(X + rad); c++) {
+    if (c < 0 || r < 0 || c >= COLS || r >= ROWS) continue;
+    if ((c + 0.5 - X) ** 2 + (r + 0.5 - Y) ** 2 <= rad * rad) water[idx(c, r)] = 1;
+  }
+}
+function campRiver(vertical, at, wig) { for (let t = -1; t <= span + 1; t += 0.5) { const w = at + Math.sin(t * 0.5) * wig; if (vertical) campStamp(w, t, 0.9); else campStamp(t, w, 0.9); } }
+const CAMP_LAYOUTS = {
+  river() { campWipe(true); campRiver(false, span / 2, 0.8); tutSpawnPair(0, [2, 2], [span - 4, span - 3]); tutSpawnPair(1, [span - 4, 1], [2, span - 3]); },
+  riverTown() { campWipe(true); campRiver(true, span / 2, 1); tutSpawnPair(0, [2, 2], [11, 3]); tutSpawnPair(1, [11, 8], [2, 9]); tutSpawnPair(2, [2, 10], [11, 11]); },
+  ring() {
+    campWipe(true);                                     // the ring first: buildings nudge off road tiles, not the other way round
+    const ring = []; for (let c = 2; c <= 9; c++) ring.push([c, 2]); for (let r = 3; r <= 9; r++) ring.push([9, r]); for (let c = 8; c >= 2; c--) ring.push([c, 9]); for (let r = 8; r >= 2; r--) ring.push([2, r]);
+    tutPath(ring);
+    tutSpawnPair(0, [4, 5], [10, 1]); tutSpawnPair(1, [6, 5], [1, 10]);
+  },
+  island() {
+    campWipe(true); const m = span / 2;
+    for (let a = 0; a < 6.3; a += 0.06) for (const rr2 of [3.7, 4.5]) campStamp(m + Math.cos(a) * rr2, m + Math.sin(a) * rr2, 0.75);
+    placeTutBuilding('store', 0, m - 1, m - 2, [4, 0, 2, 6]);
+    for (const [c, r] of [[1, 1], [span - 2, 1], [1, span - 2]]) placeTutBuilding('house', 0, c, r);
+    tutSpawnPair(1, [span - 3, span - 3], [1, m]);     // the blue pair sits outside the lake (the ring reaches 5.25 tiles from the centre)
+  },
+  cross() {
+    campWipe(true);
+    tutSpawnPair(0, [1, 6], [12, 6]); tutSpawnPair(1, [6, 1], [6, 12]); tutSpawnPair(2, [2, 11], [11, 2]); tutSpawnPair(3, [11, 11], [2, 2]);
+  }
+};
+/* ---- progress ---- */
+let campaignLevel = null, campaignBuilding = false, campaignRestarting = false, campState = null, campPick = null;
+function campBlank() { return {levels: {}, unlockedCh: 1}; }
+function campClean(d) {
+  const o = campBlank();
+  if (d && typeof d === 'object' && d.levels && typeof d.levels === 'object') for (const l of CAMP_LEVELS) {
+    const v = d.levels[l.id]; if (!v || typeof v !== 'object') continue;
+    const st = Math.max(0, Math.min(3, Math.floor(+v.stars || 0))); if (!st) continue;
+    o.levels[l.id] = {stars: st, best: v.best && typeof v.best === 'object' ? {week: +v.best.week || 0, score: +v.best.score || 0, sec: +v.best.sec || 0} : null, at: +v.at || 0};
+  }
+  o.unlockedCh = Math.max(1, Math.min(CAMP_CHAPTERS.length, Math.floor(+(d && d.unlockedCh) || 1)));
+  return o;
+}
+let camp = (() => { try { return campClean(JSON.parse(localStorage.getItem(CAMP_KEY))); } catch (e) { return campBlank(); } })();
+function saveCamp() { camp.unlockedCh = Math.max(camp.unlockedCh || 1, ...CAMP_CHAPTERS.filter(c => chapterOpen(c.n)).map(c => c.n)); try { localStorage.setItem(CAMP_KEY, JSON.stringify(camp)); } catch (e) {} }
+const campStars = id => (camp.levels[id] && camp.levels[id].stars) || 0;
+const chapterStars = n => CAMP_LEVELS.reduce((a, l) => a + (l.ch === n ? campStars(l.id) : 0), 0);
+const chapterOpen = n => n <= 1 || chapterStars(n - 1) >= CAMP_NEED;
+const levelById = id => CAMP_LEVELS.find(l => l.id === id);
+function levelOpen(l) { if (!chapterOpen(l.ch)) return false; if (l.n === 1) return true; const i = CAMP_LEVELS.indexOf(l); return campStars(CAMP_LEVELS[i - 1].id) > 0; }
+function nextLevel(l) { const i = CAMP_LEVELS.indexOf(l), n = CAMP_LEVELS[i + 1]; return n && levelOpen(n) ? n : null; }
+function campaignSnapshot() { return JSON.parse(JSON.stringify(camp)); }
+function mergeCampaign(d) {                            // takes the better of each level (e.g. the cloud copy); true when anything changed
+  const o = campClean(d); let changed = false;
+  for (const id in o.levels) { const v = o.levels[id], c = camp.levels[id]; if (!c || v.stars > c.stars) { camp.levels[id] = Object.assign({}, c, v, {stars: Math.max(v.stars, c ? c.stars : 0)}); changed = true; } else if (!c.best && v.best) { c.best = v.best; changed = true; } }
+  if (changed) { saveCamp(); if (mmPane === 'campaign') renderCampaign(); }
+  return changed;
+}
+/* ---- the goal ---- */
+const campDeadline = l => l.goal.type === 'survive' ? 0 : (l.goal.byWeek || l.stars[0]);
+function campProgress(l) { const g = l.goal; return g.type === 'survive' ? {cur: Math.min(week, g.n), n: g.n} : g.type === 'allGoals' ? {cur: Math.min(goalsDone.size, g.n), n: g.n} : {cur: Math.min(score, g.n), n: g.n}; }
+function campStarsNow(l) { const s = l.stars; if (l.goal.type === 'survive') return 1 + (score >= s[1] ? 1 : 0) + (score >= s[2] ? 1 : 0); return week <= s[2] ? 3 : week <= s[1] ? 2 : 1; }
+function campGoalText(l) {
+  const g = l.goal, by = ' by week ' + campDeadline(l);
+  if (g.type === 'survive') return 'Keep the city running to week ' + g.n;
+  if (g.type === 'allGoals') return 'Complete ' + g.n + ' city goals' + by;
+  if (g.type === 'keepCalm') return 'Deliver ' + g.n + ' parcels' + by + ' and never let a store hold more than ' + g.maxOverflow + ' parcels';
+  return 'Deliver ' + g.n + ' parcels' + by;
+}
+function campGoalShort(l) { const g = l.goal; return g.type === 'survive' ? 'Reach week ' + g.n : g.type === 'allGoals' ? g.n + ' goals by week ' + campDeadline(l) : g.n + ' parcels by week ' + campDeadline(l) + (g.type === 'keepCalm' ? ' \u00b7 max ' + g.maxOverflow + ' waiting' : ''); }
+function campStarRows(l) { const g = l.goal, s = l.stars; return g.type === 'survive' ? [[1, 'Reach week ' + g.n], [2, s[1] + ' parcels by then'], [3, s[2] + ' parcels by then']] : [[1, 'Done by week ' + s[0]], [2, 'Done by week ' + s[1]], [3, 'Done by week ' + s[2]]]; }
+function campRuleChips(l) {
+  const Rl = l.rules || {}, out = [[(DIFFS[Rl.diff] || DIFFS.standard).label, 'diff']];
+  if (Rl.budget !== undefined) out.push(['Budget ' + fmt$(Rl.budget)]);
+  if (Rl.roads !== undefined) out.push([Rl.roads + ' roads to start']);
+  if (Rl.inv) for (const k in Rl.inv) out.push([Rl.inv[k] + ' ' + CAMP_INV_NAMES[k] + (Rl.inv[k] === 1 ? '' : 's')]);
+  for (const k of Rl.banned || []) out.push(['No ' + CAMP_BAN_NAMES[k], 'ban']);
+  if (Rl.span) out.push([Rl.span + '\u00d7' + Rl.span + ' map']);
+  if (Rl.noGrow) out.push(['Map never grows', 'ban']);
+  if (l.layout) out.push(['Hand-laid map']);
+  return out.map(([t, c]) => '<span class="lv-chip' + (c ? ' ' + c : '') + '">' + t + '</span>').join('');
+}
+/* ---- starting and applying a level ---- */
+function applyLevel(l) {
+  const Rl = l.rules || {};
+  bannedTools.clear();
+  if (Rl.span && Rl.span > span) { span = Math.min(MAXD, Rl.span); org = Math.floor((MAXD - span) / 2); camSpan = span; camOrg = org; }
+  if (Rl.budget !== undefined) money = Rl.budget;
+  if (Rl.roads !== undefined) inv.road = Rl.roads;
+  if (Rl.inv) for (const k in Rl.inv) if (k in inv) inv[k] = Rl.inv[k];
+  for (const k of Rl.banned || []) { bannedTools.add(k); if (k in inv) inv[k] = 0; }
+  if (l.layout && CAMP_LAYOUTS[l.layout]) {
+    CAMP_LAYOUTS[l.layout]();
+    linkBuildings(); rebuildNet();
+    for (const c of cars) { const p = parkedPose(c); c.x = p.x; c.y = p.y; c.ang = p.a; }
+    pathCache.ver = -1;
+  }
+  campState = {done: false, failed: false, t0: Date.now()};
+  camReset(true); closeInspector(); setTool('select'); refreshUI(); renderCampHud();
+}
+function startLevel(l) {
+  if (typeof l === 'string') l = levelById(l);
+  if (!l) return false;
+  if (spectating && window.JunctionAPI && window.JunctionAPI.spectate) window.JunctionAPI.spectate.exit();
+  campaignBuilding = true;
+  try {
+    campaignLevel = l; campaignRestarting = false; pendingSlot = '';
+    document.querySelectorAll('.modal').forEach(m => { m.hidden = true; }); modalOpen = false;
+    const mr = Math.random; Math.random = seededRand(l.seed);
+    try { resetGame(l.rules.diff in DIFFS ? l.rules.diff : 'standard'); } finally { Math.random = mr; }
+    curSlot = '';
+    applyLevel(l);
+  } finally { campaignBuilding = false; }
+  running = true; refreshHud(); layout();
+  hint('Level ' + l.n + ': ' + l.name + ' \u2014 ' + campGoalShort(l) + '.', true);
+  return true;
+}
+function leaveLevel() { campaignLevel = null; campaignRestarting = false; campState = null; bannedTools.clear(); renderCampHud(); }
+/* ---- the once-a-second check ---- */
+function campaignTick() {
+  const l = campaignLevel; if (!l || !campState || demoMode || spectating || !started) return;
+  renderCampHud();
+  if (campState.done || campState.failed || over) return;
+  const g = l.goal;
+  if (g.type === 'keepCalm' && g.maxOverflow) { const bad = buildings.find(b => b.type === 'store' && b.pins > g.maxOverflow); if (bad) { campFail('The ' + COLORS[bad.color].name + ' store went past ' + g.maxOverflow + ' parcels waiting in week ' + week + '.'); return; } }
+  const p = campProgress(l);
+  if (p.cur >= p.n) { campWin(); return; }
+  const dl = campDeadline(l); if (dl && week > dl) campFail('Week ' + dl + ' came and went with ' + (g.type === 'allGoals' ? goalsDone.size + ' of ' + g.n + ' goals done.' : score + ' of ' + g.n + ' parcels delivered.'));
+}
+function campWin() {
+  const l = campaignLevel, stars = campStarsNow(l), timed = l.goal.type !== 'survive';
+  campState.done = true; running = false;
+  const rec = camp.levels[l.id] || {stars: 0, best: null}, now = {week, score, sec: Math.round(clock)};
+  if (!rec.best || stars > rec.stars || (stars === rec.stars && (timed ? now.sec < rec.best.sec : now.score > rec.best.score))) rec.best = now;
+  rec.stars = Math.max(rec.stars, stars); rec.at = Date.now(); camp.levels[l.id] = rec; saveCamp();
+  let unlocked = '';
+  if (l.unlock && COSMETICS[l.unlock] && !owns(l.unlock)) { jb.owned[l.unlock] = 1; saveShop(); unlocked = l.unlock; }
+  sfx('upgrade'); haptic('claim');
+  campEmit('campaign', {id: l.id, stars, score, week, unlocked});
+  showLevelCard('win', stars, unlocked);
+}
+function campFail(why) { campState.failed = true; running = false; refreshUI(); sfx('over'); showLevelCard('fail', 0, why); }
+function campaignOver() { if (!campState || campState.done || campState.failed) return; campState.failed = true; closeModal('m-over'); showLevelCard('over', 0, 'The city gridlocked in week ' + week + ' with ' + score + ' parcels delivered.'); }
+/* ---- the HUD plate ---- */
+function renderCampHud() {
+  const box = $('camp-hud'); if (!box) return;
+  const l = campaignLevel, on = !!(l && started && !demoMode && !spectating);
+  box.hidden = !on; if (!on) return;
+  const p = campProgress(l), g = l.goal, dl = campDeadline(l);
+  $('ch-title').textContent = 'Chapter ' + l.ch + ' \u00b7 Level ' + l.n + ' \u2014 ' + l.name;
+  $('ch-goal').textContent = 'Goal: ' + campGoalShort(l);
+  $('ch-bar').style.width = Math.round(Math.min(1, p.cur / p.n) * 100) + '%';
+  $('ch-prog').textContent = (campState && campState.done ? '\u2713 Done \u00b7 ' : campState && campState.failed ? '\u2717 Lost \u00b7 ' : '') + p.cur + ' / ' + p.n + (g.type === 'survive' ? ' weeks' : g.type === 'allGoals' ? ' goals' : '') + ' \u00b7 week ' + week + (dl && !(campState && (campState.done || campState.failed)) ? ' of ' + dl : '');
+  $('ch-stars').textContent = campStarRows(l).map(([n, t]) => '\u2605'.repeat(n) + ' ' + t).join('  \u00b7  ');
+}
+/* ---- the world map pane ---- */
+const campPts = n => Array.from({length: n}, (_, i) => [6 + i * 88 / Math.max(1, n - 1), i % 2 ? 66 : 34]);
+function campRoadSVG(n) {
+  const p = campPts(n); let d = 'M' + p[0][0] + ' ' + p[0][1];
+  for (let i = 1; i < n; i++) { const [x0, y0] = p[i - 1], [x1, y1] = p[i], mx = (x0 + x1) / 2; d += ' C' + mx + ' ' + y0 + ' ' + mx + ' ' + y1 + ' ' + x1 + ' ' + y1; }
+  return '<svg class="cp-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path class="cp-rd" d="' + d + '"/><path class="cp-ln" d="' + d + '"/></svg>';
+}
+const campStarStr = s => '\u2605'.repeat(s) + '\u2606'.repeat(3 - s);
+function renderCampaign() {
+  const box = $('mm-campaign'); if (!box) return;
+  const total = CAMP_LEVELS.reduce((a, l) => a + campStars(l.id), 0);
+  let h = '<div class="cp-top"><div><b>' + total + ' <i>\u2605</i></b><small>of ' + CAMP_LEVELS.length * 3 + '</small></div><p class="mini">Thirty handmade levels in three chapters. Each is a seeded city with its own rules and goal, and stars come from finishing fast. A chapter opens at ' + CAMP_NEED + ' stars in the one before; its finale unlocks a design found nowhere else.</p></div>';
+  for (const ch of CAMP_CHAPTERS) {
+    const lv = CAMP_LEVELS.filter(l => l.ch === ch.n), st = chapterStars(ch.n), open = chapterOpen(ch.n), info = itemInfo(ch.unlock), got = owns(ch.unlock);
+    h += '<section class="cp-ch' + (open ? '' : ' locked') + '" style="--tint:' + ch.tint + '" data-ch="' + ch.n + '"><header class="cp-h"><div><small>Chapter ' + ch.n + (open ? '' : ' \u00b7 locked') + '</small><b>' + ch.name + '</b><p>' + ch.blurb + '</p></div><div class="cp-hr"><span class="cp-st">' + st + ' / ' + lv.length * 3 + ' \u2605</span>' +
+      (open ? '<span class="cp-unl' + (got ? ' got' : '') + '">' + (got ? 'Unlocked: ' : 'Finale reward: ') + (info ? info[1] : ch.unlock) + '</span>' : '<span class="cp-unl">Needs ' + CAMP_NEED + ' \u2605 in chapter ' + (ch.n - 1) + '</span>') + '</div></header>';
+    h += '<div class="cp-scroll"><div class="cp-road">' + campRoadSVG(lv.length) + lv.map((l, i) => {
+      const [x, y] = campPts(lv.length)[i], s2 = campStars(l.id), ok = levelOpen(l), cls = !ok ? 'locked' : s2 ? 'done' : 'open next';
+      return '<button type="button" class="cp-node ' + cls + '" data-lvl="' + l.id + '" style="left:' + x + '%;top:' + y + '%"' + (ok ? '' : ' disabled') + ' aria-label="Level ' + l.n + ': ' + l.name + (s2 ? ', ' + s2 + ' stars' : ok ? '' : ', locked') + '"><b>' + (ok ? l.n : '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg>') + '</b><i>' + (ok ? campStarStr(s2) : '') + '</i><span>' + l.name + '</span></button>';
+    }).join('') + '</div></div></section>';
+  }
+  box.innerHTML = h;
+  box.querySelectorAll('[data-lvl]').forEach(b => b.addEventListener('click', () => openLevelCard(b.dataset.lvl)));
+}
+function openLevelCard(id) {
+  const l = levelById(id); if (!l || !levelOpen(l)) return;
+  campPick = l; const s2 = campStars(l.id), rec = camp.levels[l.id];
+  $('lv-kicker').textContent = 'Chapter ' + l.ch + ' \u00b7 Level ' + l.n + (s2 ? ' \u00b7 ' + campStarStr(s2) : '');
+  $('lv-title').textContent = l.name; $('lv-blurb').textContent = l.blurb;
+  $('lv-rules').innerHTML = campRuleChips(l);
+  $('lv-goal').innerHTML = '<small>Goal</small>' + campGoalText(l);
+  $('lv-stars').innerHTML = campStarRows(l).map(([n, t]) => '<div' + (n <= s2 ? ' class="have"' : '') + '><i>' + campStarStr(n) + '</i>' + t + '</div>').join('') +
+    (rec && rec.best ? '<div class="lv-best">Best: ' + rec.best.score + ' parcels, week ' + rec.best.week + '</div>' : '') +
+    (l.unlock && itemInfo(l.unlock) ? '<div class="lv-best">Reward: ' + itemInfo(l.unlock)[1] + (owns(l.unlock) ? ' (unlocked)' : '') + '</div>' : '');
+  $('lv-play').textContent = s2 ? 'Play again' : 'Play';
+  openModal('m-level');
+}
+function showLevelCard(kind, stars, extra) {
+  const l = campaignLevel; if (!l) return;
+  const sec = Math.round(clock), mm = Math.floor(sec / 60), ss = String(sec % 60).padStart(2, '0');
+  $('ld-kicker').textContent = kind === 'win' ? 'Level complete' : kind === 'over' ? 'Gridlock' : 'Not this time';
+  $('ld-title').textContent = l.name;
+  $('ld-stars').innerHTML = [1, 2, 3].map(i => '<i class="' + (i <= stars ? 'on' : '') + '" style="--d:' + (0.15 + i * 0.22).toFixed(2) + 's">\u2605</i>').join('');
+  $('ld-sub').textContent = kind === 'win' ? (stars === 3 ? 'Three stars. Nothing left to prove here.' : stars === 2 ? 'Two stars. ' + campStarRows(l)[2][1] + ' for the third.' : 'One star. ' + campStarRows(l)[1][1] + ' for two.') : extra;
+  $('ld-stats').innerHTML = [['Week', week], ['Parcels', score.toLocaleString('en-US')], ['Time', mm + ':' + ss], ['Cash', fmt$(Math.round(money))], ['Cars', cars.length], ['Trips', stats.trips]].map(([a, b]) => '<div><b>' + b + '</b><span>' + a + '</span></div>').join('');
+  const un = $('ld-unlock'), info = kind === 'win' && extra ? itemInfo(extra) : null;
+  un.hidden = !info; if (info) un.innerHTML = '<div><small>Unlocked</small>' + info[1] + '</div><span class="rar r-camp">Campaign</span>';
+  const nx = kind === 'win' ? nextLevel(l) : null, btns = [];
+  if (nx) btns.push('<button class="bigbtn" type="button" data-ld="next">Next: ' + nx.name + '</button>');
+  btns.push('<button class="' + (nx || kind === 'win' ? 'bigbtn ghost' : 'bigbtn') + '" type="button" data-ld="replay">' + (kind === 'win' ? 'Replay' : 'Retry') + '</button>');
+  if (kind === 'win') btns.push('<button class="bigbtn ghost" type="button" data-ld="keep">Keep playing</button>');
+  btns.push('<button class="bigbtn ghost" type="button" data-ld="map">Back to map</button>');
+  $('ld-btns').innerHTML = btns.join('');
+  openModal('m-level-done'); refreshUI();
+}
+function campBackToMap() { closeModal('m-level-done'); closeModal('m-level'); goHome(); showMM('campaign'); }
+{
+  const ld = $('m-level-done'), lv = $('m-level');
+  if (ld) ld.addEventListener('click', e => {
+    const b = e.target.closest('[data-ld]'); if (!b) return;
+    const act = b.dataset.ld, l = campaignLevel;
+    if (act === 'next') { const nx = nextLevel(l); closeModal('m-level-done'); if (nx) startLevel(nx); else campBackToMap(); }
+    else if (act === 'replay') { closeModal('m-level-done'); startLevel(l); }
+    else if (act === 'keep') { closeModal('m-level-done'); running = true; refreshUI(); }
+    else if (act === 'map') campBackToMap();
+  });
+  if (lv) { $('lv-play').addEventListener('click', () => { if (campPick) startLevel(campPick); }); $('lv-close').addEventListener('click', () => closeModal('m-level')); lv.addEventListener('click', e => { if (e.target === lv) closeModal('m-level'); }); }
+  const pr = $('pause-restart'); if (pr) pr.addEventListener('click', () => { if (campaignLevel) campaignRestarting = true; }, true);
+  new MutationObserver(() => { if (!$('m-start').hidden) campaignRestarting = false; }).observe($('m-start'), {attributes: true, attributeFilter: ['hidden']});
+  const tile = document.querySelector('.rl-tile.t-camp .cp-tilest'); if (tile) tile.textContent = CAMP_LEVELS.reduce((a, l) => a + campStars(l.id), 0) + ' / ' + CAMP_LEVELS.length * 3 + ' \u2605';
+}
+/* ---- wrappers round the game's own functions (function declarations are reassignable bindings) ---- */
+MM_TITLES.campaign = 'Campaign';
+const _showMM_c = showMM;
+showMM = function (pane) { _showMM_c(pane); if (pane === 'campaign') renderCampaign(); const t = document.querySelector('.rl-tile.t-camp .cp-tilest'); if (t) t.textContent = CAMP_LEVELS.reduce((a, l) => a + campStars(l.id), 0) + ' / ' + CAMP_LEVELS.length * 3 + ' \u2605'; };
+const _resetGame_c = resetGame;
+resetGame = function (dk) {                            // a restart from the pause menu re-applies the level; any other new city leaves the campaign
+  if (campaignBuilding) return _resetGame_c(dk);
+  if (campaignLevel && campaignRestarting) { const l = campaignLevel; campaignRestarting = false; return startLevel(l); }
+  leaveLevel(); return _resetGame_c(dk);
+};
+const _startDemo_c = startDemo;
+startDemo = function () { leaveLevel(); return _startDemo_c(); };
+const _loadGame_c = loadGame;
+loadGame = function (d) { const ok = _loadGame_c(d); if (ok) leaveLevel(); return ok; };
+const _saveGame_c = saveGame;
+saveGame = function (u) { if (campaignLevel) return; return _saveGame_c(u); };
+const _writeSlot_c = writeSlot;
+writeSlot = function (f) { if (campaignLevel) return; return _writeSlot_c(f); };
+const _growMap_c = growMap;
+growMap = function () { if (campaignLevel && campaignLevel.rules && campaignLevel.rules.noGrow) return false; return _growMap_c(); };
+const _endGame_c = endGame;
+endGame = function (why) {                             // a lost level leaves the mode's best and the ordinary autosave alone
+  if (!campaignLevel) return _endGame_c(why);
+  let kb = null, ks = null; try { kb = localStorage.getItem(bestKey(diffKey)); ks = localStorage.getItem(SAVE_KEY); } catch (e) {}
+  const keepBest = best;
+  try { _endGame_c(why); } finally {
+    best = keepBest;
+    try { if (kb === null) localStorage.removeItem(bestKey(diffKey)); else localStorage.setItem(bestKey(diffKey), kb); if (ks !== null) localStorage.setItem(SAVE_KEY, ks); } catch (e) {}
+  }
+};
+const _setTool_c = setTool;
+setTool = function (t) {
+  const def = TOOLS.find(x => x.id === (isSignTool(t) ? 'signs' : t));
+  if (def && def.inv && bannedTools.has(def.inv)) { hint('Not on this level \u2014 ' + CAMP_BAN_NAMES[def.inv] + ' are banned.'); return; }
+  return _setTool_c(t);
+};
+const _refreshUI_c = refreshUI;
+refreshUI = function () {
+  _refreshUI_c();
+  if (!inv) return;
+  document.querySelectorAll('.tool').forEach(b => {
+    const def = TOOLS.find(t => t.id === b.dataset.id), ban = !!(def && def.inv && bannedTools.has(def.inv));
+    if (b.disabled !== ban) { b.disabled = ban; b.classList.toggle('banned', ban); }
+    if (ban) b.dataset.sub = 'Banned on this level';
+  });
+};
+const campEmit = JEvents.emit.bind(JEvents);
+JEvents.emit = function (n, d) {                       // campaign runs stay off leaderboards and cloud saves; a lost level shows the campaign card
+  if (campaignLevel && !demoMode) {
+    if (n === 'over') { campaignOver(d); return; }
+    if (n === 'week' || n === 'autosave' || n === 'allGoals') return;
+  }
+  return campEmit(n, d);
+};
+if (window.JunctionAPI) window.JunctionAPI.campaign = {
+  snapshot: campaignSnapshot, merge: mergeCampaign, start: startLevel, open() { if ($('m-start').hidden) openModal('m-start'); showMM('campaign'); },
+  levels: () => CAMP_LEVELS.map(l => ({id: l.id, ch: l.ch, n: l.n, name: l.name, stars: campStars(l.id), open: levelOpen(l)})),
+  get current() { return campaignLevel ? {id: campaignLevel.id, name: campaignLevel.name, done: !!(campState && campState.done), failed: !!(campState && campState.failed)} : null; },
+  get total() { return CAMP_LEVELS.reduce((a, l) => a + campStars(l.id), 0); }
+};
+if (window.__JUNCTION) {                               // debug surface (getters defined as such: Object.assign would copy their values)
+  Object.assign(window.__JUNCTION, {startLevel, campaignTick, renderCampaign, CAMP_LEVELS, leaveLevel});
+  Object.defineProperties(window.__JUNCTION, {campaignLevel: {get: () => campaignLevel}, campState: {get: () => campState}, camp: {get: () => camp}, bannedTools: {get: () => bannedTools}});
+}
+
+
+/* =====================================================================
+   MAP EDITOR AND COMMUNITY MAPS. Build a map by hand (water, stores, houses, roads), give it rules and a goal,
+   test-play it, keep drafts on this device, publish it under a 6-letter code and play other people's maps.
+   online.js keeps the published copies, likes, play counts and the per-map leaderboards; this side only knows the
+   map format and how to start a city from it. While a map city is played, 'week' and 'over' are emitted as
+   'mapweek' and 'mapover' so cloud saves and the mode leaderboards leave it alone.
+   Map format v1 (tile indexes are relative to the map's own box: idx = r * span + c):
+     {v: 1, name, desc, span, mode, rules: {cash, roads, banned: []}, goal: {type: 'survive' | 'parcels', n, byWeek},
+      water: [idx...], roads: [idx...], links: [[idx, mask]...], buildings: [[c, r, type (0 house, 1 store), colour, sd, ends]...]}
+   ===================================================================== */
+let editorMode = false, mapPlay = false, mapCur = null, mapStarting = false, mapGoalDone = false, mapBanned = new Set();
+const MAPS_KEY = 'junction-maps-v1', MAP_SPAN_MIN = 10, MAP_SPAN_MAX = 24, MAP_MODES = ['chill', 'standard', 'frantic'], MAP_MAX_JSON = 40000, MAP_CODE_RE = /^[A-HJ-NP-Z2-9]{6}$/;
+const MAP_TOOLS = [['moto', 'Motorways'], ['light', 'Lights'], ['round', 'Roundabouts'], ['sign', 'Signs'], ['park', 'Lots'], ['depot', 'Bays'], ['upgrade', 'Store upgrades'], ['tow', 'Tow trucks']];
+const ED_TOOLS = [['road', 'Road'], ['water', 'Water'], ['dry', 'Dry land'], ['store', 'Store'], ['house', 'House'], ['erase', 'Erase']];
+const ed = {tool: 'road', size: 2, col: 0, sd: 4, ends: 0, meta: null, draft: '', code: ''};
+let edTab = 'browse', edSort = 'likes', mapRows = {};
+const mapDefaults = () => ({v: 1, name: '', desc: '', span: 14, mode: 'standard', rules: {cash: 0, roads: 20, banned: []}, goal: {type: 'survive'}, water: [], roads: [], links: [], buildings: []});
+function validMap(d) {
+  if (!d || typeof d !== 'object' || d.v !== 1) return false;
+  const int = (v, a, b) => Number.isInteger(v) && v >= a && v <= b;
+  if (typeof d.name !== 'string' || d.name.length > 32 || typeof d.desc !== 'string' || d.desc.length > 140) return false;
+  if (!int(d.span, MAP_SPAN_MIN, MAP_SPAN_MAX) || !MAP_MODES.includes(d.mode)) return false;
+  const R = d.rules, G = d.goal;
+  if (!R || typeof R !== 'object' || !int(R.cash, 0, 5000) || !int(R.roads, 0, 200) || !Array.isArray(R.banned) || !R.banned.every(t => MAP_TOOLS.some(x => x[0] === t))) return false;
+  if (!G || typeof G !== 'object' || !(G.type === 'survive' || (G.type === 'parcels' && int(G.n, 1, 100000) && int(G.byWeek, 1, 200)))) return false;
+  const n = d.span * d.span, tile = k => int(k, 0, n - 1);
+  if (![d.water, d.roads, d.links, d.buildings].every(Array.isArray)) return false;
+  if (!d.water.every(tile) || !d.roads.every(tile) || !d.links.every(p => Array.isArray(p) && tile(p[0]) && int(p[1], 0, 255))) return false;
+  if (!d.buildings.every(b => Array.isArray(b) && int(b[0], 0, d.span - 1) && int(b[1], 0, d.span - 1) && (b[2] === 0 || b[2] === 1) && int(b[3], 0, COLORS.length - 1)
+      && (b[2] === 0 || (ORTH.includes(b[4]) && int(b[5], 0, 2))))) return false;
+  return true;
+}
+const mapGoalText = d => d.goal && d.goal.type === 'parcels' ? 'Deliver ' + d.goal.n + ' parcels by the end of week ' + d.goal.byWeek : 'Survive as long as you can';
+/* the map being edited, as data */
+function serializeMap() {
+  const m = ed.meta || mapDefaults(), out = mapDefaults();
+  Object.assign(out, {name: m.name || '', desc: m.desc || '', span, mode: m.mode, rules: {cash: m.rules.cash | 0, roads: m.rules.roads | 0, banned: m.rules.banned.slice()}, goal: Object.assign({}, m.goal)});
+  const rel = k => (cy(k) - org) * span + (cx(k) - org);
+  for (let r = org; r < org + span; r++) for (let c = org; c < org + span; c++) {
+    const k = idx(c, r);
+    if (water[k]) out.water.push(rel(k));
+    if (road[k]) { out.roads.push(rel(k)); if (lnk[k]) out.links.push([rel(k), lnk[k]]); }
+  }
+  for (const b of buildings) { if (!inPlay(b.k)) continue; out.buildings.push(b.type === 'store' ? [cx(b.k) - org, cy(b.k) - org, 1, b.color, isBig(b) ? b.sd : 4, b.ends || 0] : [cx(b.k) - org, cy(b.k) - org, 0, b.color]); }
+  return out;
+}
+/* lay a map's data into the (blank) world; span and org are already set */
+function loadMapInto(d, withCars) {
+  const abs = i => idx(org + i % d.span, org + Math.floor(i / d.span));
+  for (const i of d.water) water[abs(i)] = 1;
+  for (const i of d.roads) road[abs(i)] = 1;
+  for (const [i, m] of d.links) { const k = abs(i); if (!road[k]) continue; for (let dd = 0; dd < 8; dd++) if ((m >> dd) & 1) { const n = nbr(k, dd); if (n >= 0 && road[n]) setLink(k, dd, true); } }
+  for (const b of d.buildings) {
+    const k = idx(org + b[0], org + b[1]);
+    if (b[2] === 1) { if (storeFits(k, b[4], inPlay, b[5])) newBuilding(k, 'store', b[3], b[4], b[5]); }
+    else if (inPlay(k) && !water[k] && !occupied(k)) newBuilding(k, 'house', b[3]);
+  }
+  linkBuildings();
+  if (withCars) buildings.forEach((b, i) => { if (b.type === 'house') for (let j = 0; j < CFG.carsPerHouse; j++) addCar(i); });
+  rebuildNet();
+  for (const c of cars) { const p = parkedPose(c); c.x = p.x; c.y = p.y; c.ang = p.a; }
+}
+/* the same map in a bigger or smaller box, kept centred; anything outside the new box is dropped */
+function resizeMapData(d, ns) {
+  const o = Object.assign({}, d, {span: ns, water: [], roads: [], links: [], buildings: []}), os = d.span, sh = Math.floor((ns - os) / 2);
+  const conv = i => { const c = i % os + sh, r = Math.floor(i / os) + sh; return (c < 0 || r < 0 || c >= ns || r >= ns) ? -1 : r * ns + c; };
+  for (const i of d.water) { const j = conv(i); if (j >= 0) o.water.push(j); }
+  for (const i of d.roads) { const j = conv(i); if (j >= 0) o.roads.push(j); }
+  for (const [i, m] of d.links) { const j = conv(i); if (j >= 0) o.links.push([j, m]); }
+  for (const b of d.buildings) { const c = b[0] + sh, r = b[1] + sh; if (c >= 0 && r >= 0 && c < ns && r < ns) o.buildings.push([c, r].concat(b.slice(2))); }
+  return o;
+}
+/* a picture of a map: land, water, roads, stores as blocks and houses as dots */
+function mapCanvas(d, S) {
+  const cv2 = document.createElement('canvas'); cv2.width = cv2.height = S;
+  const g = cv2.getContext('2d'), k = S / d.span, X = i => (i % d.span + 0.5) * k, Y = i => (Math.floor(i / d.span) + 0.5) * k;
+  g.fillStyle = PAL.land2 || PAL.land; g.fillRect(0, 0, S, S);
+  g.fillStyle = PAL.water; for (const i of d.water) g.fillRect((i % d.span) * k, Math.floor(i / d.span) * k, k + 0.4, k + 0.4);
+  const p = new Path2D();
+  for (const [i, m] of d.links) for (let dd = 0; dd < 8; dd++) if ((m >> dd) & 1) {
+    const c = i % d.span + DX[dd], r = Math.floor(i / d.span) + DY[dd];
+    if (c < 0 || r < 0 || c >= d.span || r >= d.span) continue;
+    const j = r * d.span + c; if (j > i) { p.moveTo(X(i), Y(i)); p.lineTo(X(j), Y(j)); }
+  }
+  for (const i of d.roads) { p.moveTo(X(i), Y(i)); p.lineTo(X(i), Y(i)); }
+  g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = PAL.edge; g.lineWidth = k * 0.72; g.stroke(p); g.strokeStyle = PAL.road; g.lineWidth = k * 0.52; g.stroke(p);
+  for (const b of d.buildings) {
+    g.fillStyle = COLORS[b[3]].hex;
+    if (b[2] === 1) {
+      const fx = DX[b[4]], fy = DY[b[4]], px = -fy, py = fx;
+      for (let depth = 0; depth < STORE_DEPTH; depth++) for (let s = 0; s < STORE_W; s++) { const c = b[0] + px * s - fx * depth, r = b[1] + py * s - fy * depth; if (c >= 0 && r >= 0 && c < d.span && r < d.span) g.fillRect(c * k + 0.5, r * k + 0.5, k - 1, k - 1); }
+    } else { g.beginPath(); g.arc((b[0] + 0.5) * k, (b[1] + 0.5) * k, k * 0.38, 0, 6.3); g.fill(); g.strokeStyle = 'rgba(255,255,255,.8)'; g.lineWidth = 1; g.stroke(); }
+  }
+  return cv2;
+}
+function drawMapThumb(d) { for (const S of [96, 64, 48]) { const u = mapCanvas(d, S).toDataURL('image/png'); if (u.length <= 8192) return u; } return ''; }
+/* ---- drafts on this device */
+function readDrafts() { try { const o = JSON.parse(localStorage.getItem(MAPS_KEY)); return o && typeof o === 'object' && o.drafts ? o : {drafts: {}}; } catch (e) { return {drafts: {}}; } }
+function writeDrafts(o) { try { localStorage.setItem(MAPS_KEY, JSON.stringify(o)); } catch (e) {} }
+function saveDraft(d, quiet) {
+  if (!ed.draft) ed.draft = 'd' + Date.now().toString(36);
+  const o = readDrafts(); o.drafts[ed.draft] = {data: d, code: ed.code || '', at: Date.now()}; writeDrafts(o);
+  if (!quiet) toast('Draft saved on this device.', 'good');
+}
+/* ---- the editor itself: a paused city with endless road and money, painted with the editor bar's tools */
+function openEditor(d, opts) {
+  d = d || mapDefaults(); opts = opts || {};
+  if (!validMap(d)) { toast('That map can’t be opened.', 'warn'); return false; }
+  closeModal('m-start'); document.querySelectorAll('.modal').forEach(m => { m.hidden = true; }); modalOpen = false;
+  closeMenu(); toggleCust(false); closeInspector();
+  mapStarting = true;
+  try { resetGameBlank(d.mode); } finally { mapStarting = false; }
+  mapPlay = false; mapCur = null; mapGoalDone = false; window.JunctionAPI.mapId = null; window.JunctionAPI.mapGoalDone = false; mapBanned = new Set(); applyMapBans();
+  curSlot = ''; pendingSlot = ''; demoMode = false;
+  inv = {road: 1e9, bridge: 1e9, moto: 0, light: 0, round: 0, sign: 0, park: 0, depot: 0}; perks = Object.assign({}, PERK_DEFAULTS);
+  money = 1e9; score = 0; week = 1; weekTimer = 1e9; houseTimer = storeTimer = 1e9; clock = 0; carCapacity = CFG.carCapacityStart; carsBought = 0; goalsDone = new Set();
+  span = d.span; org = Math.floor((MAXD - span) / 2); camSpan = span; camOrg = org;
+  loadMapInto(d, false);
+  ed.meta = {name: d.name, desc: d.desc, mode: d.mode, rules: {cash: d.rules.cash, roads: d.rules.roads, banned: d.rules.banned.slice()}, goal: Object.assign({}, d.goal)};
+  ed.draft = opts.draft || 'd' + Date.now().toString(36); ed.code = opts.code || '';
+  if (!ED_TOOLS.some(t => t[0] === ed.tool)) ed.tool = 'road';
+  editorMode = true; started = true; running = false; over = false; tool = ed.tool === 'road' ? 'road' : 'ed'; motoPick = -1;
+  $('app').classList.add('editing');
+  camReset(true); refreshUI(); refreshHud(); layout(); renderEdBar(); renderMapTest();
+  hint('Drag to lay road. Pick Water, Store or House in the editor bar; Settings sets the name, size, rules and goal.', true);
+  return true;
+}
+function exitEditor() {
+  if (!editorMode) return;
+  editorMode = false; tool = 'select'; $('app').classList.remove('editing');
+  const bar = $('ed-bar'); if (bar) bar.hidden = true;
+}
+function applyMapBans() {
+  document.querySelectorAll('#dock .tool').forEach(b => {
+    const def = TOOLS.find(t => t.id === b.dataset.id), key = def && def.inv ? def.inv : b.dataset.id;
+    b.dataset.banned = mapBanned.has(key) ? '1' : '0';
+  });
+}
+function brushTiles(k) {
+  const rad = [0, 0.5, 1.3, 2.1][ed.size] || 0.5, c0 = cx(k), r0 = cy(k), out = [];
+  for (let r = Math.floor(r0 - rad); r <= Math.ceil(r0 + rad); r++) for (let c = Math.floor(c0 - rad); c <= Math.ceil(c0 + rad); c++) {
+    if (c < 0 || r < 0 || c >= COLS || r >= ROWS) continue;
+    if ((c - c0) ** 2 + (r - r0) ** 2 > rad * rad + 0.01) continue;
+    const t = idx(c, r); if (inPlay(t)) out.push(t);
+  }
+  return out;
+}
+function edWater(k, v) {
+  let n = 0;
+  for (const t of brushTiles(k)) { if (road[t] || bAt[t] >= 0 || water[t] === v) continue; water[t] = v; n++; }
+  if (n) netVer++;
+}
+function removeBuildingAt(bi) {
+  const b = buildings[bi]; if (!b) return;
+  buildings.splice(bi, 1); cars = [];
+  bAt.fill(-1); buildings.forEach((x, i) => { x.cars = []; x.carsN = 0; markBuilding(x, i); });
+  linkBuildings(); rebuildNet(); refreshUI(); sfx('erase'); renderEdBar();
+}
+function edErase(k) {
+  if (bAt[k] >= 0) { removeBuildingAt(bAt[k]); return; }
+  if (road[k]) { eraseAt(k, false); return; }
+  if (water[k]) { water[k] = 0; netVer++; }
+}
+function edPlaceStore(k) {
+  if (!storeFits(k, ed.sd, inPlay, ed.ends)) { hint('No room for a store there: it needs a 2×3 plot of dry land, with space for a road at an open end of its car park.'); return; }
+  const b = newBuilding(k, 'store', ed.col, ed.sd, ed.ends);
+  linkBuildings(); rebuildNet(); refreshUI(); sfx('place'); popRing(bX(b), bY(b), COLORS[ed.col].hex); renderEdBar();
+}
+function edPlaceHouse(k) {
+  if (water[k] || occupied(k) || storeFront(k)) { hint(storeFront(k) ? 'That tile is kept clear so a road can reach the store’s car park.' : 'A house needs an empty, dry tile.'); return; }
+  const b = newBuilding(k, 'house', ed.col);
+  linkBuildings(); rebuildNet(); refreshUI(); sfx('place'); popRing(bX(b), bY(b), COLORS[ed.col].hex); renderEdBar();
+}
+function edApply(k, dragging) {
+  if (k < 0 || !inPlay(k)) return;
+  switch (ed.tool) {
+    case 'road': placeRoad(k, false, !dragging); break;
+    case 'water': edWater(k, 1); break;
+    case 'dry': edWater(k, 0); break;
+    case 'erase': edErase(k); break;
+    case 'store': if (!dragging) edPlaceStore(k); break;
+    case 'house': if (!dragging) edPlaceHouse(k); break;
+  }
+}
+const ED_ICONS = {
+  road: '<path d="M6 20l3-16M18 20l-3-16M12 7v2M12 12v2M12 17v2"/>',
+  water: '<path d="M3 9c2-2 4-2 6 0s4 2 6 0 4-2 6 0M3 15c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/>',
+  dry: '<circle cx="12" cy="8" r="3"/><path d="M3 20h18M5 17l3-3 3 3 3-4 4 4"/>',
+  store: '<path d="M4 9h16l-1.5 11h-13z"/><path d="M8 9V7a4 4 0 018 0v2"/>',
+  house: '<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>',
+  erase: '<path d="M16 4l5 5-10 10H7l-4-4z"/><path d="M9 10l5 5"/>'
+};
+const edIcon = k => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ED_ICONS[k] + '</svg>';
+function renderEdBar() {
+  const box = $('ed-bar'); if (!box) return;
+  box.hidden = !editorMode; if (!editorMode) return;
+  const m = ed.meta;
+  $('eb-name').textContent = m.name || 'Untitled map';
+  $('eb-sub').textContent = DIFFS[m.mode].label + ' · ' + span + '×' + span + ' · ' + mapGoalText(m) + (ed.code ? ' · code ' + ed.code : '');
+  $('eb-tools').innerHTML = ED_TOOLS.map(([id, l]) => '<button type="button" data-edt="' + id + '" aria-pressed="' + (ed.tool === id) + '">' + edIcon(id) + l + '</button>').join('');
+  let opt = '';
+  if (ed.tool === 'water' || ed.tool === 'dry') opt = '<span class="eb-l">Brush</span><div class="seg">' + [1, 2, 3].map(s => '<button type="button" data-edsize="' + s + '" aria-pressed="' + (ed.size === s) + '">' + ['', 'Dot', 'Small', 'Big'][s] + '</button>').join('') + '</div>';
+  if (ed.tool === 'store' || ed.tool === 'house') opt = '<span class="eb-l">Colour</span><div class="eb-cols">' + COLORS.map((c, i) => '<button type="button" class="eb-col" data-edcol="' + i + '" aria-pressed="' + (ed.col === i) + '" style="--c:' + c.hex + '" aria-label="' + c.name + '" title="' + c.name + '"></button>').join('') + '</div>';
+  if (ed.tool === 'store') opt += '<span class="eb-l">Car park</span><div class="seg">' + [[0, 'N'], [2, 'E'], [4, 'S'], [6, 'W']].map(([d, l]) => '<button type="button" data-edsd="' + d + '" aria-pressed="' + (ed.sd === d) + '">' + l + '</button>').join('') + '</div>' +
+    '<span class="eb-l">Open ends</span><div class="seg">' + [[0, 'Both'], [1, 'Near'], [2, 'Far']].map(([e, l]) => '<button type="button" data-edends="' + e + '" aria-pressed="' + (ed.ends === e) + '">' + l + '</button>').join('') + '</div>';
+  $('eb-opts').innerHTML = opt; $('eb-opts').hidden = !opt;
+  const n = buildings.filter(b => b.type === 'store').length, h = buildings.length - n;
+  $('eb-count').textContent = n + ' store' + (n === 1 ? '' : 's') + ', ' + h + ' house' + (h === 1 ? '' : 's') + ' · tap a tile, drag to paint';
+}
+/* ---- the settings sheet: name, size, pace, rules and goal */
+function openEdSettings() {
+  const m = ed.meta; if (!m) return;
+  $('es-name').value = m.name || ''; $('es-desc').value = m.desc || ''; $('es-span').value = span; $('es-spanv').textContent = span + '×' + span;
+  document.querySelectorAll('#es-mode button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === m.mode)));
+  $('es-cash').value = m.rules.cash; $('es-roads').value = m.rules.roads;
+  document.querySelectorAll('#es-goal button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === m.goal.type)));
+  $('es-goalrow').hidden = m.goal.type !== 'parcels'; $('es-goaln').value = m.goal.n || 100; $('es-goalw').value = m.goal.byWeek || 5;
+  $('es-bans').innerHTML = MAP_TOOLS.map(([id, l]) => '<label><input type="checkbox" data-ban="' + id + '"' + (m.rules.banned.includes(id) ? ' checked' : '') + '><span>' + l + '</span></label>').join('');
+  $('es-err').textContent = '';
+  openModal('m-edset');
+}
+function applyEdSettings() {
+  const m = ed.meta, err = $('es-err'), name = $('es-name').value.trim(), desc = $('es-desc').value.trim();
+  if (name && (name.length < 3 || name.length > 32)) { err.textContent = 'Map names are 3–32 characters.'; return; }
+  const on = window.JunctionOnline;
+  if (on && on.textOk && (!on.textOk(name) || !on.textOk(desc))) { err.textContent = 'Please choose a friendlier name or description.'; return; }
+  const cash = clamp(Math.round(+$('es-cash').value || 0), 0, 5000), roads = clamp(Math.round(+$('es-roads').value || 0), 0, 200);
+  const gt = document.querySelector('#es-goal [aria-pressed="true"]'), goal = gt && gt.dataset.v === 'parcels' ? {type: 'parcels', n: clamp(Math.round(+$('es-goaln').value || 1), 1, 100000), byWeek: clamp(Math.round(+$('es-goalw').value || 1), 1, 200)} : {type: 'survive'};
+  const md = document.querySelector('#es-mode [aria-pressed="true"]'), mode = md && MAP_MODES.includes(md.dataset.v) ? md.dataset.v : 'standard';
+  const banned = [...document.querySelectorAll('#es-bans input:checked')].map(i => i.dataset.ban);
+  Object.assign(m, {name, desc, mode, goal, rules: {cash, roads, banned}});
+  const ns = clamp(Math.round(+$('es-span').value || span), MAP_SPAN_MIN, MAP_SPAN_MAX);
+  closeModal('m-edset');
+  if (ns !== span) { const d = resizeMapData(serializeMap(), ns); openEditor(d, {draft: ed.draft, code: ed.code}); toast('Map resized to ' + ns + '×' + ns + '.', 'good'); }
+  else { DIFF = DIFFS[mode]; diffKey = mode; renderEdBar(); }
+}
+/* ---- playing a map: a real city of the map's pace, laid out from its data, with its rules and goal */
+function startMapCity(d, meta) {
+  if (!validMap(d)) { toast('That map can’t be opened.', 'warn'); return false; }
+  closeModal('m-start'); document.querySelectorAll('.modal').forEach(m => { m.hidden = true; }); modalOpen = false;
+  closeMenu(); toggleCust(false); closeInspector();
+  if (editorMode) exitEditor();
+  mapStarting = true;
+  try { pendingSlot = ''; resetGame(d.mode); } finally { mapStarting = false; }
+  curSlot = '';
+  for (const b of buildings) for (const t of bTiles(b)) bAt[t] = -1;
+  buildings = []; cars = []; trucks = []; water.fill(0); road.fill(0); lnk.fill(0); undoStack = []; redoStack = [];
+  span = d.span; org = Math.floor((MAXD - span) / 2); camSpan = span; camOrg = org;
+  rand = seededRand(strHash('junction-map-' + ((meta && meta.id) || d.name || 'draft')));
+  loadMapInto(d, true);
+  money = Math.max(0, d.rules.cash | 0); inv.road = Math.max(0, d.rules.roads | 0);
+  if (typeof hudShown === 'object' && hudShown) { hudShown.money = money; hudShown.score = score; }
+  mapBanned = new Set(d.rules.banned); applyMapBans();
+  mapPlay = true; mapCur = Object.assign({}, meta || {}, {data: d}); mapGoalDone = false;
+  window.JunctionAPI.mapId = mapCur.id || null; window.JunctionAPI.mapGoalDone = false;
+  running = true; started = true; over = false; camReset(true); setTool('select'); refreshUI(); refreshHud(); layout(); renderMapTest();
+  hint(mapCur.test ? 'Test run: the city plays for real. Back to editor keeps your map as it was.' : mapGoalText(d) + '.', true);
+  return true;
+}
+function mapLeave() {
+  mapPlay = false; mapCur = null; mapGoalDone = false; window.JunctionAPI.mapId = null; window.JunctionAPI.mapGoalDone = false;
+  if (mapBanned.size) { mapBanned = new Set(); applyMapBans(); }
+  if (editorMode) exitEditor();
+  renderMapTest();
+}
+function renderMapTest(textOnly) {
+  const box = $('ed-test'); if (!box) return;
+  const on = mapPlay && started && !editorMode && !!mapCur;
+  box.hidden = !on; if (!on) return;
+  const d = mapCur.data, g = d.goal;
+  const gt = g.type === 'parcels' ? (mapGoalDone ? 'Goal reached ✓ — keep going' : 'Goal: ' + g.n + ' parcels by week ' + g.byWeek + ' · ' + score + ' so far') : 'Survive as long as you can';
+  $('et-text').innerHTML = '<small>' + (mapCur.test ? 'Testing your map' : 'Community map') + '</small><b>' + escH(d.name || 'Untitled map') + '</b><span>' + (mapCur.authorName && !mapCur.test ? 'by ' + escH(mapCur.authorName) + ' · ' : '') + escH(gt) + '</span>';
+  if (textOnly) return;
+  $('et-btns').innerHTML = mapCur.test ? '<button type="button" class="act small" data-et="back">Back to editor</button><button type="button" class="act small" data-et="publish">Publish</button>'
+    : '<button type="button" class="act small" data-et="menu">Main menu</button>' + (mapCur.code ? '<button type="button" class="act small" data-et="copy">Copy code</button>' : '');
+}
+function testPlay() {
+  const d = serializeMap();
+  if (!d.buildings.some(b => b[2] === 1)) { toast('Place at least one store first.', 'warn'); return; }
+  saveDraft(d, true);
+  startMapCity(d, {test: true, draft: ed.draft, code: ed.code});
+}
+async function copyText(t) { try { await navigator.clipboard.writeText(t); toast('Copied: ' + t, 'good'); } catch (e) { toast('Code: ' + t); } }
+function shareMap(m) {
+  let d; try { d = typeof m.data === 'string' ? JSON.parse(m.data) : m.data; } catch (e) { d = null; }
+  const pic = d && validMap(d) ? mapCanvas(d, 480) : null, code = m.code || m.id || '';
+  const c = makeShareCard({pic, kicker: 'Community map · code ' + code, big: m.name || 'Untitled map', bigLabel: 'by ' + (m.authorName || 'a player'), title: m.goalText || (d ? mapGoalText(d) : ''),
+    stats: [['Likes', m.likes || 0], ['Plays', m.plays || 0], ['Pace', (DIFFS[m.mode] || DIFFS.standard).label], ['Size', d ? d.span + '×' + d.span : '']], line: 'Enter the code in Junction’s Map editor to play it.'});
+  return shareCanvas(c, 'junction-map-' + code, 'Play my Junction map “' + (m.name || '') + '”: enter the code ' + code + ' in the Map editor.');
+}
+async function publishMapData(d, meta) {
+  const on = window.JunctionOnline; meta = meta || {};
+  if (!(on && on.ready && on.publishMap)) { toast('Publishing needs the online service — sign in or play as a guest first.', 'warn'); return; }
+  const name = (d.name || '').trim();
+  if (name.length < 3) { toast('Give the map a name (3–32 letters) in Settings first.', 'warn'); return; }
+  const ns = d.buildings.filter(b => b[2] === 1).length, nh = d.buildings.length - ns;
+  if (!ns || !nh) { toast('A map needs at least one store and one house.', 'warn'); return; }
+  if (JSON.stringify(d).length > MAP_MAX_JSON) { toast('This map is too big to publish.', 'warn'); return; }
+  if (!(await ask({title: meta.code ? 'Update this map?' : 'Publish this map?', text: meta.code ? 'Everyone who opens code ' + meta.code + ' gets this version.' : 'It gets a 6-letter code anyone can enter, and shows up in Community maps.', ok: meta.code ? 'Update' : 'Publish'}))) return;
+  try {
+    const r = await on.publishMap({code: meta.code || '', data: d, name, desc: d.desc || '', goalText: mapGoalText(d), thumb: drawMapThumb(d)});
+    ed.code = r.code; if (mapCur) mapCur.code = r.code; saveDraft(d, true);
+    $('ep-title').textContent = r.updated ? 'Updated' : 'Published!'; $('ep-code').textContent = r.code;
+    $('ep-share').onclick = () => shareMap({code: r.code, name, data: d, authorName: on.myName ? on.myName() : '', goalText: mapGoalText(d), mode: d.mode});
+    openModal('m-edpub'); renderMapTest(); renderEdBar();
+  } catch (e) { toast('Couldn’t publish: ' + ((e && e.message) || e), 'warn'); }
+}
+/* ---- the Map editor page on the main menu: community maps, your published maps, and drafts */
+function mapCardHTML(m, opts) {
+  opts = opts || {};
+  let d = null; try { d = typeof m.data === 'string' ? JSON.parse(m.data) : m.data; } catch (e) {}
+  const thumb = m.thumb || (d && validMap(d) ? mapCanvas(d, 84).toDataURL() : '');
+  const mode = (DIFFS[m.mode] || DIFFS.standard).label, code = m.code || m.id || '';
+  const btns = opts.draft
+    ? '<button class="bigbtn" type="button" data-act="edit">Edit</button><button class="act" type="button" data-act="test">Test play</button>' + (code ? '<button class="act" type="button" data-act="copy">Copy code</button>' : '') + '<button class="act danger" type="button" data-act="deldraft">Delete</button>'
+    : '<button class="bigbtn" type="button" data-act="play">Play</button><button class="act" type="button" data-act="board">Leaderboard</button><button class="act" type="button" data-act="share">Share</button>' +
+      (m.mine ? '<button class="act" type="button" data-act="edit">Edit</button><button class="act danger" type="button" data-act="del">Delete</button>' : '<button class="act" type="button" data-act="report">Report</button>');
+  return '<article class="mapcard' + (m.mine ? ' mine' : '') + '" data-id="' + escH(code || m.draftId || '') + '"' + (opts.draft ? ' data-draft="' + escH(m.draftId) + '"' : '') + '>' +
+    (thumb ? '<img class="mc-thumb" alt="" src="' + thumb + '">' : '<span class="mc-thumb"></span>') +
+    '<div class="mc-body"><b>' + escH(m.name || 'Untitled map') + '</b><small>' + (opts.draft ? (code ? 'Published as ' + escH(code) : 'Draft') + ' · ' + agoLocal(m.at || Date.now()) : 'by ' + escH(m.authorName || '?')) + '<span class="mc-chip">' + mode + '</span>' + (d ? '<span class="mc-chip">' + d.span + '×' + d.span + '</span>' : '') + '</small>' +
+    (m.desc ? '<p>' + escH(m.desc) + '</p>' : '') + '<em>' + escH(m.goalText || (d ? mapGoalText(d) : '')) + '</em></div>' +
+    (opts.draft ? '' : '<div class="mc-row"><button type="button" class="mc-like" data-act="like" aria-pressed="' + (!!m.liked) + '" aria-label="Like">♥ <span>' + (m.likes || 0) + '</span></button><span>▶ ' + (m.plays || 0) + ' play' + (m.plays === 1 ? '' : 's') + '</span><code>' + escH(code) + '</code></div>') +
+    '<div class="mc-btns">' + btns + '</div></article>';
+}
+function renderEditorPane() {
+  const box = $('mm-editor'); if (!box) return;
+  document.querySelectorAll('#ed-tabs [data-edtab]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.edtab === edTab)));
+  const on = window.JunctionOnline, online = !!(on && on.ready && on.loadMaps);
+  const head = '<div class="ed-head"><button class="bigbtn" type="button" data-act="new">New map</button><p class="mini ed-lead">Build a map, test it, then publish it with a code.</p>' +
+    '<form class="ed-code" id="ed-codeform"><input id="ed-codein" type="text" maxlength="6" autocomplete="off" spellcheck="false" placeholder="MAP CODE" aria-label="Map code"><button class="act" type="submit">Open</button></form></div>';
+  if (edTab === 'drafts') {
+    const o = readDrafts(), list = Object.entries(o.drafts).map(([id, v]) => Object.assign({draftId: id, at: v.at, code: v.code, data: v.data}, v.data)).sort((a, b) => b.at - a.at);
+    box.innerHTML = head + '<h3>Drafts on this device</h3>' + (list.length ? '<div class="mapgrid">' + list.map(m => mapCardHTML(m, {draft: true})).join('') + '</div>' : '<p class="mini">No drafts yet. New map starts one; drafts save when you test-play, publish or leave the editor.</p>');
+    return;
+  }
+  if (!online) { box.innerHTML = head + '<p class="mini">Community maps need the online service — it’s still connecting, or isn’t available right now. Drafts still work offline.</p>'; return; }
+  if (edTab === 'mine') {
+    box.innerHTML = head + '<h3>Your published maps</h3><div class="mapgrid" id="ed-grid"><p class="mini">Loading…</p></div>';
+    on.myMaps().then(list => { if (edTab !== 'mine') return; list.forEach(m => { mapRows[m.id] = m; }); $('ed-grid').innerHTML = list.length ? list.map(m => mapCardHTML(m)).join('') : '<p class="mini">Nothing published yet. Publish a map from the editor and it shows up here.</p>'; })
+      .catch(e => { $('ed-grid').innerHTML = '<p class="mini">Couldn’t load your maps: ' + escH(e.message) + '</p>'; });
+    return;
+  }
+  box.innerHTML = head + '<div class="ed-sortrow"><h3>Community maps</h3><div class="seg" id="ed-sort">' + [['likes', 'Popular'], ['new', 'New'], ['plays', 'Most played']].map(([k, l]) => '<button type="button" data-edsort="' + k + '" aria-pressed="' + (edSort === k) + '">' + l + '</button>').join('') + '</div></div>' +
+    '<div class="mapgrid" id="ed-grid"><p class="mini">Loading…</p></div>';
+  const want = edSort;
+  on.loadMaps(edSort).then(list => { if (edTab !== 'browse' || edSort !== want || !$('ed-grid')) return; list.forEach(m => { mapRows[m.id] = m; }); $('ed-grid').innerHTML = list.length ? list.map(m => mapCardHTML(m)).join('') : '<p class="mini">No maps yet — publish the first one.</p>'; })
+    .catch(e => { if ($('ed-grid')) $('ed-grid').innerHTML = '<p class="mini">Couldn’t load maps: ' + escH(e.message) + '</p>'; });
+}
+async function edPaneAction(act, card) {
+  const on = window.JunctionOnline, id = card ? card.dataset.id : '', draftId = card ? card.dataset.draft : '';
+  const need = () => { if (!(on && on.ready)) { toast('Online features are still connecting — try again in a moment.', 'warn'); return false; } return true; };
+  try {
+    if (act === 'new') { openEditor(mapDefaults(), {}); return; }
+    if (draftId) {
+      const o = readDrafts(), v = o.drafts[draftId]; if (!v) return;
+      if (act === 'edit') openEditor(v.data, {draft: draftId, code: v.code || ''});
+      else if (act === 'test') { ed.draft = draftId; ed.code = v.code || ''; ed.meta = {name: v.data.name, desc: v.data.desc, mode: v.data.mode, rules: v.data.rules, goal: v.data.goal}; startMapCity(v.data, {test: true, draft: draftId, code: v.code || ''}); }
+      else if (act === 'copy') copyText(v.code);
+      else if (act === 'deldraft') { if (await ask({title: 'Delete this draft?', text: 'It’s only on this device' + (v.code ? '; the published copy stays online' : '') + '.', ok: 'Delete', danger: true})) { delete o.drafts[draftId]; writeDrafts(o); renderEditorPane(); } }
+      return;
+    }
+    const m = mapRows[id]; if (!m) return;
+    if (act === 'play') { if (need()) await on.playMap(id); }
+    else if (act === 'board') { if (need()) await on.openMapBoard(id); }
+    else if (act === 'share') shareMap(m);
+    else if (act === 'report') { if (need()) on.reportMap(id, m.name); }
+    else if (act === 'like') { if (!need()) return; const r = await on.likeMap(id); const b = card.querySelector('.mc-like'); b.setAttribute('aria-pressed', String(r.liked)); b.querySelector('span').textContent = r.likes; }
+    else if (act === 'edit') { let d; try { d = JSON.parse(m.data); } catch (e) {} if (!d) return; openEditor(d, {draft: 'p' + id, code: id}); }
+    else if (act === 'del') { if (await ask({title: 'Delete this map?', text: 'Code ' + id + ' stops working and the map leaves Community maps. This can’t be undone.', ok: 'Delete', danger: true})) { await on.deleteMap(id); delete mapRows[id]; toast('Map deleted.', 'good'); renderEditorPane(); } }
+  } catch (e) { toast((e && e.message) || String(e), 'warn'); }
+}
+/* ---- the game hooks: all wrappers, so the functions above keep their bodies */
+MM_TITLES.editor = 'Map editor';
+const _showMMEd = showMM;
+showMM = function (pane) { _showMMEd(pane); if (pane === 'editor') { $('m-start').classList.add('center-pane'); renderEditorPane(); } };
+const _saveGameEd = saveGame;
+saveGame = function (urgent) { if (mapPlay || editorMode) return; return _saveGameEd(urgent); };
+const _writeSlotEd = writeSlot;
+writeSlot = function (final) { if (mapPlay || editorMode) return; return _writeSlotEd(final); };
+const _resetGameEd = resetGame;
+resetGame = function (dk) {
+  if (!mapStarting) {
+    if (mapPlay && mapCur && $('m-start').hidden) { const m = mapCur; return startMapCity(m.data, m); }   // Restart or Play again on a map: the same map again
+    mapLeave();
+  }
+  return _resetGameEd(dk);
+};
+const _resetBlankEd = resetGameBlank;
+resetGameBlank = function (dk) { if (!mapStarting) mapLeave(); return _resetBlankEd(dk); };
+const _startDemoEd = startDemo;
+startDemo = function () { mapLeave(); return _startDemoEd(); };
+const _goHomeEd = goHome;
+goHome = async function () {
+  if (editorMode) {
+    const d = serializeMap();
+    if (d.buildings.length || d.water.length || d.roads.length) saveDraft(d, true);
+    exitEditor(); started = false;
+  }
+  return _goHomeEd();
+};
+const _openPauseEd = openPause;
+openPause = function () { if (editorMode) { openEdSettings(); return false; } return _openPauseEd(); };
+const _setToolEd = setTool;
+setTool = function (t) { if (editorMode) return; return _setToolEd(t); };
+const _applyToolEd = applyTool;
+applyTool = function (k, dragging) {
+  if (editorMode) return edApply(k, dragging);
+  if (mapPlay && mapBanned.size) {
+    const key = isSignTool(tool) ? 'sign' : tool;
+    if (mapBanned.has(key)) { hint('This map doesn’t allow ' + (MAP_TOOLS.find(x => x[0] === key) || [0, key])[1].toLowerCase() + '.'); return; }
+  }
+  return _applyToolEd(k, dragging);
+};
+const _endGameEd = endGame;
+endGame = function (why) {
+  if (!mapPlay) return _endGameEd(why);
+  const bk = bestKey(diffKey); let bv = null, sv = null;
+  try { bv = localStorage.getItem(bk); sv = localStorage.getItem(SAVE_KEY); } catch (e) {}
+  const r = _endGameEd(why);
+  try { if (bv === null) localStorage.removeItem(bk); else localStorage.setItem(bk, bv); if (sv === null) localStorage.removeItem(SAVE_KEY); else localStorage.setItem(SAVE_KEY, sv); } catch (e) {}
+  best = lastRun.prevBest; $('over-newbest').hidden = true;
+  $('over-best').textContent = mapCur && mapCur.id ? 'A community map: this run goes on the map’s own leaderboard, not your ' + DIFF.label + ' best.' : 'A test run of your map.';
+  renderMapTest();
+  return r;
+};
+const _drawEd = draw;
+draw = function () {
+  _drawEd();
+  if (!editorMode) return;
+  ctx.setTransform(dpr * cam.z, 0, 0, dpr * cam.z, dpr * (W / 2 - cam.x * cam.z), dpr * (H / 2 - cam.y * cam.z));
+  ctx.save();
+  ctx.setLineDash([CELL * 0.5, CELL * 0.35]); ctx.lineWidth = 3 / cam.z; ctx.strokeStyle = 'rgba(255,201,51,.9)';
+  ctx.strokeRect(org * CELL, org * CELL, span * CELL, span * CELL); ctx.setLineDash([]);
+  const k = hoverCell;
+  if (k >= 0 && inPlay(k) && !modalOpen && !pinch && !panning) {
+    let tiles = null, ok = true;
+    if (ed.tool === 'store') { tiles = storeTilesAt(k, ed.sd) || [k]; ok = storeFits(k, ed.sd, inPlay, ed.ends); }
+    else if (ed.tool === 'house') { tiles = [k]; ok = !water[k] && !occupied(k) && !storeFront(k); }
+    else if (ed.tool === 'water' || ed.tool === 'dry') tiles = brushTiles(k);
+    else if (ed.tool === 'erase') { tiles = [k]; ok = false; }
+    if (tiles) { ctx.fillStyle = ok ? 'rgba(67,209,122,.38)' : 'rgba(255,90,74,.42)'; for (const t of tiles) ctx.fillRect(cx(t) * CELL + 2, cy(t) * CELL + 2, CELL - 4, CELL - 4); }
+    if (ed.tool === 'store' && ok) { ctx.fillStyle = 'rgba(255,201,51,.7)'; for (const [f] of storeDoorsAt(k, ed.sd, ed.ends)) { ctx.beginPath(); ctx.arc(tx(f), ty(f), CELL * 0.2, 0, 6.3); ctx.fill(); } }
+  }
+  ctx.restore();
+};
+const _emitEd = JEvents.emit;
+JEvents.emit = function (n, d) {
+  if (mapPlay && (n === 'over' || n === 'week' || n === 'autosave' || n === 'allGoals')) {
+    if (n === 'over' || n === 'week') return _emitEd.call(this, 'map' + n, Object.assign({}, d, {mapId: (mapCur && mapCur.id) || null, goal: mapGoalDone}));
+    return;
+  }
+  return _emitEd.call(this, n, d);
+};
+/* the goal: reached when the parcels are in; missed when the week after the deadline starts without them */
+setInterval(() => {
+  if (!mapPlay || !started || over || !mapCur) return;
+  const g = mapCur.data.goal;
+  if (g.type === 'parcels' && !mapGoalDone) {
+    if (score >= g.n) { mapGoalDone = true; window.JunctionAPI.mapGoalDone = true; toast('Goal reached: ' + g.n + ' parcels by week ' + g.byWeek + '!', 'good'); sfx('upgrade'); JEvents.emit('week', {week, score, diffKey}); }
+    else if (week > g.byWeek && running && !modalOpen) { endGame('Week ' + g.byWeek + ' ended with ' + score + ' of the ' + g.n + ' parcels this map asks for.'); return; }
+  }
+  renderMapTest(true);
+}, 1000);
+Object.assign(window.JunctionAPI, {mapId: null, mapGoalDone: false, validMap, mapCanvas, mapGoalText, startMapCity(d, meta) { return startMapCity(d, meta); }, openEditor(d, o) { return openEditor(d, o); }});
+{
+  const bar = $('ed-bar');
+  if (bar) bar.addEventListener('click', e => {
+    const t = e.target.closest('[data-edt],[data-edsize],[data-edcol],[data-edsd],[data-edends]');
+    if (t) {
+      const ds = t.dataset;
+      if (ds.edt !== undefined) { ed.tool = ds.edt; tool = ed.tool === 'road' ? 'road' : 'ed'; motoPick = -1; }
+      if (ds.edsize !== undefined) ed.size = +ds.edsize;
+      if (ds.edcol !== undefined) ed.col = +ds.edcol;
+      if (ds.edsd !== undefined) ed.sd = +ds.edsd;
+      if (ds.edends !== undefined) ed.ends = +ds.edends;
+      renderEdBar(); return;
+    }
+    if (e.target.closest('#eb-settings')) openEdSettings();
+    else if (e.target.closest('#eb-test')) testPlay();
+    else if (e.target.closest('#eb-save')) saveDraft(serializeMap());
+    else if (e.target.closest('#eb-publish')) publishMapData(serializeMap(), {code: ed.code});
+    else if (e.target.closest('#eb-exit')) goHome();
+  });
+  const et = $('ed-test');
+  if (et) et.addEventListener('click', e => {
+    const b = e.target.closest('[data-et]'); if (!b || !mapCur) return;
+    const act = b.dataset.et, m = mapCur;
+    if (act === 'back') openEditor(m.data, {draft: m.draft, code: m.code});
+    else if (act === 'publish') publishMapData(m.data, {code: m.code});
+    else if (act === 'menu') goHome();
+    else if (act === 'copy') copyText(m.code);
+  });
+  const pane = $('mm-editor');
+  if (pane) {
+    pane.addEventListener('click', e => {
+      const s = e.target.closest('[data-edsort]'); if (s) { edSort = s.dataset.edsort; renderEditorPane(); return; }
+      const b = e.target.closest('[data-act]'); if (!b) return;
+      edPaneAction(b.dataset.act, b.closest('.mapcard'));
+    });
+    pane.addEventListener('submit', async e => {
+      if (!e.target.closest('#ed-codeform')) return;
+      e.preventDefault();
+      const code = $('ed-codein').value.trim().toUpperCase(), on = window.JunctionOnline;
+      if (!MAP_CODE_RE.test(code)) { toast('A map code is 6 letters or digits, like AB3CD7.', 'warn'); return; }
+      if (!(on && on.ready && on.getMap)) { toast('Online features are still connecting — try again in a moment.', 'warn'); return; }
+      try { const m = await on.getMap(code); mapRows[m.id] = m; const g = $('ed-grid'); if (g) g.innerHTML = mapCardHTML(m) + g.innerHTML; else renderEditorPane(); }
+      catch (err) { toast((err && err.message) || String(err), 'warn'); }
+    });
+  }
+  document.querySelectorAll('#ed-tabs [data-edtab]').forEach(b => b.addEventListener('click', () => { edTab = b.dataset.edtab; renderEditorPane(); }));
+  const seg = (id, after) => { const el = $(id); if (el) el.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; el.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); if (after) after(b); }); };
+  seg('es-mode'); seg('es-goal', b => { $('es-goalrow').hidden = b.dataset.v !== 'parcels'; });
+  if ($('es-span')) $('es-span').addEventListener('input', () => { $('es-spanv').textContent = $('es-span').value + '×' + $('es-span').value; });
+  if ($('es-ok')) $('es-ok').addEventListener('click', applyEdSettings);
+  if ($('es-cancel')) $('es-cancel').addEventListener('click', () => closeModal('m-edset'));
+  if ($('ep-copy')) $('ep-copy').addEventListener('click', () => copyText($('ep-code').textContent));
+  if ($('ep-done')) $('ep-done').addEventListener('click', () => closeModal('m-edpub'));
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    for (const id of ['m-edset', 'm-edpub', 'm-mapboard', 'm-mapreport']) if ($(id) && !$(id).hidden) { e.stopPropagation(); closeModal(id); return; }
+  }, true);
+}
+
+/* ===== Co-op (C4): one city, built together. The host runs the simulation as a normal game; guests see it
+   through the spectate path (so nothing simulates or saves on their side) but keep the build tools, and every
+   tool action a guest makes is sent to the host, who applies it to the real city. The session, the actions,
+   the cursors and the panel's data live in online.js; this part only wraps the game's own functions at the end
+   of the file (function declarations are reassignable bindings) and draws the other players' cursors. ===== */
+let coop = null, coopApplying = false, coopHint = '', coopCursors = [], coopBubbles = [], coopLayerEl = null, coopLastSend = {};
+const coopGuest = () => !!(coop && !coop.host);
+const COOP_CUR_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l14 8.5-6.2 1.6L9.6 19z" fill="var(--c)" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>';
+function coopSend(a) {
+  if (!coop || coop.host || !a || !coop.send) return;
+  const key = a.act + ':' + a.k + ':' + (a.k2 === undefined ? '' : a.k2) + ':' + (a.kind || ''), now = performance.now();
+  if (a.act !== 'emote' && coopLastSend[key] && now - coopLastSend[key] < 400) return;      // a drag crossing the same tile twice
+  coopLastSend[key] = now;
+  coop.send(a);
+}
+/* what a guest's tap means with the current tool (the motorway's two taps are handled here, locally) */
+function coopActionFor(k, dragging) {
+  if (k < 0 || !inPlay(k)) return null;
+  switch (tool) {
+    case 'select': return null;
+    case 'road': return {act: 'road', k, k2: -1};
+    case 'erase': return {act: 'erase', k};
+    case 'park': return dragging ? null : {act: 'park', k};
+    case 'depot': return dragging ? null : {act: 'depot', k};
+    case 'light': case 'round': {
+      if (dragging) return null;
+      if (!isRoad(k)) { hint('Lights and roundabouts go on road tiles.'); return null; }
+      return {act: 'special', k, kind: tool};
+    }
+    case 'upgrade': return dragging ? null : {act: 'upstore', k};
+    case 'tow': return dragging ? null : {act: 'tow', k};
+    case 'moto': {
+      if (dragging) return null;
+      if (!isRoad(k)) { hint('Motorways start and end on road tiles.'); return null; }
+      if (motoPick < 0) { motoPick = k; hint('Now pick the far end.'); return null; }
+      if (motoPick === k) { motoPick = -1; return null; }
+      const a = motoPick;
+      if (Math.hypot(cx(k) - cx(a), cy(k) - cy(a)) < 4) { motoPick = k; hint('Motorways need at least 4 tiles between ends.'); return null; }
+      motoPick = -1;
+      return {act: 'moto', k: a, k2: k};
+    }
+    default:
+      if (tool === 'oneway') return dragging ? null : {act: 'oneway', k};
+      if (isSignTool(tool)) { if (dragging) return null; if (!isRoad(k)) { hint('Signs go on road tiles.'); return null; } return {act: 'sign', k, kind: tool}; }
+  }
+  return null;
+}
+const _applyTool0 = applyTool;
+applyTool = function (k, dragging) {
+  if (coopGuest()) { const a = coopActionFor(k, dragging); if (a) coopSend(a); return; }
+  return _applyTool0(k, dragging);
+};
+/* a guest's road drag: the host walks the pen from the last tile to this one, on the real city */
+const _stepRoad0 = stepRoad;
+stepRoad = function (from, to) {
+  if (coopGuest()) { if (to >= 0 && inPlay(to)) coopSend({act: 'road', k: to, k2: from}); return; }
+  return _stepRoad0(from, to);
+};
+/* guests may pick any tool (plain watching keeps the inspector only) */
+const _setTool0 = setTool;
+setTool = function (t) {
+  if (!coopGuest()) return _setTool0(t);
+  tool = t; motoPick = -1; refreshUI();
+  const def = TOOLS.find(x => x.id === (isSignTool(t) ? 'signs' : t));
+  if (def) hint(def.hint, true);
+};
+/* while the host applies someone else's action, the hints it raises are collected for that player instead of shown */
+const _hint0 = hint;
+hint = function (msg, sticky, label) { if (coopApplying) { if (!coopHint) coopHint = String(msg || ''); return; } return _hint0(msg, sticky, label); };
+/* a guest keeps their tool across the host's snapshots (each new layout reloads the city) */
+{
+  const sp = window.JunctionAPI.spectate, _enter0 = sp.enter;
+  sp.enter = function (d, meta, keepCam) {
+    const t = tool, mp = motoPick;
+    const r = _enter0.call(sp, d, meta, keepCam);
+    if (r && coopGuest()) { tool = t; motoPick = mp; refreshUI(); }
+    return r;
+  };
+}
+/* the host going back to the main menu ends the session (the button holds the old reference, so both are caught) */
+const _goHome0 = goHome;
+goHome = async function () { if (coop && coop.host && coop.end) coop.end('home'); return _goHome0(); };
+window.addEventListener('click', e => { if (coop && coop.host && coop.end && e.target && e.target.closest && e.target.closest('#btn-home')) coop.end('home'); }, true);
+/* guests' taps on the dock, the sign bar and the inspector's buy buttons: handled here, ahead of the listener that
+   blocks them while watching (window capture runs before document capture) */
+window.addEventListener('pointerdown', e => {
+  if (!coopGuest() || !e.target || !e.target.closest) return;
+  const tb = e.target.closest('#dock .tool[data-id], #signs .signbtn[data-id]');
+  if (tb) { e.preventDefault(); e.stopPropagation(); const id = tb.dataset.id; sfx('ui'); setTool(id === 'signs' ? (isSignTool(tool) ? tool : 'only-forward') : id); return; }
+  const bb = e.target.closest('[data-kind]');
+  if (bb && e.button === 0) {
+    e.preventDefault(); e.stopPropagation();
+    if (bb.disabled) return;
+    const kind = bb.dataset.kind, id = bb.dataset.id;
+    if (kind === 'carbuy') coopSend({act: 'car', k: +id});
+    else if (['store', 'truck', 'junction', 'carup', 'vanconv'].includes(kind)) coopSend({act: 'buy', k: -1, kind, payload: String(id)});
+  }
+}, true);
+window.addEventListener('click', e => { if (coopGuest() && e.target && e.target.closest && e.target.closest('#dock .tool[data-id], #signs .signbtn[data-id], [data-kind]')) { e.preventDefault(); e.stopPropagation(); } }, true);
+/* where my pointer is, in world space, for the others' screens */
+cv.addEventListener('pointermove', e => { if (!coop || !coop.cursor) return; const p = evPos(e), w = toWorld(p.x, p.y); coop.cursor(w.x, w.y); });
+/* the others' cursors and reactions, drawn in a layer over the map */
+function coopLayer() { if (!coopLayerEl) coopLayerEl = $('coop-layer'); return coopLayerEl; }
+function coopDraw() {
+  requestAnimationFrame(coopDraw);
+  const L = coopLayer(); if (!L) return;
+  if (!coop || !started || !$('m-start').hidden) { if (L.childElementCount) L.innerHTML = ''; L._h = ''; coopBubbles = []; return; }
+  const now = Date.now(), toS = (x, y) => ({x: (x - cam.x) * cam.z + W / 2, y: (y - cam.y) * cam.z + H / 2});
+  let h = '';
+  const at = {};
+  for (const c of coopCursors) {
+    if (c.uid === coop.uid || now - c.at > 20e3) continue;
+    if (c.dx === undefined) { c.dx = c.x; c.dy = c.y; } else { c.dx += (c.x - c.dx) * 0.25; c.dy += (c.y - c.dy) * 0.25; }
+    const s = toS(c.dx, c.dy); at[c.uid] = s;
+    if (s.x < -60 || s.y < -60 || s.x > W + 60 || s.y > H + 60) continue;
+    h += '<div class="coop-cur" style="left:' + s.x.toFixed(1) + 'px;top:' + s.y.toFixed(1) + 'px;--c:' + escH(c.colour || '#2f7de1') + '">' + COOP_CUR_SVG + '<span>' + escH(c.name || 'Player') + '</span></div>';
+  }
+  if (h !== L._h) { L._h = h; let cc = L.querySelector('.coop-curs'); if (!cc) { cc = document.createElement('div'); cc.className = 'coop-curs'; L.prepend(cc); } cc.innerHTML = h; }
+  // reactions: one element each, kept while its CSS animation runs, following the sender's cursor
+  coopBubbles = coopBubbles.filter(b => { if (now - b.at >= 2500) { if (b.el) b.el.remove(); return false; } return true; });
+  for (const b of coopBubbles) {
+    if (!b.el) { b.el = document.createElement('div'); b.el.className = 'coop-bub'; b.el.innerHTML = escH(b.kind) + '<small>' + escH(b.name || '') + '</small>'; L.append(b.el); }
+    const s = at[b.uid], x = s ? s.x + 12 : W / 2, y = s ? s.y - 6 : Math.min(H * 0.3, 160);
+    b.el.style.left = x.toFixed(1) + 'px'; b.el.style.top = y.toFixed(1) + 'px';
+  }
+}
+coopDraw();
+Object.assign(window.JunctionAPI, {
+  /* online.js tells the game it is in a session: {id, host, uid, send(action), cursor(x, y), end(why)} or null */
+  coopSet(c) {
+    coop = c; coopLastSend = {}; coopCursors = []; coopBubbles = [];
+    $('app').classList.toggle('coop-guest', !!(c && !c.host)); $('app').classList.toggle('coop-on', !!c);
+    if (!c) { const L = coopLayer(); if (L) { L._h = ''; L.innerHTML = ''; } if (spectating && tool !== 'select') { tool = 'select'; motoPick = -1; refreshUI(); } }
+  },
+  /* the host applies a guest's action to the real city; says whether it worked and, if not, why */
+  coopApply(a) {
+    if (!coop || !coop.host) return {ok: false, note: 'Not hosting.'};
+    if (!started || over) return {ok: false, note: 'The city isn\u2019t running.'};
+    const k = Number.isFinite(+a.k) ? a.k | 0 : -1, k2 = Number.isFinite(+a.k2) ? a.k2 | 0 : -1;
+    const bi = k >= 0 && k < N ? bAt[k] : -1;
+    if (a.act !== 'buy' && a.act !== 'car' && (k < 0 || k >= N)) return {ok: false, note: 'Off the map.'};
+    const sig = () => money + '|' + (road ? road.reduce((s, v) => s + v, 0) : 0) + '|' + motorways.length + '|' + parks.length + '|' + depots.length + '|' + JSON.stringify(inv) + '|' + (onewayDir && k >= 0 ? onewayDir[k] : 0) + '|' + (k >= 0 && nodes[k] ? nodes[k].lvl : 0) + '|' + (k >= 0 ? (sign[k] || '') + (special[k] || '') : '') + '|' + buildings.map(b => (b.lvl || 0) + ':' + (b.trucks || 0) + ':' + (b.extra || 0) + ':' + b.cars.length).join(',');
+    const before = sig(); coopHint = ''; coopApplying = true; let r;
+    try {
+      undoGroup++;
+      switch (a.act) {
+        case 'road':
+          if (k2 >= 0 && k2 < N && k2 !== k) { _stepRoad0(k2, k); r = undefined; }
+          else { r = placeRoad(k, false, true); if (!r && inPlay(k) && !occupied(k) && money < roadCost(k)) hint('Road costs ' + fmt$(roadCost(k)) + ' a tile. ' + shortBy(roadCost(k))); }
+          break;
+        case 'erase': r = eraseAt(k); break;
+        case 'special': r = (a.kind === 'light' || a.kind === 'round') ? placeSpecial(k, a.kind) : false; break;
+        case 'moto': r = (k2 >= 0 && k2 < N) ? placeMoto(k, k2) : false; if (r === false && isRoad(k) && isRoad(k2) && !canTake('moto')) hint('A motorway costs ' + fmt$(PRICE.moto) + '. ' + shortBy(PRICE.moto)); break;
+        case 'park': r = placePark(k); break;
+        case 'depot': r = placeDepot(k); break;
+        case 'sign':
+          if (!SIGNS.find(x => x.id === a.kind && x.id !== 'oneway') || !isRoad(k)) { r = false; hint('Signs go on road tiles.'); }
+          else if (sign[k] === a.kind) { sign[k] = null; inv.sign++; rebuildNet(); refreshUI(); r = true; }
+          else r = placeSign(k, a.kind);
+          break;
+        case 'oneway': toggleOneway(k); r = undefined; break;
+        case 'upjunc': r = upgradeJunction(k); break;
+        case 'upstore': r = upgradeStore(bi); break;
+        case 'tow': r = hireTruck(bi); break;
+        case 'car': r = buyHouseCar(k); break;
+        case 'buy': r = ['store', 'truck', 'junction', 'carup', 'vanconv'].includes(a.kind) ? doBuy(a.kind, String(a.payload == null ? '' : a.payload)) : false; break;
+        default: r = false;
+      }
+    } catch (e) { console.error('co-op action', e); r = false; }
+    finally { coopApplying = false; }
+    const ok = r === true || (r !== false && sig() !== before);
+    if (ok) { refreshHud(); if (sel) renderInspector(); }
+    return {ok, note: ok ? '' : (coopHint || 'The city couldn\u2019t do that.')};
+  },
+  coopCursors(list) { coopCursors = list || []; },
+  coopEmote(b) { coopBubbles.push(Object.assign({at: Date.now()}, b)); if (coopBubbles.length > 12) coopBubbles.shift(); },
+  /* a guest keeps the city when the host ends: it goes into slot 5 of that mode */
+  coopSaveCopy(mode, city, score, week) {
+    if (!SLOT_MODES.includes(mode)) mode = 'standard';
+    try { localStorage.setItem(SLOT_KEY + mode + '-5', JSON.stringify({data: city, score: score | 0, week: week | 0, diffKey: city.diffKey || mode, at: Date.now()})); return mode; } catch (e) { return ''; }
+  },
+  coopHint(m) { hint(m, true); },
+  coopCityInfo() { return {money: Math.round(money), week, score, running, over, started}; }
+});
+MM_TITLES.coop = 'Co-op';
+const _showMM2 = showMM;
+showMM = function (pane) {
+  _showMM2(pane);
+  if (pane !== 'coop') return;
+  $('m-start').classList.add('center-pane');
+  const on = window.JunctionOnline;
+  if (on && on.renderCoop) on.renderCoop($('mm-coop')); else $('mm-coop').innerHTML = '<p class="mini">Co-op needs the online service, which isn\u2019t available right now.</p>';
+};
+
+/* 2.3: the HUD counters start from the new city's numbers instead of rolling down from the demo's $1,000,000,000 */
+{ const _rgHud = resetGame; resetGame = function () { const r = _rgHud.apply(this, arguments); if (typeof hudShown === 'object') { hudShown.money = hudTarget.money = money; hudShown.score = hudTarget.score = score; const m = $('v-money'), sc = $('v-score'); if (m) m.textContent = fmt$(Math.round(money)); if (sc) sc.textContent = String(Math.round(score)); } return r; }; }

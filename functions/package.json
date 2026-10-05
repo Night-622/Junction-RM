@@ -1,0 +1,16 @@
+{
+  "name": "junction-functions",
+  "description": "Cloud Functions for Junction: ranked matchmaking, match settlement and ratings, seasons, tournaments, and validation of scores and balances.",
+  "private": true,
+  "engines": { "node": "20" },
+  "main": "index.js",
+  "scripts": {
+    "serve": "firebase emulators:start --only functions,firestore,auth",
+    "deploy": "firebase deploy --only functions --project junction-rm",
+    "logs": "firebase functions:log --project junction-rm"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.6.0",
+    "firebase-functions": "^6.1.0"
+  }
+}
