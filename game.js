@@ -2038,40 +2038,90 @@ function tutStatus() {
 }
 /* free play after the guided steps: things worth trying that don't need a scripted scenario */
 const TUT_LESSONS = [
-  {id: 'van', name: 'Grow a car into a pickup', hint: 'Buy Carry size twice on one car: hatchback \u2192 estate \u2192 pickup. Each size carries more but drives 10% slower.', hit: () => cars.some(c => bodyOf(c) >= 2)},
-  {id: 'shop', name: 'Open the Shop tab', hint: 'Cars, vans and motorways can also be bought outright there.', hit: () => tutShopOpened},
-  {id: 'event', name: 'Trigger a live event', hint: 'Use the buttons below to see rush hour, rain, a breakdown, a closure, an ambulance or a contract.', hit: () => tutEventTried}
+  {id: 'van', name: 'Grow a car into a pickup', hint: 'Tap one car and buy Carry size twice: hatchback \u2192 estate \u2192 pickup. Each size carries one more parcel per trip but drives 10% slower.', hit: () => cars.some(c => bodyOf(c) >= 2)},
+  {id: 'shop', name: 'Open the Shop tab', hint: 'In the side panel, the Shop tab sells tow trucks, motorway pieces, extra cars and delivery vans for cash, any time you can afford them.', hit: () => tutShopOpened},
+  {id: 'event', name: 'Trigger a live event', hint: 'In a real city these happen by themselves. Use the buttons below to try rush hour, rain, a breakdown, a road closure, an ambulance or a contract, and see how your roads cope.', hit: () => tutEventTried}
 ];
-/* the guided steps; TUT_STEPS[tutStage] is always the active one */
+/* the guided steps; TUT_STEPS[tutStage] is always the active one.
+   t: the title, active: one line on what this step is, how: what to do, click by click, tip: what's worth knowing,
+   done: what you've just achieved (shown once the step is complete) */
 const TUT_STEPS = [
-  {t: 'Connect the red store and house', done: 'Parcels are flowing.',
-   active: 'Follow the glowing ghost road: drag from the end of the red store\u2019s car park (where the arrow is) to the side of the red house. Stores only join a road at the ends of their car park.'},
-  {t: 'Connect the amber store and house', done: 'You built your first intersection.',
-   active: 'Connect the amber store (from an end of its car park) to the amber house so the new road crosses the red one. Where two roads share a tile, that tile becomes an intersection \u2014 and cars have to take turns there.'},
-  {t: 'See how junctions work', done: 'You know a give-way from a light from a roundabout.',
-   active: 'What you just made is a give-way \u2014 the simplest, free control. Open the guide to see the others.'},
-  {t: 'Turn a junction into a light', done: 'That crossing now runs on a timed cycle.',
-   active: 'Connect the blue store to the blue house across another road. Then tap a junction on the blue road with the Light tool.'},
-  {t: 'Turn a junction into a roundabout', done: 'Several streams can merge without stopping.',
-   active: 'Connect the green pair across another road, then tap a junction on the green road with the Roundabout tool.'},
-  {t: 'Place a turn sign', done: 'Signs are read from the driver\u2019s seat.',
-   active: 'Pick the Signs tool, choose a sign, then tap a junction \u2014 it restricts one turn. Make sure every car still has a way through.'},
-  {t: 'Make part of a loop one-way', done: 'Cars still reach both ends, without sharing a lane.',
-   active: 'The teal loop has two ways round. With the Signs tool\u2019s One-way option, tap one straight stretch of it. Check nobody gets cut off.'},
-  {t: 'Build a motorway', done: 'An express link that skips every junction between.',
-   active: 'Pick the Motorway tool, tap a tile on the red road, then one on the teal loop at least 4 tiles away. Motorways are fast but only link two points \u2014 and only cars with a bigger fuel tank can use them. You\u2019ll fit one in a moment.'},
-  {t: 'Buy a car for a house', done: 'More cars per house means more trips a minute.',
-   active: 'Tap any house (the red one is marked) and press Buy a car. Each extra car at the same house costs more than the last.'},
-  {t: 'Upgrade a car', done: 'Each upgrade also changes how the vehicle looks.',
-   active: 'Click any red car (or pick one from the house list). Carry size turns it into a bigger model with one more slot but 10% slower; Speed fits a faster kit.'},
-  {t: 'Fit a bigger fuel tank', done: 'That car can now take the motorway and go further.',
-   active: 'Click any red car and buy a Fuel tank. A stock tank only covers 16 road tiles each way and can\u2019t use motorways, so nothing drives on the motorway you built until a car has one. If a far-away house stops sending cars, this is why.'},
-  {t: 'Upgrade a junction', done: 'Upgraded junctions let more cars through per turn.',
-   active: 'Tap any junction and press its upgrade button. The gold ring shows its level.'},
-  {t: 'Upgrade a store', done: 'Every parcel from that store now pays more.',
-   active: 'Pick the Upgrade tool (U) and tap any store.'},
-  {t: 'Hire a tow truck', done: 'It will clear stuck and broken-down cars on its own.',
-   active: 'Pick the Hire tow tool (Y) and tap any store. The truck waits in its yard until something breaks down.'}
+  {t: 'Connect the red store and house',
+   active: 'Your first delivery route: join the red store to the red house with a road.',
+   how: ['The Road tool (key 2) is already picked.', 'Press on the end of the red store\u2019s car park, where the white arrow points.',
+         'Drag along the glowing ghost road to a tile beside the red house, then let go.', 'Watch a red car drive out, collect a parcel and bring it home.'],
+   tip: 'Stores only join a road at the ends of their car park; houses join on any side. Made a mistake? Ctrl+Z undoes it, and the Erase tool (E) removes road.',
+   done: 'Parcels are flowing. Every round trip scores a point and earns cash.'},
+  {t: 'Connect the amber store and house',
+   active: 'A second route, and this one has to cross the first.',
+   how: ['Find the amber store and house (they have pulsing rings).', 'Drag a road from an end of the amber car park toward the amber house.',
+         'Let your road run across the red road: the shared tile becomes an intersection.'],
+   tip: 'Crossing roads is free, but cars meeting there have to take turns. Busy crossings are where jams begin, so keep an eye on them.',
+   done: 'You built your first intersection. Cars now give way to each other where the roads meet.'},
+  {t: 'See how junctions work',
+   active: 'Every crossing starts as a give-way. Learn the other controls before you need them.',
+   how: ['Read the guide that opens: give-way, traffic lights and roundabouts.', 'Press Start building when you\u2019re ready.'],
+   tip: 'Give-way: free and fine while it\u2019s quiet. Lights: the two directions take turns, a few cars at a time. Roundabouts: cars from every side merge without stopping.',
+   done: 'You know a give-way from a light from a roundabout.'},
+  {t: 'Turn a junction into a light',
+   active: 'Connect the blue pair across a road, then put traffic lights on that crossing.',
+   how: ['Drag a road from an end of the blue car park to the blue house so it crosses another road.', 'Pick the Light tool (key 7).',
+         'Tap the crossing on the blue road. It uses one of your traffic lights.'],
+   tip: 'Lights have sensors: a side with nobody waiting hands over straight away. Click a placed light to choose how many cars each side lets through per turn.',
+   done: 'That crossing now takes turns: each side lets a few cars through, then hands over.'},
+  {t: 'Turn a junction into a roundabout',
+   active: 'Connect the green pair across a road, then make that crossing a roundabout.',
+   how: ['Drag a road from an end of the green car park to the green house, across another road.', 'Pick the Roundabout tool (key 8).',
+         'Tap the crossing on the green road.'],
+   tip: 'Cars drive round the ring and leave at their exit. Roundabouts handle traffic from many sides at once, but a ring that fills up can still lock.',
+   done: 'Several streams can now merge without anyone stopping outright.'},
+  {t: 'Place a turn sign',
+   active: 'Ban one turn at a junction, to stop awkward turns blocking it.',
+   how: ['Pick the Signs tool (key 9).', 'Choose a sign in the bar that appears, like No left or Ahead only.',
+         'Tap a junction. Every car arriving there follows it, judged from its own direction.'],
+   tip: 'Before you go on, check every store and house can still be reached. A sign that cuts a route off makes cars give up and turn back.',
+   done: 'Signs are read from the driver\u2019s seat, and every car obeys them.'},
+  {t: 'Make part of a loop one-way',
+   active: 'The teal loop has two ways round, so one stretch of it can be one-way for free.',
+   how: ['Keep the Signs tool and choose One-way.', 'Tap a straight stretch of the teal loop (not a junction). Arrows show the direction.',
+         'Tap it again to flip the direction, a third time to make it two-way again.'],
+   tip: 'One-way roads stop cars meeting head-on in the same street. Use them on loops, where every stop can still be reached the other way round.',
+   done: 'Cars still reach both teal buildings, without sharing a lane.'},
+  {t: 'Build a motorway',
+   active: 'Link two far-apart roads with an express route that skips every junction between them.',
+   how: ['Pick the Motorway tool (key 6).', 'Tap a tile on the red road.', 'Tap a tile on the teal loop at least 4 tiles away. The motorway is built between the two.'],
+   tip: 'Only cars with a bigger fuel tank can use motorways. Nobody drives on this one yet; you\u2019ll fit a tank in a few steps.',
+   done: 'An express link now skips every junction between its two ends.'},
+  {t: 'Buy a car for a house',
+   active: 'Give a house another car, so it can make more trips at once.',
+   how: ['Pick Inspect (key 1).', 'Tap the red house (it\u2019s marked).', 'Press Buy a car in the panel that opens.'],
+   tip: 'Each extra car at the same house costs more than the last. Buy for houses whose store keeps filling up faster than its cars can empty it.',
+   done: 'More cars per house means more trips a minute, and a bigger house to park them.'},
+  {t: 'Upgrade a car',
+   active: 'Make one car carry more, or drive faster.',
+   how: ['Tap a red car on the road, or pick one from the house\u2019s car list.', 'Press Carry size for one more parcel per trip (but 10% slower), or Speed for a faster kit.'],
+   tip: 'Cars change model as they grow: hatchback, estate, then pickup. Speed kits add racing stripes, then a GT and a racer look.',
+   done: 'Each upgrade changes how the car looks, so you can spot your best ones.'},
+  {t: 'Fit a bigger fuel tank',
+   active: 'Give a car the range for long trips and your motorway.',
+   how: ['Tap any red car.', 'Press Fuel tank.', 'Watch it use the motorway on its next long trip.'],
+   tip: 'A stock tank covers 16 road tiles each way and can\u2019t use motorways. If a far-away house stops sending cars, its cars are out of range.',
+   done: 'That car can now take the motorway and reach houses further away.'},
+  {t: 'Upgrade a junction',
+   active: 'Let more cars through a busy crossing on each turn.',
+   how: ['Pick Inspect (key 1) and tap any junction.', 'Press its upgrade button.', 'A gold ring around the junction shows its level.'],
+   tip: 'A busy junction at a higher level often does more good than building extra roads around it.',
+   done: 'Upgraded junctions let more cars through on each turn.'},
+  {t: 'Upgrade a store',
+   active: 'Make every parcel from a store pay more.',
+   how: ['Pick the Upgrade tool (key U).', 'Tap any store.'],
+   tip: 'Store upgrades are pure profit: the same traffic earns more cash. Stores also grow by themselves as they get busier.',
+   done: 'Every parcel from that store now pays more.'},
+  {t: 'Hire a tow truck',
+   active: 'Keep a truck ready to clear broken-down and stuck cars.',
+   how: ['Pick Hire tow (key Y).', 'Tap any store. The truck parks in that store\u2019s garage.'],
+   tip: 'When a car breaks down or gets stuck for too long, the truck drives out, clears it and comes home, before one car can back up a whole street.',
+   done: 'Your tow truck will clear stuck and broken-down cars on its own. That\u2019s everything: the city is yours.'}
 ];
 /* per-step coaching: which tool to reach for, where on the map to look, whether to draw a guide line, and why it matters */
 const TUT_COACH = [
@@ -2134,6 +2184,8 @@ function renderTutorialCoach() {
   $('tc-step').textContent = 'Step ' + (tutStage + 1) + ' of ' + TUT_STEPS.length;
   $('tc-title').textContent = st.t;
   $('tc-body').textContent = st.active;
+  setHTML($('tc-how'), (st.how || []).map(x => '<li>' + x + '</li>').join(''));
+  $('tc-tip').textContent = st.tip || ''; $('tc-tip').parentNode.hidden = !st.tip;
   $('tc-why').textContent = co.why;
   const tl = co.tool ? TOOLS.find(t => t.id === co.tool) : null;
   const tt = $('tc-tool'); tt.hidden = !tl; if (tl) tt.textContent = tl.label + ' \u00b7 ' + tl.key;
@@ -2210,7 +2262,8 @@ function renderTutorialPanel() {
   if (!free) {
     let h = '<div class="tsum">' + TUT_STEPS.map((s, i) => '<i class="' + (i < tutStage ? 'd' : i === tutStage ? 'a' : '') + '" title="' + s.t + '"></i>').join('') + '</div>';
     if (tutStage > 0) h += '<div class="goal done"><span class="tick">\u2713</span><div><b>' + TUT_STEPS[tutStage - 1].t + '</b><small>' + TUT_STEPS[tutStage - 1].done + '</small></div></div>';
-    h += '<div class="goal now"><span class="tick">' + (tutStage + 1) + '</span><div><b>' + TUT_STEPS[tutStage].t + '</b><small>' + TUT_STEPS[tutStage].active + '</small></div></div>';
+    h += '<div class="goal now"><span class="tick">' + (tutStage + 1) + '</span><div><b>' + TUT_STEPS[tutStage].t + '</b><small>' + TUT_STEPS[tutStage].active + '</small>' +
+      ((TUT_STEPS[tutStage].how || []).length ? '<ol class="goal-how">' + TUT_STEPS[tutStage].how.map(x => '<li>' + x + '</li>').join('') + '</ol>' : '') + '</div></div>';
     for (let i = tutStage + 1; i < Math.min(N, tutStage + 3); i++) h += '<div class="goal next"><span class="tick">' + (i + 1) + '</span><div><b>' + TUT_STEPS[i].t + '</b></div></div>';
     if (tutStage < N - 1) h += '<button class="linkbtn" id="tut-skip" type="button">Stuck? Skip this step</button>';
     setHTML(box, h);
@@ -2288,11 +2341,13 @@ function renderTutLive() {
 function tutOpenExplainer() { openModal('m-explain'); }
 /* ---- the tutorial's opening: five short animated cards on how the game works, drawn with the real artwork ---- */
 const TI_CARDS = [
-  {t: 'Stores make parcels', b: 'Each store fills up with parcels of its colour. The number over it shows how full it is \u2014 if it overflows for too long, the city fails (not in the tutorial, though).'},
-  {t: 'Houses send cars', b: 'Houses send their cars to fetch parcels from stores of the <b>same colour</b>, then bring them home. Each parcel delivered scores a point and pays cash.'},
-  {t: 'You draw the roads', b: 'Drag to lay road. Houses connect on any side; stores only at the <b>ends of their car park</b> (the white arrows). Some stores open at both ends, some at one.'},
-  {t: 'Keep traffic moving', b: 'Where roads cross, cars take turns. Lights, roundabouts, signs, one-way streets and motorways stop jams before they start.'},
-  {t: 'Grow, earn and customise', b: 'Each week the map grows and you pick a reward. Upgrade cars, stores and junctions with cash. Every 3 parcels earn 2 ◎ coins to spend on looks in the Store.'}
+  {t: 'Stores make parcels', b: 'Each store fills up with parcels of its colour; the number over it shows how full it is. If a store stays full for too long, the city is lost (not in the tutorial, though). Your job is to keep every store emptying.'},
+  {t: 'Houses send cars', b: 'Houses send their cars to fetch parcels from stores of the <b>same colour</b> and bring them home. Each parcel delivered scores a point and earns cash. A house starts with two cars, and you can buy more.'},
+  {t: 'You draw the roads', b: 'Drag to lay road. Houses join on any side; stores only at the <b>ends of their car park</b> (the white arrows); some open at both ends, some at one. Road tiles are limited: you get more each week. Ctrl+Z undoes, and the Erase tool (E) removes road.'},
+  {t: 'Keep traffic moving', b: 'Where roads cross, cars take turns. Traffic lights, roundabouts, turn signs, one-way streets and motorways each fix a different kind of jam. You\u2019ll try every one of them in this tutorial.'},
+  {t: 'Weeks and rewards', b: 'Each week the map grows and new stores and houses appear. When a week ends you pick one reward: extra roads plus a perk, a bridge, a light, a roundabout or another tool. Plan for the traffic that\u2019s coming, not just what\u2019s there.'},
+  {t: 'Cash, \u25ce coins and \u2726 stars', b: '<b>Cash</b> is earned in each city and spent there on cars, upgrades and the Shop. <b>\u25ce coins</b> (2 for every 3 parcels) stay with you between cities and buy looks in the Store. <b>\u2726 stars</b> come only from Frantic cities and buy the daily special.'},
+  {t: 'Getting around', b: 'Scroll or pinch to zoom; right-drag, or hold Shift and drag, to move the map. Keys 1\u20139 pick tools, P pauses, and the speed buttons go from half to 3\u00d7. Tap anything with Inspect (key 1) to see what it\u2019s doing.'}
 ];
 let tiCard = 0, tiRaf = 0, tiT0 = 0;
 function openTutIntro() {
@@ -2338,10 +2393,23 @@ function drawTutIntro(t) {
       drawLightHeads(tx(idx(6, 8)), ty(idx(6, 8)), {ph: Math.floor(t / 2) % 2, allRed: false}, [0, 0]);
       drawRoundAt(tx(idx(10, 8)), ty(idx(10, 8)));
       const a = t * 1.2; car(tx(idx(10, 8)) + Math.cos(a) * 10.6, ty(idx(10, 8)) + Math.sin(a) * 10.6, a + Math.PI / 2, 0);
+    } else if (tiCard === 4) {                             // the map growing week by week
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      const ph = (t * 0.5) % 3, wk = 1 + Math.floor(ph);
+      for (let i = 0; i < 3; i++) { const sz = 70 + i * 50, a = i < ph ? 1 : 0.18; g.strokeStyle = 'rgba(30,60,75,' + (0.75 * a).toFixed(2) + ')'; g.lineWidth = 3; g.setLineDash([10, 8]); g.beginPath(); if (g.roundRect) g.roundRect(W2 / 2 - sz, H2 / 2 - sz * 0.5, sz * 2, sz, 16); else g.rect(W2 / 2 - sz, H2 / 2 - sz * 0.5, sz * 2, sz); g.stroke(); }
+      g.setLineDash([]); g.fillStyle = '#12303f'; g.font = '900 22px Overpass, system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('Week ' + wk, W2 / 2, H2 / 2);
+    } else if (tiCard === 6) {                             // keys and the mouse
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      const key = (x, y, w, txt, on) => { g.fillStyle = on ? '#ffc933' : '#f4f2ec'; g.beginPath(); if (g.roundRect) g.roundRect(x - w / 2, y - 22, w, 44, 12); else g.rect(x - w / 2, y - 22, w, 44); g.fill(); g.strokeStyle = 'rgba(0,0,0,.18)'; g.lineWidth = 2; g.stroke(); g.fillStyle = '#12303f'; g.font = '800 17px Overpass, system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(txt, x, y + 1); };
+      const hi = Math.floor(t * 0.8) % 4;
+      key(W2 * 0.2, H2 * 0.4, 70, '1\u20139', hi === 0); key(W2 * 0.4, H2 * 0.4, 50, 'P', hi === 1); key(W2 * 0.6, H2 * 0.4, 96, 'Ctrl Z', hi === 2); key(W2 * 0.8, H2 * 0.4, 70, 'Shift', hi === 3);
+      g.fillStyle = '#12303f'; g.font = '700 14px Overpass, system-ui, sans-serif';
+      ['tools', 'pause', 'undo', '+ drag to move'].forEach((l, i) => g.fillText(l, W2 * (0.2 + i * 0.2), H2 * 0.4 + 40));
+      const mx = W2 / 2, my = H2 * 0.78 + Math.sin(t * 2) * 3; g.fillStyle = '#f4f2ec'; g.beginPath(); g.ellipse(mx, my, 18, 26, 0, 0, 6.3); g.fill(); g.strokeStyle = 'rgba(0,0,0,.2)'; g.stroke(); g.fillStyle = '#ffc933'; g.beginPath(); if (g.roundRect) g.roundRect(mx - 3, my - 18, 6, 12, 3); else g.rect(mx - 3, my - 18, 6, 12); g.fill();
     } else {
       g.setTransform(1, 0, 0, 1, 0, 0);
       const coin = (x, y, txt, c1, c2) => { const gr = g.createRadialGradient(x - 8, y - 8, 2, x, y, 30); gr.addColorStop(0, c1); gr.addColorStop(1, c2); g.fillStyle = gr; g.beginPath(); g.arc(x, y + Math.sin(t * 2 + x) * 6, 30, 0, 6.3); g.fill(); g.fillStyle = '#4a3400'; g.font = '900 26px Overpass, system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(txt, x, y + Math.sin(t * 2 + x) * 6); };
-      coin(W2 * 0.3, H2 / 2, '$', '#d6ffe2', '#43d17a'); coin(W2 * 0.5, H2 / 2, '#', '#fff1a8', '#d4a017'); coin(W2 * 0.7, H2 / 2, '\u2191', '#e0ecff', '#5b8cff');
+      coin(W2 * 0.3, H2 / 2, '$', '#d6ffe2', '#43d17a'); coin(W2 * 0.5, H2 / 2, '\u25ce', '#fff1a8', '#d4a017'); coin(W2 * 0.7, H2 / 2, '\u2726', '#efe0ff', '#9a6bff');
     }
   });
   animT = keepAnim; Object.assign(SUN, keepSun);

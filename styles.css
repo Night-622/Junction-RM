@@ -1688,3 +1688,15 @@ ol.board li.click:hover{background:rgba(var(--ov),.09)}
 .sp-aurora i{border-radius:11px;background-color:var(--plate);background-image:linear-gradient(120deg,rgba(77,255,195,.16),rgba(127,90,255,.14) 50%,rgba(47,214,255,.14));background-size:auto;box-shadow:inset 0 0 0 1px rgba(var(--accent-rgb),.55),0 0 0 1px rgba(var(--accent-rgb),.35),0 3px 12px rgba(var(--accent-rgb),.6)}
 .sp-gilded i{border-radius:8px;background-color:var(--plate);background-image:linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,0) 42%);background-size:auto;box-shadow:inset 0 0 0 1.5px #d4af37,0 8px 14px rgba(0,0,0,.35)}
 .sp-opal i{border-radius:12px;background-color:var(--plate-frost);background-image:linear-gradient(135deg,rgba(255,170,220,.18),rgba(170,220,255,.16) 50%,rgba(200,255,210,.14));background-size:auto;box-shadow:inset 0 1px 0 rgba(255,255,255,.3),inset 0 0 0 1px rgba(255,255,255,.14),0 8px 14px rgba(0,0,0,.35);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+
+/* v1.14: a more descriptive tutorial: numbered steps always show; the tip and "why" when the card is opened */
+#tut-coach #tc-body{display:block;-webkit-line-clamp:unset;margin:0 0 4px}
+.tc-how{margin:2px 0 6px;padding-left:20px;font-size:12.5px;line-height:1.45}
+.tc-how li{margin:1px 0}.tc-how li::marker{font-weight:800;color:var(--accent)}
+#tut-coach .tc-tip{display:none;font-size:12.5px;line-height:1.45;padding:7px 9px;border-radius:10px;background:rgba(var(--accent-rgb),.12)}
+#tut-coach.full .tc-tip{display:block}
+#tut-coach .tc-tip[hidden]{display:none}
+#tut-coach.full .tc-why{display:block;font-size:12.5px}
+#tut-coach:not(.full) .tc-top::after{content:"Tap for tips"}
+.goal-how{margin:4px 0 0;padding-left:18px;font-size:11.5px;line-height:1.4;opacity:.9}
+.goal-how li::marker{font-weight:800}
