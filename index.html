@@ -308,7 +308,8 @@
         </div>
         <div class="rl-topr">
           <div class="acct-strip" id="start-account" hidden></div>
-          <button type="button" class="rl-icon" data-mm="friends" aria-pressed="false" title="Chats"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><circle cx="17.5" cy="9" r="2.6"/><path d="M16 14.2c3 .2 5.5 2.3 5.5 5.3"/></svg></button>
+          <button type="button" class="rl-icon" data-mm="chats" aria-pressed="false" title="Chats"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg><em class="tabbadge mm-chat-badge" hidden>0</em></button>
+          <button type="button" class="rl-icon" data-mm="friends" aria-pressed="false" title="Friends"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><circle cx="17.5" cy="9" r="2.6"/><path d="M16 14.2c3 .2 5.5 2.3 5.5 5.3"/></svg></button>
           <button type="button" class="rl-icon" id="mm-settings2" title="Settings"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg></button>
         </div>
       </div>
@@ -317,7 +318,8 @@
       <nav class="rl-menu" aria-label="Main menu">
         <button type="button" class="rl-item big" data-mm="play" aria-pressed="false"><span>Play</span></button>
         <button type="button" class="rl-item" data-mm="saves" aria-pressed="false"><span>Saves</span></button>
-        <button type="button" class="rl-item" data-mm="friends" aria-pressed="false"><span>Chats</span></button>
+        <button type="button" class="rl-item" data-mm="chats" aria-pressed="false"><span>Chats</span><em class="tabbadge mm-chat-badge" hidden>0</em></button>
+        <button type="button" class="rl-item" data-mm="friends" aria-pressed="false"><span>Friends</span></button>
         <button type="button" class="rl-item" data-mm="custom" aria-pressed="false"><span>Customise</span></button>
         <button type="button" class="rl-item" id="mm-settings"><span>Settings</span></button>
         <button type="button" class="rl-item" id="mm-account"><span>Account</span></button>
@@ -341,6 +343,7 @@
             <div class="btnrow"><button class="bigbtn ghost" id="btn-saves" type="button" hidden>Open save files</button><button class="bigbtn ghost" id="mm-resume" type="button" hidden>Continue last city</button></div>
           </div>
           <div class="mm-pane" data-mm="friends" hidden><div id="mm-friends"></div></div>
+          <div class="mm-pane" data-mm="chats" hidden><div id="mm-chats"></div></div>
           <div class="mm-pane" data-mm="custom" hidden>
             <div class="seg cus-tabs"><button type="button" data-cus="mine" aria-pressed="true">My stuff</button><button type="button" data-cus="coll" aria-pressed="false">Collection</button></div>
             <p class="mini" id="mm-cus-lead">Everything you own. Tap to use it. <button class="linkbtn inl" type="button" data-mm-go="store">Get more in the Store</button></p>

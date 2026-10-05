@@ -881,7 +881,7 @@ $('run-msg').addEventListener('click', () => { if (!runOf) return; closeM('m-run
 /* ============================================================ MESSAGES
    messages/{id}: {from, fromName, to, toName, text, at, read}. Each player listens for messages sent to them;
    what they've sent is fetched when they open a conversation. Rules let only the two people involved read one. */
-O.inbox = []; O.sent = []; O.msgUid = null; let msgWith = null, msgUnsub = null;
+O.inbox = []; O.sent = []; O.msgUid = null; let msgWith = null, msgUnsub = null, sentUnsub = null;
 const msAt = m => (m.at && m.at.toMillis) ? m.at.toMillis() : (m.localAt || Date.now());
 function startInbox() {
   if (!O.user || O.msgUid === O.user.uid) return;
@@ -890,16 +890,23 @@ function startInbox() {
     O.inbox = snap.docs.map(x => Object.assign({id: x.id}, x.data()));
     updateMsgBadge();
     if (!$('m-acct').hidden && acctPane === 'msgs') renderMsgs();
-    if (frBox && frSel) renderFriendChat();
+    if (chatBox) renderChats();
   }, e => console.warn('Inbox unavailable', e));
+  if (sentUnsub) sentUnsub();
+  sentUnsub = onSnapshot(query(collection(db, 'messages'), where('from', '==', O.user.uid), limit(200)), snap => {
+    O.sent = snap.docs.map(x => Object.assign({id: x.id}, x.data(), x.metadata.hasPendingWrites && !x.data().at ? {localAt: Date.now()} : {}));
+    if (chatBox) renderChats();
+    if (!$('m-acct').hidden && acctPane === 'msgs') renderMsgs();
+  }, e => console.warn('Sent messages unavailable', e));
 }
 async function loadSent() {
   try { const sn = await getDocs(query(collection(db, 'messages'), where('from', '==', O.user.uid), limit(200))); O.sent = sn.docs.map(x => Object.assign({id: x.id}, x.data())); }
   catch (e) { console.warn('Sent messages unavailable', e); }
 }
 function updateMsgBadge() {
-  const n = O.inbox.filter(m => !m.read).length;
-  for (const id of ['msg-badge', 'msg-tabbadge']) { const el = $(id); if (el) { el.textContent = n > 99 ? '99+' : String(n); el.hidden = !n; } }
+  const n = O.inbox.filter(m => !m.read).length, t = n > 99 ? '99+' : String(n);
+  for (const id of ['msg-badge', 'msg-tabbadge']) { const el = $(id); if (el) { el.textContent = t; el.hidden = !n; } }
+  document.querySelectorAll('.mm-chat-badge').forEach(el => { el.textContent = t; el.hidden = !n; });
 }
 function threadsList() {
   const by = {};
@@ -932,6 +939,7 @@ function renderThread() {
 }
 async function openThread(uid, name) {
   if (!O.ready || !O.user) return;
+  if (API.menuOpen) { openChat(uid, name); return; }
   msgWith = {uid, name};
   openAcct('msgs');
 }
@@ -944,7 +952,7 @@ async function sendTo(uid, name, t) {
   if (!t) return 'Write something first.';
   if (!O.profile || !O.profile.name) return 'Pick a username first (Account \u2192 Profile).';
   if (t.length > 500) return 'Messages can be up to 500 characters.';
-  if (Date.now() - lastSend < 1500) return 'Slow down a little.';
+  if (Date.now() - lastSend < 600) return 'Slow down a little.';
   lastSend = Date.now();
   const m = {from: O.user.uid, fromName: myName(), to: uid, toName: (name || 'Player').slice(0, 16), text: t, at: serverTimestamp(), read: false};
   try { const ref = await addDoc(collection(db, 'messages'), m); O.sent.push(Object.assign({id: ref.id, localAt: Date.now()}, m, {at: null})); return ''; }
@@ -1009,47 +1017,156 @@ function recordsHTML(r) {
 }
 /* the Friends section: add form, your friends with their best records, and a chat with whoever is picked */
 async function renderFriends(box) {
-  frBox = box || frBox; if (!frBox) return;
-  if (!O.ready || !O.user) { frBox.innerHTML = '<p class="mini">Friends need the online service \u2014 it\u2019s still connecting, or unavailable right now.</p>'; return; }
+  frBox = box || frBox; if (!frBox || !frBox.isConnected) { frBox = null; return; }
+  if (!O.ready || !O.user) { frBox.innerHTML = '<p class="mini">Friends need the online service — it’s still connecting, or unavailable right now.</p>'; return; }
   if (!O.profile || !O.profile.name) { frBox.innerHTML = '<p class="mini">Pick a username first, then you can add friends.</p><button class="bigbtn" type="button" id="fr-pick">Pick a username</button>'; $('fr-pick').onclick = () => openUserModal(); return; }
-  frBox.innerHTML = '<p class="mini">Loading friends\u2026</p>';
+  frBox.innerHTML = '<p class="mini">Loading friends…</p>';
   const list = await loadFriends();
-  await loadSent();
-  const unreadFrom = uid => O.inbox.filter(m => m.from === uid && !m.read).length;
+  if (!frBox) return;
+  if (!frSel && list.length) frSel = {uid: list[0].uid, name: list[0].name};
   frBox.innerHTML = '<div class="frwrap"><div class="frcol">' +
     '<div class="fradd"><input id="fr-name" type="text" maxlength="16" placeholder="Add a friend by username" autocomplete="off" spellcheck="false"><button class="bigbtn" id="fr-add" type="button">Add</button></div>' +
     '<p class="formerr" id="fr-err" role="alert"></p>' +
-    '<div class="frlist">' + (list.length ? list.map(f => '<button type="button" class="frrow' + (frSel && frSel.uid === f.uid ? ' active' : '') + '" data-fr="' + esc(f.uid) + '" data-name="' + esc(f.name) + '"><span class="av">' + esc(String(f.name).charAt(0).toUpperCase()) + '</span><b>' + esc(f.name) + '</b>' + (unreadFrom(f.uid) ? '<span class="tabbadge">' + unreadFrom(f.uid) + '</span>' : '') + '</button>').join('')
-      : '<p class="mini">No friends yet. Add someone by their username, or from a player on the Expert leaderboard.</p>') + '</div></div>' +
-    '<div class="frmain" id="fr-main">' + (frSel ? '' : '<p class="mini">Pick a friend to see their records and chat.</p>') + '</div></div>';
+    '<div class="frlist">' + (list.length ? list.map(f => { const h = h2hWith(f.uid);
+      return '<button type="button" class="frrow' + (frSel && frSel.uid === f.uid ? ' active' : '') + '" data-fr="' + esc(f.uid) + '" data-name="' + esc(f.name) + '"><span class="av" style="background:' + avColour(f.uid) + '">' + esc(String(f.name).charAt(0).toUpperCase()) + '</span><span class="frrow-t"><b>' + esc(f.name) + '</b><small>' +
+        (h.played ? 'ISO ' + h.w + '–' + h.l + (h.d ? '–' + h.d : '') : 'No matches yet') + (h.open ? ' · ' + h.open + ' open' : '') + '</small></span></button>'; }).join('')
+      : '<p class="mini">No friends yet. Add someone by their username, or tap a player on any leaderboard.</p>') + '</div></div>' +
+    '<div class="frmain" id="fr-main">' + (frSel ? '' : '<p class="mini">Pick a friend to see their records, how you do against them, and whether they’re playing.</p>') + '</div></div>';
   const add = async () => { const err = await addFriendByName($('fr-name').value); if (err) { $('fr-err').textContent = err; return; } API.toast('Friend added', 'good'); renderFriends(); };
   $('fr-add').onclick = add; $('fr-name').onkeydown = e => { if (e.key === 'Enter') add(); };
   frBox.querySelectorAll('[data-fr]').forEach(b => b.onclick = () => { frSel = {uid: b.dataset.fr, name: b.dataset.name}; renderFriends(); });
   if (frSel) renderFriendMain();
 }
+/* your ISO record against one player */
+function h2hWith(uid) {
+  const me = O.user.uid, out = {w: 0, l: 0, d: 0, played: 0, open: 0, last: []};
+  for (const d of Object.values(O.chals || {})) {
+    if (oppOf(d).uid !== uid) continue;
+    if (d.status === 'done') { out.played++; if (d.winner === me) out.w++; else if (d.winner === uid) out.l++; else out.d++; out.last.push(d); }
+    else if ((d.status === 'pending' || d.status === 'accepted') && tms(d.expiresAt) > Date.now()) out.open++;
+  }
+  out.last.sort((a, b) => tms(b.endedAt) - tms(a.endedAt));
+  return out;
+}
+const AV_COLS = ['#e0483e', '#2f7de1', '#f0a81c', '#2fa66a', '#8a5bd6', '#16a2b8', '#d0268f', '#c1592c'];
+const avColour = uid => { let h = 0; for (const c of String(uid)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return AV_COLS[h % AV_COLS.length]; };
+/* is a player playing right now? (their public card points at their live channel) */
+async function liveOf(uid) {
+  try {
+    const p = await getDoc(doc(db, 'profiles', uid)), code = p.exists() ? p.data().live : null;
+    const l = code ? await getDoc(doc(db, 'live', code)) : null, d = l && l.exists() ? l.data() : null;
+    const fresh = !!(d && d.updatedAt && d.updatedAt.toMillis && Date.now() - d.updatedAt.toMillis() < 3 * LIVE_HEARTBEAT);
+    return {code, d, fresh, playing: !!(d && d.playing && fresh)};
+  } catch (e) { return {code: null, d: null, fresh: false, playing: false}; }
+}
 async function renderFriendMain() {
   const main = $('fr-main'); if (!main || !frSel) return;
-  main.innerHTML = '<div class="frhead"><b>' + esc(frSel.name) + '</b><span><button class="act small" type="button" id="fr-chal">Challenge</button> <button class="act small" type="button" id="fr-view">Profile</button> <button class="linkbtn" type="button" id="fr-remove">Remove friend</button></span></div>' +
-    '<div id="fr-rec"><p class="mini">Loading records\u2026</p></div>' +
-    '<h4 class="frh">Chat</h4><div class="mt-body" id="fr-chat"></div>' +
-    '<div class="mt-reply"><input id="fr-text" type="text" maxlength="500" placeholder="Message ' + esc(frSel.name) + '\u2026" autocomplete="off"><button class="bigbtn" id="fr-send" type="button">Send</button></div><p class="formerr" id="fr-cerr" role="alert"></p>';
-  $('fr-chal').onclick = () => openChallenge(frSel.uid, frSel.name);
-  $('fr-view').onclick = () => openPlayer(frSel.uid, frSel.name);
-  $('fr-remove').onclick = async () => { try { await deleteDoc(friendRef(frSel.uid)); } catch (e) {} frSel = null; await loadFriends(true); renderFriends(); };
-  const send = async () => { $('fr-cerr').textContent = ''; const err = await sendTo(frSel.uid, frSel.name, $('fr-text').value); if (err) { $('fr-cerr').textContent = err; return; } $('fr-text').value = ''; renderFriendChat(); };
-  $('fr-send').onclick = send; $('fr-text').onkeydown = e => { if (e.key === 'Enter') send(); };
-  renderFriendChat();
-  const sel = frSel, r = await friendRecordsOf(sel.uid);
-  if (frSel === sel && $('fr-rec')) $('fr-rec').innerHTML = recordsHTML(r);
+  const sel = frSel, h = h2hWith(sel.uid);
+  main.innerHTML = '<div class="frhead"><span class="av big" style="background:' + avColour(sel.uid) + '">' + esc(String(sel.name).charAt(0).toUpperCase()) + '</span><div class="frhead-t"><b>' + esc(sel.name) + '</b><small id="fr-live">Checking…</small></div></div>' +
+    '<div class="btnrow fr-acts"><button class="bigbtn" type="button" id="fr-chal">Challenge</button><button class="bigbtn ghost" type="button" id="fr-msg">Message</button><button class="bigbtn ghost" type="button" id="fr-view">Profile</button><button class="linkbtn" type="button" id="fr-remove">Remove friend</button></div>' +
+    '<h4 class="frh">ISO 1v1 against ' + esc(sel.name) + '</h4>' +
+    '<div class="fr-h2h"><div><b class="num">' + h.w + '</b><span>won</span></div><div><b class="num">' + h.l + '</b><span>lost</span></div><div><b class="num">' + h.d + '</b><span>drawn</span></div><div><b class="num">' + h.open + '</b><span>open</span></div></div>' +
+    (h.last.length ? '<div class="fr-last">' + h.last.slice(0, 5).map(d => { const w = d.winner === O.user.uid ? 'won' : d.winner === sel.uid ? 'lost' : 'draw';
+      return '<span class="fr-res r-' + w + '"><b>' + (w === 'won' ? 'Won' : w === 'lost' ? 'Lost' : 'Draw') + '</b> ' + (d.kind === 'live' ? 'Live' : 'Daily') + '</span>'; }).join('') + '</div>' : '<p class="mini">You haven’t played each other yet. Challenge them to a live or daily match.</p>') +
+    '<h4 class="frh">Their records</h4><div id="fr-rec"><p class="mini">Loading records…</p></div>';
+  $('fr-chal').onclick = () => openChallenge(sel.uid, sel.name);
+  $('fr-msg').onclick = () => openChat(sel.uid, sel.name);
+  $('fr-view').onclick = () => openPlayer(sel.uid, sel.name);
+  $('fr-remove').onclick = async () => { if (!confirm('Remove ' + sel.name + ' from your friends?')) return; try { await deleteDoc(friendRef(sel.uid)); } catch (e) {} frSel = null; await loadFriends(true); renderFriends(); };
+  friendRecordsOf(sel.uid).then(r => { if (frSel === sel && $('fr-rec')) $('fr-rec').innerHTML = recordsHTML(r); });
+  liveOf(sel.uid).then(L => {
+    if (frSel !== sel || !$('fr-live')) return;
+    $('fr-live').innerHTML = L.playing ? '<i class="dot on"></i>Playing now · <button class="linkbtn inl" type="button" id="fr-watch">Watch live</button>' : L.fresh ? '<i class="dot"></i>Online, on the menu' : 'Not playing right now';
+    const w = $('fr-watch'); if (w) w.onclick = () => startWatching(L.code, L.d);
+  });
 }
-function renderFriendChat() {
-  const body = $('fr-chat'); if (!body || !frSel) return;
-  const ms = O.inbox.filter(m => m.from === frSel.uid).concat(O.sent.filter(m => m.to === frSel.uid)).sort((a, b) => msAt(a) - msAt(b));
-  body.innerHTML = ms.length ? ms.map(m => '<div class="bubble' + (m.from === O.user.uid ? ' me' : '') + '">' + esc(m.text || '') + '<time>' + new Date(msAt(m)).toLocaleString(undefined, {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'}) + '</time></div>').join('')
-    : '<p class="mini">No messages yet \u2014 say hello.</p>';
-  body.scrollTop = body.scrollHeight;
-  for (const m of ms) if (m.to === O.user.uid && !m.read) { m.read = true; updateDoc(doc(db, 'messages', m.id), {read: true}).catch(() => {}); }
-  updateMsgBadge();
+
+/* ============================================================ CHATS
+   The main menu's Chats: every conversation down the side (like a messaging app), the open one beside it.
+   Tap the name at the top of a chat to open that player's profile. */
+let chatBox = null, chatSel = null, chatQ = '', chatNew = false;
+function openChat(uid, name) {
+  chatSel = {uid, name}; chatNew = false;
+  closeM('m-player'); closeM('m-board'); closeM('m-run');
+  if (API.showMenuPane) API.showMenuPane('chats'); else { msgWith = {uid, name}; openAcct('msgs'); }
+}
+const dayKey = t => new Date(t).toDateString();
+function dayLabel(t) {
+  const d = new Date(t), now = new Date(), y = new Date(now); y.setDate(now.getDate() - 1);
+  if (d.toDateString() === now.toDateString()) return 'Today';
+  if (d.toDateString() === y.toDateString()) return 'Yesterday';
+  return d.toLocaleDateString(undefined, Date.now() - t < 6 * 864e5 ? {weekday: 'long'} : {day: 'numeric', month: 'short', year: 'numeric'});
+}
+const hhmm = t => new Date(t).toLocaleTimeString(undefined, {hour: '2-digit', minute: '2-digit'});
+const listTime = t => Date.now() - t < 864e5 && dayKey(t) === dayKey(Date.now()) ? hhmm(t) : dayLabel(t);
+const ticks = m => '<i class="wa-tick' + (m.read ? ' read' : '') + '" title="' + (m.read ? 'Read' : 'Sent') + '">' + (m.at ? '✓✓' : '✓') + '</i>';
+async function renderChats(box) {
+  chatBox = box || chatBox; if (!chatBox || !chatBox.isConnected) { chatBox = null; return; }
+  if (!O.ready || !O.user) { chatBox.innerHTML = '<p class="mini">Chats need the online service — it’s still connecting, or unavailable right now.</p>'; return; }
+  if (!O.profile || !O.profile.name) { chatBox.innerHTML = '<p class="mini">Pick a username first, then you can chat.</p>'; return; }
+  const keep = $('wa-text'), draft = keep ? keep.value : '', focused = keep && document.activeElement === keep, qFocus = document.activeElement && document.activeElement.id === 'wa-q';
+  const threads = threadsList(), q = chatQ.trim().toLowerCase();
+  if (chatSel && !threads.some(t => t.uid === chatSel.uid)) threads.unshift({uid: chatSel.uid, name: chatSel.name, last: null, unread: 0});
+  const shown = threads.filter(t => !q || String(t.name || '').toLowerCase().includes(q));
+  const rows = shown.map(t => {
+    const m = t.last, mine = m && m.from === O.user.uid;
+    return '<button type="button" class="wa-row' + (chatSel && chatSel.uid === t.uid ? ' active' : '') + (t.unread ? ' unread' : '') + '" data-chat="' + esc(t.uid) + '" data-name="' + esc(t.name || '') + '">' +
+      '<span class="av" style="background:' + avColour(t.uid) + '">' + esc(String(t.name || '?').charAt(0).toUpperCase()) + '</span>' +
+      '<span class="wa-row-t"><span class="wa-row-1"><b>' + esc(t.name || 'Player') + '</b><time>' + (m ? listTime(msAt(m)) : '') + '</time></span>' +
+      '<span class="wa-row-2"><small>' + (m ? (mine ? ticks(m) + ' ' : '') + esc(m.text || '') : 'New chat') + '</small>' + (t.unread ? '<em class="wa-unread">' + t.unread + '</em>' : '') + '</span></span></button>';
+  }).join('');
+  let main;
+  if (chatNew) {
+    const fr = await loadFriends(); if (!chatBox) return;
+    main = '<header class="wa-head"><button type="button" class="wa-back" id="wa-newback" aria-label="Back">←</button><span class="wa-who-t"><b>New chat</b><small>Pick a friend, or type a username</small></span></header>' +
+      '<div class="wa-newbody"><div class="fradd"><input id="wa-newname" type="text" maxlength="16" placeholder="Username" autocomplete="off" spellcheck="false"><button class="bigbtn" id="wa-newgo" type="button">Chat</button></div><p class="formerr" id="wa-newerr" role="alert"></p>' +
+      (fr.length ? fr.map(f => '<button type="button" class="wa-row" data-newchat="' + esc(f.uid) + '" data-name="' + esc(f.name) + '"><span class="av" style="background:' + avColour(f.uid) + '">' + esc(String(f.name).charAt(0).toUpperCase()) + '</span><span class="wa-row-t"><b>' + esc(f.name) + '</b><small>Friend</small></span></button>').join('') : '<p class="mini">Add friends in the Friends section to see them here.</p>') + '</div>';
+  } else if (chatSel) {
+    const ms = O.inbox.filter(m => m.from === chatSel.uid).concat(O.sent.filter(m => m.to === chatSel.uid)).sort((a, b) => msAt(a) - msAt(b));
+    let body = '', lastDay = '';
+    for (const m of ms) {
+      const t = msAt(m), k = dayKey(t), mine = m.from === O.user.uid;
+      if (k !== lastDay) { body += '<div class="wa-day"><span>' + dayLabel(t) + '</span></div>'; lastDay = k; }
+      body += '<div class="wa-msg' + (mine ? ' me' : '') + '"><span class="wa-txt">' + esc(m.text || '') + '</span><span class="wa-meta">' + hhmm(t) + (mine ? ' ' + ticks(m) : '') + '</span></div>';
+    }
+    main = '<header class="wa-head"><button type="button" class="wa-back" id="wa-back" aria-label="Back to chats">←</button>' +
+      '<button type="button" class="wa-who" id="wa-who" title="See their profile"><span class="av" style="background:' + avColour(chatSel.uid) + '">' + esc(String(chatSel.name || '?').charAt(0).toUpperCase()) + '</span><span class="wa-who-t"><b>' + esc(chatSel.name || 'Player') + '</b><small>Tap for their profile</small></span></button>' +
+      '<button type="button" class="act small" id="wa-chal">Challenge</button></header>' +
+      '<div class="wa-body" id="wa-body">' + (body || '<p class="wa-empty">Say hello to ' + esc(chatSel.name || 'them') + '.</p>') + '</div>' +
+      '<div class="wa-input"><input id="wa-text" type="text" maxlength="500" placeholder="Message" autocomplete="off"><button type="button" class="wa-send" id="wa-send" aria-label="Send"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M3 20l18-8L3 4l2.5 8L3 20zm2.5-8h7"/></svg></button></div><p class="formerr" id="wa-err" role="alert"></p>';
+    for (const m of ms) if (m.to === O.user.uid && !m.read) { m.read = true; updateDoc(doc(db, 'messages', m.id), {read: true}).catch(() => {}); }
+    updateMsgBadge();
+  } else main = '<div class="wa-none"><svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"/></svg><b>Your chats</b><span>Pick a conversation, or start a new one.</span></div>';
+  chatBox.innerHTML = '<div class="wa' + (chatSel || chatNew ? ' has-sel' : '') + '"><aside class="wa-side"><div class="wa-top"><b>Chats</b><button type="button" class="act small" id="wa-new">New chat</button></div>' +
+    '<input class="wa-search" id="wa-q" type="search" placeholder="Search chats" value="' + esc(chatQ) + '" autocomplete="off">' +
+    '<div class="wa-list">' + (rows || '<p class="mini wa-nolist">' + (q ? 'No chats match.' : 'No chats yet. Start one with New chat, or message a player from their profile.') + '</p>') + '</div></aside>' +
+    '<section class="wa-main">' + main + '</section></div>';
+  const body = $('wa-body'); if (body) body.scrollTop = body.scrollHeight;
+  const ti = $('wa-text'); if (ti) { ti.value = draft; if (focused) { ti.focus(); ti.setSelectionRange(draft.length, draft.length); } }
+  const qi = $('wa-q'); if (qFocus) { qi.focus(); qi.setSelectionRange(chatQ.length, chatQ.length); }
+  qi.oninput = () => { chatQ = qi.value; renderChats(); };
+  $('wa-new').onclick = () => { chatNew = true; chatSel = null; renderChats(); };
+  chatBox.querySelectorAll('[data-chat]').forEach(b => b.onclick = () => { chatSel = {uid: b.dataset.chat, name: b.dataset.name}; chatNew = false; renderChats(); });
+  chatBox.querySelectorAll('[data-newchat]').forEach(b => b.onclick = () => { chatSel = {uid: b.dataset.newchat, name: b.dataset.name}; chatNew = false; renderChats(); });
+  const nb = $('wa-newback'); if (nb) nb.onclick = () => { chatNew = false; renderChats(); };
+  const ng = $('wa-newgo'); if (ng) {
+    const go = async () => {
+      const n = $('wa-newname').value.trim(); $('wa-newerr').textContent = '';
+      if (!NAME_RE.test(n)) { $('wa-newerr').textContent = 'Usernames are 3–16 letters, numbers, _ or -.'; return; }
+      try { const u = await getDoc(nameRef(n.toLowerCase())); if (!u.exists()) { $('wa-newerr').textContent = 'No player called ' + n + '.'; return; }
+        if (u.data().uid === O.user.uid) { $('wa-newerr').textContent = 'That’s you.'; return; }
+        chatSel = {uid: u.data().uid, name: n}; chatNew = false; renderChats(); } catch (e) { $('wa-newerr').textContent = e.message; }
+    };
+    ng.onclick = go; $('wa-newname').onkeydown = e => { if (e.key === 'Enter') go(); };
+  }
+  const bk = $('wa-back'); if (bk) bk.onclick = () => { chatSel = null; renderChats(); };
+  const who = $('wa-who'); if (who) who.onclick = () => openPlayer(chatSel.uid, chatSel.name);
+  const ch = $('wa-chal'); if (ch) ch.onclick = () => openChallenge(chatSel.uid, chatSel.name);
+  const sb = $('wa-send'); if (sb) {
+    const send = async () => { const el = $('wa-text'), t = el.value; $('wa-err').textContent = ''; if (!t.trim()) return; el.value = '';
+      const err = await sendTo(chatSel.uid, chatSel.name, t); if (err) { $('wa-err').textContent = err; el.value = t; return; } renderChats(); $('wa-text').focus(); };
+    sb.onclick = send; ti.onkeydown = e => { if (e.key === 'Enter') send(); };
+  }
 }
 window.__junctionMessages = () => {
   if (!O.ready || !O.user) { API.toast('Online features are still connecting \u2014 try again in a moment.', 'warn'); return; }
@@ -1543,7 +1660,7 @@ window.JunctionOnline = {
   get feedbackReady() { return !!O.user; },
   openSaves, openBoard, openWatch, sendFeedback, feedbackIdentity,
   renderSlots(box, mode, tabs) { if (!O.ready) return false; renderSlots(box, mode, tabs); return true; },
-  renderFriends(box) { renderFriends(box); },
+  renderFriends(box) { renderFriends(box); }, renderChats(box) { renderChats(box); }, openChat(uid, name) { openChat(uid, name); },
   expertTop(ago, n) { return expertTop(ago, n); },
   openRun(ago, uid) { openRun(API.expertSeed(ago || 0).key, uid); },
   renderIso(box) { if (!O.ready) return false; renderIso(box); return true; },

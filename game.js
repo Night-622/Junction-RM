@@ -7396,17 +7396,18 @@ function showNews() {
   document.querySelectorAll('#news-dots [data-nd]').forEach((d, i) => d.setAttribute('aria-pressed', i === newsAt ? 'true' : 'false'));
 }
 setInterval(() => { if (!newsHover && !REDUCED_MOTION && $('m-start') && !$('m-start').hidden && !mmPane) { newsAt = (newsAt + 1) % NEWS.length; showNews(); } }, 6000);
-const MM_TITLES = {play: 'Play', saves: 'Saves', friends: 'Chats', custom: 'Customise', store: 'Store', weekly: 'Weeklys'};
+const MM_TITLES = {play: 'Play', saves: 'Saves', chats: 'Chats', friends: 'Friends', custom: 'Customise', store: 'Store', weekly: 'Weeklys'};
 function showMM(pane) {
   mmPane = pane || null;
   document.querySelectorAll('#m-start [data-mm]').forEach(b => { if (b.matches('.rl-item,.rl-tile,.rl-icon')) b.setAttribute('aria-pressed', b.dataset.mm === mmPane ? 'true' : 'false'); });
   document.querySelectorAll('#m-start .mm-pane').forEach(p => { p.hidden = p.dataset.mm !== mmPane; });
   $('mm-panel').hidden = !mmPane; $('m-start').classList.toggle('has-panel', !!mmPane);
-  $('m-start').classList.toggle('center-pane', mmPane === 'store' || mmPane === 'weekly');
+  $('m-start').classList.toggle('center-pane', ['store', 'weekly', 'chats', 'friends'].includes(mmPane));
   if (mmPane) { $('mm-ptitle').textContent = MM_TITLES[mmPane] || ''; const pb = $('mm-panel'); pb.classList.remove('slide'); void pb.offsetWidth; pb.classList.add('slide'); }
   const on = window.JunctionOnline;
   if (mmPane === 'play') renderPlay();
   if (mmPane === 'saves') { renderSlotsFor($('mm-slots'), playMode, true); $('mm-resume').hidden = !hasSave(); }
+  if (mmPane === 'chats') { if (on && on.renderChats) on.renderChats($('mm-chats')); else $('mm-chats').innerHTML = '<p class="mini">Chats need the online service, which isn\u2019t available right now.</p>'; }
   if (mmPane === 'friends') { if (on && on.renderFriends) on.renderFriends($('mm-friends')); else $('mm-friends').innerHTML = '<p class="mini">Friends need the online service, which isn\u2019t available right now.</p>'; }
   if (mmPane === 'weekly') { renderExpertCard(); renderWeekly(); }
   if (mmPane === 'custom') setCusTab(cusTab);
@@ -9378,7 +9379,7 @@ if (typeof window !== 'undefined' && (location.hostname === 'localhost' || locat
       showStartBest(); $('btn-resume').hidden = !hasSave(); openModal('m-start'); refreshUI();
     },
     toast, openModal, closeModal, renderCollection, setIsoPending, openIsoPane() { openModal('m-start'); showMM('play'); playMode = 'iso'; renderPlay(); },
-    startIso, showIsoResult,
+    startIso, showIsoResult, showMenuPane(p) { if ($('m-start').hidden) openModal('m-start'); showMM(p); }, get menuOpen() { return !$('m-start').hidden; },
     get iso() { return iso && diffKey === 'iso' ? {id: iso.id, kind: iso.kind, over} : null; },
     isoOpp(st) { if (!iso) return; iso.oppSt = st; renderIsoHud(); },
     isoProp(p) { if (!iso) return; iso.prop = p; renderIsoHud(); if (p && !p.mine) sfx('click'); },
