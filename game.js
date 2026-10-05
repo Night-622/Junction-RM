@@ -2193,7 +2193,65 @@ function renderTutorialCoach() {
   setHTML($('tc-dots'), TUT_STEPS.map((_, i) => '<i class="' + (i < tutStage ? 'd' : i === tutStage ? 'a' : '') + '"></i>').join(''));
   if (co.tool) { const b = document.querySelector('.tool[data-id="' + co.tool + '"]'); if (b) b.classList.add('tut-glow'); }
   renderTutLive();
+  applyCoachDock();
   if (changed) { card.classList.remove('swap'); void card.offsetWidth; card.classList.add('swap'); card.classList.remove('full'); }
+}
+/* The coach card can shrink to a slim bar flat against the bottom, and (on bigger screens) be dragged to the bottom
+   middle, the bottom left, or into the right-hand tutorial panel. Phones only get the shrink. Remembered per browser. */
+const COACH_KEY = 'junction-coach-v1';
+let coachPref = (() => { try { const d = JSON.parse(localStorage.getItem(COACH_KEY)); if (d && typeof d === 'object') return {dock: ['center', 'left', 'right'].includes(d.dock) ? d.dock : 'center', bar: !!d.bar}; } catch (e) {} return {dock: 'center', bar: false}; })();
+let coachHome = null, coachDrag = null, coachNoClick = false;
+const coachMobile = () => window.matchMedia('(max-width: 700px)').matches;
+function saveCoach() { try { localStorage.setItem(COACH_KEY, JSON.stringify(coachPref)); } catch (e) {} }
+function applyCoachDock() {
+  const card = $('tut-coach'), panel = $('tut-panel'); if (!card || !panel) return;
+  if (!coachHome) coachHome = card.parentNode;
+  const mobile = coachMobile(), dock = mobile ? 'center' : coachPref.dock;
+  const inPanel = dock === 'right' && !panel.hidden && !panel.classList.contains('min');
+  if (inPanel) { const before = $('tut-open-explain'); if (card.parentNode !== panel || card.nextSibling !== before) panel.insertBefore(card, before); }
+  else if (card.parentNode !== coachHome) coachHome.insertBefore(card, $('coach-zones'));
+  card.classList.toggle('dock-left', dock === 'left');
+  card.classList.toggle('dock-right', dock === 'right' && !inPanel);
+  card.classList.toggle('in-panel', inPanel);
+  card.classList.toggle('tc-bar', coachPref.bar);
+  $('app').classList.toggle('coach-bar', coachPref.bar && !inPanel && !card.hidden && tutorialMode);   // lift the hint above the bar
+  card.classList.toggle('can-drag', !mobile);
+  const b = $('tc-shrink'); if (b) { b.title = coachPref.bar ? 'Show the step' : 'Shrink to the bottom'; b.setAttribute('aria-label', b.title); b.classList.toggle('up', coachPref.bar); }
+}
+function coachZoneAt(x) { return x > innerWidth - 330 ? 'right' : x < innerWidth * 0.36 ? 'left' : 'center'; }
+function bindCoachDock() {
+  const card = $('tut-coach'), zones = $('coach-zones');
+  $('tc-shrink').addEventListener('click', e => { e.stopPropagation(); coachPref.bar = !coachPref.bar; if (coachPref.bar) card.classList.remove('full'); saveCoach(); applyCoachDock(); });
+  card.addEventListener('click', () => {
+    if (coachNoClick) return;
+    if (coachPref.bar) { coachPref.bar = false; saveCoach(); applyCoachDock(); return; }   // tapping the bar brings the card back
+    card.classList.toggle('full');
+  });
+  card.addEventListener('pointerdown', e => {
+    if (coachMobile() || e.button !== 0 || e.target.closest('button')) return;
+    const r = card.getBoundingClientRect();
+    coachDrag = {x0: e.clientX, y0: e.clientY, dx: e.clientX - r.left, dy: e.clientY - r.top, w: r.width, moved: false};
+  });
+  addEventListener('pointermove', e => {
+    const d = coachDrag; if (!d) return;
+    if (!d.moved) {
+      if (Math.hypot(e.clientX - d.x0, e.clientY - d.y0) < 6) return;
+      d.moved = true;
+      if (card.parentNode !== coachHome) coachHome.insertBefore(card, zones);
+      card.classList.add('dragging'); card.style.width = d.w + 'px'; zones.hidden = false;
+    }
+    card.style.left = (e.clientX - d.dx) + 'px'; card.style.top = (e.clientY - d.dy) + 'px';
+    const z = coachZoneAt(e.clientX); zones.querySelectorAll('i').forEach(i => i.classList.toggle('on', i.dataset.z === z));
+  });
+  addEventListener('pointerup', e => {
+    const d = coachDrag; coachDrag = null; if (!d || !d.moved) return;
+    coachPref.dock = coachZoneAt(e.clientX); saveCoach();
+    card.classList.remove('dragging'); card.style.left = card.style.top = card.style.width = ''; zones.hidden = true;
+    coachNoClick = true; setTimeout(() => { coachNoClick = false; }, 50);   // the drop isn't a tap
+    applyCoachDock();
+    hint(coachPref.dock === 'right' ? 'The tutorial card now sits in the right-hand panel.' : coachPref.dock === 'left' ? 'The tutorial card now sits bottom left.' : 'The tutorial card is back at the bottom.');
+  });
+  addEventListener('resize', () => applyCoachDock());
 }
 function tutFlash(title) {
   const f = $('tut-flash'); if (!f) return;
@@ -7338,7 +7396,7 @@ function showNews() {
   document.querySelectorAll('#news-dots [data-nd]').forEach((d, i) => d.setAttribute('aria-pressed', i === newsAt ? 'true' : 'false'));
 }
 setInterval(() => { if (!newsHover && !REDUCED_MOTION && $('m-start') && !$('m-start').hidden && !mmPane) { newsAt = (newsAt + 1) % NEWS.length; showNews(); } }, 6000);
-const MM_TITLES = {play: 'Play', saves: 'Saves', friends: 'Friends', custom: 'Customise', store: 'Store', weekly: 'Weeklys'};
+const MM_TITLES = {play: 'Play', saves: 'Saves', friends: 'Chats', custom: 'Customise', store: 'Store', weekly: 'Weeklys'};
 function showMM(pane) {
   mmPane = pane || null;
   document.querySelectorAll('#m-start [data-mm]').forEach(b => { if (b.matches('.rl-item,.rl-tile,.rl-icon')) b.setAttribute('aria-pressed', b.dataset.mm === mmPane ? 'true' : 'false'); });
@@ -7835,7 +7893,7 @@ function bindInput() {
   $('btn-feedback-s').addEventListener('click', openFeedback);
   bindFeedback();
   $('tut-min').addEventListener('click', () => setTutMin(!$('tut-panel').classList.contains('min')));
-  $('tut-coach').addEventListener('click', () => { $('tut-coach').classList.toggle('full'); });
+  bindCoachDock();
   $('btn-snap').addEventListener('click', snapshot);
   $('btn-export').addEventListener('click', () => { $('menu').hidden = true; exportCity(); });
   $('btn-import').addEventListener('click', () => $('file-import').click());
@@ -9114,6 +9172,7 @@ function bindFeedback() {
 function setTutMin(on, silent) {
   const tp = $('tut-panel'), b = $('tut-min'); if (!tp) return;
   tp.classList.toggle('min', !!on);
+  applyCoachDock();
   if (b) { b.textContent = on ? 'Show steps' : 'Hide'; b.setAttribute('aria-expanded', on ? 'false' : 'true'); }
   if (!silent) layout();
 }

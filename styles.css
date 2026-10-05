@@ -1700,3 +1700,40 @@ ol.board li.click:hover{background:rgba(var(--ov),.09)}
 #tut-coach:not(.full) .tc-top::after{content:"Tap for tips"}
 .goal-how{margin:4px 0 0;padding-left:18px;font-size:11.5px;line-height:1.4;opacity:.9}
 .goal-how li::marker{font-weight:800}
+
+/* v1.15: the tutorial card shrinks to a bar at the bottom, and can be dragged to the bottom left or the right panel */
+#tut-coach .tc-top{display:flex;align-items:center;gap:6px}
+#tut-coach .tc-top::after{order:1}
+#tut-coach .tc-btns{order:2;display:flex;gap:4px;margin-left:8px}
+#tut-coach .tc-btn{width:26px;height:26px;border-radius:50%;border:0;padding:0;display:grid;place-items:center;background:rgba(var(--ov),.1);color:inherit;cursor:pointer;transition:background .15s,transform .2s}
+#tut-coach .tc-btn:hover{background:var(--accent);color:var(--on-accent)}
+#tut-coach .tc-btn.up svg{transform:rotate(180deg)}
+#tut-coach.can-drag .tc-top{cursor:grab}
+#tut-coach.dock-left{left:96px;transform:none}
+#tut-coach.dock-right{left:auto;right:16px;transform:none;bottom:16px;width:min(320px,calc(100% - 140px))}
+#tut-coach.in-panel{position:relative;left:auto;right:auto;bottom:auto;top:auto;transform:none;width:auto;min-width:0;margin:10px 0 4px;animation:none;flex:none;
+  box-shadow:inset 0 0 0 1px var(--line);background:rgba(var(--ov),.04)}
+#tut-coach.tc-bar{bottom:0;padding:7px 12px 8px;border-radius:16px 16px 0 0;width:min(420px,calc(100% - 360px))}
+#tut-coach.tc-bar.dock-right{bottom:0}
+#tut-coach.tc-bar > :not(.tc-top):not(h4){display:none}
+#tut-coach.tc-bar h4{margin:3px 0 0;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#tut-coach.tc-bar .tc-top::after{content:"Tap to open";margin-left:auto}
+#tut-coach.tc-bar.in-panel{border-radius:12px;width:auto}
+#tut-coach.dragging{position:fixed!important;transform:none!important;bottom:auto!important;right:auto!important;margin:0;z-index:60;opacity:.94;cursor:grabbing;animation:none;transition:none;box-shadow:0 18px 40px rgba(0,0,0,.35)}
+#tut-coach.dragging .tc-top{cursor:grabbing}
+#coach-zones{position:fixed;inset:0;z-index:55;pointer-events:none}
+#coach-zones[hidden]{display:none}
+#coach-zones i{position:absolute;border-radius:18px;border:2px dashed rgba(var(--accent-rgb),.6);background:rgba(var(--accent-rgb),.08);display:grid;place-items:center;transition:background .15s,border-color .15s}
+#coach-zones i span{font-size:12px;font-weight:800;font-style:normal;letter-spacing:.04em;text-transform:uppercase;color:var(--accent);background:rgba(8,22,30,.7);padding:4px 10px;border-radius:99px}
+#coach-zones i.on{background:rgba(var(--accent-rgb),.22);border-color:var(--accent);border-style:solid}
+#coach-zones i[data-z="left"]{left:92px;bottom:12px;width:min(380px,30vw);height:150px}
+#coach-zones i[data-z="center"]{left:50%;transform:translateX(-50%);bottom:12px;width:min(420px,34vw);height:150px}
+#coach-zones i[data-z="right"]{right:10px;top:var(--top,150px);bottom:10px;width:300px}
+@media (max-width:700px){
+  #tut-coach.tc-bar{left:8px;right:8px;width:auto;bottom:calc(env(safe-area-inset-bottom,0px) + 72px);border-radius:14px}
+  #tut-coach .tc-btn{width:30px;height:30px}
+}
+#tut-coach.tc-bar #tc-body{display:none}
+#app.coach-bar #hint{bottom:58px}
+@media (max-width:700px){#app.coach-bar #hint{bottom:130px}}
+#tut-coach.in-panel .tc-top::after,#tut-coach.in-panel .tc-tool{display:none}#tut-coach.in-panel .tc-pill{white-space:nowrap}#tut-coach.in-panel .tc-btns{margin-left:auto}

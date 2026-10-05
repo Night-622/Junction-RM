@@ -287,7 +287,7 @@
 
     <!-- tutorial coach card and step-complete flash -->
     <div id="tut-coach" class="plate" hidden aria-live="polite">
-      <div class="tc-top"><span id="tc-icon" class="tc-icon" aria-hidden="true"></span><span id="tc-step" class="tc-pill">Step 1 of 14</span><span id="tc-tool" class="tc-tool" hidden></span></div>
+      <div class="tc-top"><span id="tc-icon" class="tc-icon" aria-hidden="true"></span><span id="tc-step" class="tc-pill">Step 1 of 14</span><span id="tc-tool" class="tc-tool" hidden></span><span class="tc-btns"><button type="button" class="tc-btn" id="tc-shrink" title="Shrink to the bottom" aria-label="Shrink to the bottom"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 10l6 6 6-6"/></svg></button></span></div>
       <h4 id="tc-title"></h4>
       <p id="tc-body"></p>
       <ol class="tc-how" id="tc-how"></ol>
@@ -296,6 +296,7 @@
       <p class="tc-why"><b>Why it matters</b> <span id="tc-why"></span></p>
       <div class="tc-dots" id="tc-dots"></div>
     </div>
+    <div id="coach-zones" hidden aria-hidden="true"><i data-z="left"><span>Bottom left</span></i><i data-z="center"><span>Bottom</span></i><i data-z="right"><span>Right panel</span></i></div>
     <div id="tut-flash" hidden><div class="tf-card"><span class="tf-tick">✓</span><div><small>Step complete</small><b id="tf-title"></b></div></div></div>
 
     <!-- modals -->
@@ -307,7 +308,7 @@
         </div>
         <div class="rl-topr">
           <div class="acct-strip" id="start-account" hidden></div>
-          <button type="button" class="rl-icon" data-mm="friends" aria-pressed="false" title="Friends"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><circle cx="17.5" cy="9" r="2.6"/><path d="M16 14.2c3 .2 5.5 2.3 5.5 5.3"/></svg></button>
+          <button type="button" class="rl-icon" data-mm="friends" aria-pressed="false" title="Chats"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><circle cx="17.5" cy="9" r="2.6"/><path d="M16 14.2c3 .2 5.5 2.3 5.5 5.3"/></svg></button>
           <button type="button" class="rl-icon" id="mm-settings2" title="Settings"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg></button>
         </div>
       </div>
@@ -316,7 +317,7 @@
       <nav class="rl-menu" aria-label="Main menu">
         <button type="button" class="rl-item big" data-mm="play" aria-pressed="false"><span>Play</span></button>
         <button type="button" class="rl-item" data-mm="saves" aria-pressed="false"><span>Saves</span></button>
-        <button type="button" class="rl-item" data-mm="friends" aria-pressed="false"><span>Friends</span></button>
+        <button type="button" class="rl-item" data-mm="friends" aria-pressed="false"><span>Chats</span></button>
         <button type="button" class="rl-item" data-mm="custom" aria-pressed="false"><span>Customise</span></button>
         <button type="button" class="rl-item" id="mm-settings"><span>Settings</span></button>
         <button type="button" class="rl-item" id="mm-account"><span>Account</span></button>

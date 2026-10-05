@@ -874,7 +874,7 @@ function openRun(wk, uid) {
 }
 $('run-close').addEventListener('click', () => closeM('m-run'));
 $('run-chal').addEventListener('click', () => { if (runOf) openChallenge(runOf.uid, runOf.name); });
-$('run-friend').addEventListener('click', async () => { if (!runOf) return; const err = await addFriend(runOf.uid, runOf.name); API.toast(err || runOf.name + ' is now your friend \u2014 find them under Friends on the main menu.', err ? 'warn' : 'good'); renderRunFriend(); });
+$('run-friend').addEventListener('click', async () => { if (!runOf) return; const err = await addFriend(runOf.uid, runOf.name); API.toast(err || runOf.name + ' is now your friend \u2014 find them under Chats on the main menu.', err ? 'warn' : 'good'); renderRunFriend(); });
 function renderRunFriend() { const b = $('run-friend'); if (!b || !runOf) return; const f = isFriend(runOf.uid); b.hidden = !O.user || runOf.uid === O.user.uid || f; }
 $('run-msg').addEventListener('click', () => { if (!runOf) return; closeM('m-run'); closeM('m-board'); openThread(runOf.uid, runOf.name); });
 
