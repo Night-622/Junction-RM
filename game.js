@@ -7982,6 +7982,12 @@ function bindInput() {
   $('tut-amb').addEventListener('click', tutTriggerAmb);
   $('tut-contract').addEventListener('click', tutTriggerContract);
   window.addEventListener('resize', layout);
+  // Phones report a rotation before the page has finished resizing, which left the city drawn at the old shape
+  // and stretched. Follow the real size of the play area instead, and check again as a rotation settles.
+  if (window.ResizeObserver) new ResizeObserver(() => fitStage()).observe($('stage'));
+  const settle = () => { for (const ms of [0, 120, 300, 600, 1000]) setTimeout(fitStage, ms); };
+  window.addEventListener('orientationchange', settle);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', settle);
   window.addEventListener('beforeunload', saveGame);
   document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(true); });
 }
@@ -9179,6 +9185,16 @@ function setTutMin(on, silent) {
 }
 
 /* --------------------------------------------------------------- layout */
+/* re-fit only when the play area's size really differs from what the canvas was sized for */
+function fitStage() {
+  const st = $('stage'); if (!st) return;
+  const w = Math.max(320, Math.round(st.clientWidth)), h = Math.max(320, Math.round(st.clientHeight));
+  const d = Math.min(window.devicePixelRatio || 1, 2);
+  if (w !== W || h !== H || d !== dpr || cv.width !== Math.round(w * d) || cv.height !== Math.round(h * d)) {
+    const wasW = W, wasH = H; layout();
+    if ((wasW > wasH) !== (W > H) && !demoMode) camReset(false);   // turned the phone: fit the city to the new shape
+  }
+}
 function layout() {
   const stage = $('stage'), r = stage.getBoundingClientRect();
   W = Math.max(320, Math.round(r.width)); H = Math.max(320, Math.round(r.height));
@@ -9210,7 +9226,7 @@ function layout() {
 /* ----------------------------------------------------------------- loop */
 let last = 0, accHud = 0, accMini = 0, accIns = 0, accLife = 0, accLifeSave = 0;
 const SIM_STEP = 1 / 30;
-let simAcc = 0;
+let simAcc = 0, fitCheck = 0;
 /* Smooth motion: the city moves in steps of 1/30 s, but the screen draws more often than that. Vehicles are drawn
    part way between their last two positions, so they glide at every speed instead of stepping. (Something that
    jumped, like a car towed or parked in one go, is simply drawn where it is.) */
@@ -9247,6 +9263,7 @@ function frame(now) {
   rollHud();
   stepFX(real);
   if (demoMode) demoCam(real); else camUpdate(real);
+  fitCheck += real; if (fitCheck > 0.25) { fitCheck = 0; fitStage(); }
   drawBetween(alpha);
   accHud += real; accMini += real; accIns += real;
   if (accHud > 0.2) { accHud = 0; refreshHud(); musicTick(); }

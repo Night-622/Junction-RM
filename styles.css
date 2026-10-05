@@ -1802,3 +1802,4 @@ ol.board li.click:hover{background:rgba(var(--ov),.09)}
 .fr-res{font-size:11.5px;padding:4px 10px;border-radius:99px;background:rgba(var(--ov),.08)}
 .fr-res.r-won{background:rgba(72,224,138,.18)}.fr-res.r-lost{background:rgba(255,111,97,.18)}
 .frmain .frhead{justify-content:flex-start}.frhead-t{text-align:left}
+.mm-chat-badge[hidden],.tabbadge[hidden]{display:none!important}
