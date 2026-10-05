@@ -2256,7 +2256,7 @@ function checkTutorial() {
   if (tutStage === 0 && !tutFollowDone) {                // the first trip: follow a red car out and back
     const c = cars.find(x => x.color === 0 && (x.state === 'driving' || x.state === 'exiting') && x.job === 'fetch');
     if (c && !(sel && sel.ref === c)) { sel = {type: 'car', ref: c}; follow = true; cam.auto = false; toast(tcol('Watch this red car: it drives to the store, loads a parcel, and brings it home. That\u2019s one delivery.'), 'tip'); }
-    if (stats.delivered >= 1) { tutFollowDone = true; follow = false; cam.auto = true; closeInspector(); toast('Delivered! +1 point and cash. Each parcel delivered also earns towards Junc Bucks (#).', 'good'); }
+    if (stats.delivered >= 1) { tutFollowDone = true; follow = false; cam.auto = true; closeInspector(); toast('Delivered! +1 point and cash. Each parcel delivered also earns towards Junc Bucks (◎).', 'good'); }
   }
   if (tutStage < TUT_STEPS.length) {
     let st = null; try { st = tutStatus(); } catch (e) { console.error(e); st = {ok: false}; }
@@ -2292,7 +2292,7 @@ const TI_CARDS = [
   {t: 'Houses send cars', b: 'Houses send their cars to fetch parcels from stores of the <b>same colour</b>, then bring them home. Each parcel delivered scores a point and pays cash.'},
   {t: 'You draw the roads', b: 'Drag to lay road. Houses connect on any side; stores only at the <b>ends of their car park</b> (the white arrows). Some stores open at both ends, some at one.'},
   {t: 'Keep traffic moving', b: 'Where roads cross, cars take turns. Lights, roundabouts, signs, one-way streets and motorways stop jams before they start.'},
-  {t: 'Grow, earn and customise', b: 'Each week the map grows and you pick a reward. Upgrade cars, stores and junctions with cash. Every 10 parcels earns a Junc Buck (#) to spend on looks in the Store.'}
+  {t: 'Grow, earn and customise', b: 'Each week the map grows and you pick a reward. Upgrade cars, stores and junctions with cash. Every 3 parcels earn 2 ◎ coins to spend on looks in the Store.'}
 ];
 let tiCard = 0, tiRaf = 0, tiT0 = 0;
 function openTutIntro() {
@@ -7244,12 +7244,13 @@ function setCusTab(t) {
 }
 /* what's new, sliding by above the weekly tile */
 const NEWS = [
+  {tag: 'New credits', title: '◎ coins and ✦ stars', text: 'Everyone starts fresh: 2 ◎ for every 3 parcels, and ✦ stars from Frantic cities.', go: 'store', art: ['store', 'golden']},
   {tag: 'New mode', title: 'ISO 1v1', text: 'Challenge a player: live side by side, or a daily duel scored category by category.', go: 'iso', art: ['car', 'rainbowstripe']},
   {tag: 'New designs', title: 'Hundreds of new designs', text: 'At least 36 of everything: cars, houses, roads, stores, lights, roundabouts, bridges, motorways, themes, maps, decorations and panel styles.', go: 'store', art: ['car', 'tidal']},
   {tag: 'Collection', title: 'Track your collection', text: 'See everything you own and how to get the rest, in Customise and Account.', go: 'coll', art: ['house', 'observatory']},
   {tag: 'Weekly', title: 'See this week\u2019s map', text: 'A seed makes the same map for everyone. Look it over before you play.', go: 'weekly', art: 'seed'},
   {tag: 'Crates', title: 'Mystery crates', text: 'Colour, item and object crates hold unique designs the Store never sells.', go: 'store', art: ['store', 'golden']},
-  {tag: 'Store', title: 'Fresh stock every hour', text: '6 items and 6 colours each hour, and a daily special for R#.', go: 'store', art: ['moto', 'galaxy']}
+  {tag: 'Store', title: 'Fresh stock every hour', text: '6 items and 6 colours each hour, and a daily special for ✦.', go: 'store', art: ['moto', 'galaxy']}
 ];
 let newsAt = 0, newsHover = false;
 function renderNews() {
@@ -8194,16 +8195,17 @@ function loadModes() {
   modeBusy = false; rememberMode();
 }
 
-/* ------------------------------------------------ Junc Bucks (#), the Store and what you own
+/* ------------------------------------------------ Junc Bucks (◎) and stars (✦), the Store and what you own
    Every 10 parcels delivered, in any city, earns one Junc Buck. They buy interface themes, panel styles, map themes,
    decorations, designs for cars, houses, roads, stores, traffic lights, roundabouts and bridges, and colours, one
    colour at a time. A colour can also be hired for 3 hours. Buying takes two taps, so nothing goes by accident.
    The standard light and dark looks and the colour-blind colour modes are always free. Saved on this browser. */
 const SHOP_KEY = 'junction-shop-v1', HIRE_PRICE = 150, HIRE_MS = 3 * 3600 * 1000;
-const BUCKS_PER = 3, R_PER = 1;                        // # for every parcel delivered; R# for every parcel in a Frantic city
+const CUR = '◎', RCUR = '✦';                     // the credits' symbols: ◎ coins, ✦ stars (rare, from Frantic cities)
+const PARCELS_PER_BUCK = 3, BUCKS_EACH = 2, R_PER = 1;  // 2 ◎ for every 3 parcels delivered; ✦ for every parcel in a Frantic city
 /* prices are written on the old scale (25-90) and stretched onto today's: standard #500-700, rare #750-1000 */
 const newPrice = p => p <= 40 ? 500 + Math.round((p - 25) / 15 * 200 / 25) * 25 : Math.min(1000, 750 + Math.round((p - 45) / 45 * 250 / 25) * 25);
-/* [name, price, currency] — currency 'R' means R# (rare bucks, only from Frantic games): the super-rare few */
+/* [name, price, currency] — currency 'R' means ✦ (rare bucks, only from Frantic games): the super-rare few */
 const DESIGNS = {
   car:    {label: 'Car designs', one: 'car design', items: {standard: ['Standard', 0], twotone: ['Two-tone', 35], checker: ['Checker band', 35], livery: ['Racing livery', 40],
            retro: ['Retro chrome', 40], flames: ['Flames', 45], camo: ['Camo', 40], pastel: ['Pastel', 35], neon: ['Neon underglow', 60], gold: ['Gold plated', 30, 'R'], champion: ['Champion', 0, 'A', 'p1000']}},
@@ -8219,7 +8221,7 @@ const DESIGNS = {
            brick: ['Brick arch', 35], glass: ['Glass', 45], suspension: ['Suspension', 55], rainbow: ['Rainbow', 30, 'R'], covered: ['Covered', 0, 'A', 'cities10']}},
   moto:   {label: 'Motorway designs', one: 'motorway design', items: {standard: ['Blue deck', 0], concrete: ['Concrete', 30], ivy: ['Ivy', 35], lights: ['Night lights', 40], sunset: ['Sunset', 45], glass: ['Glass', 45], rainbow: ['Rainbow', 30, 'R'], skyline: ['Skyline', 0, 'A', 'moto3']}}
 };
-/* v1.9: new designs. 'U' is unique (only from mystery crates); 'R' items are the daily specials, priced in R# */
+/* v1.9: new designs. 'U' is unique (only from mystery crates); 'R' items are the daily specials, priced in ✦ */
 Object.assign(DESIGNS.car.items, {police: ['Police', 60], galaxy: ['Galaxy', 0, 'U']});
 Object.assign(DESIGNS.house.items, {mushroom: ['Mushroom house', 0, 'U']});
 Object.assign(DESIGNS.road.items, {marble: ['Marble', 55], lava: ['Lava flow', 0, 'U']});
@@ -8362,7 +8364,7 @@ for (const g of COLOR_LIBRARY) g.cols.forEach(([n, h, pr], i) => {
 });
 const colourName = hex => LIB_NAME[hex] || hueName(hex);
 const colourPrice = hex => hex in COLOUR_PRICE ? COLOUR_PRICE[hex] : 700;
-let jb = {v: 3, bucks: 0, toward: 0, rbucks: 0, rtoward: 0, owned: {}, hired: {}, designs: {}, rot: null, daily: null}, jbFirstRun = false, buyPending = null;
+let jb = {v: 4, bucks: 0, toward: 0, rbucks: 0, rtoward: 0, owned: {}, hired: {}, designs: {}, rot: null, daily: null}, jbFirstRun = false, buyPending = null;
 const design = cat => (jb.designs && DESIGNS[cat] && DESIGNS[cat].items[jb.designs[cat]]) ? jb.designs[cat] : 'standard';
 const storeDesign = () => design('store');
 function itemInfo(id) {                                // [price, name] for anything that can be bought
@@ -8397,8 +8399,8 @@ function loadShop() {
     let refund = 0; for (const k in OLD) if (old[k]) refund += OLD[k];
     jb.bucks += refund; jb.migrateColours = true; if (refund) jb.refunded = refund;
   }
-  if ((d.v || 0) < 3) { jb.bucks *= 15; jb.rbucks *= 5; jb.rescaled = true; }   // prices went up about 15 times: balances follow
-  jb.v = 3;
+  if ((d.v || 0) < 4) { jb.bucks = 0; jb.rbucks = 0; jb.toward = 0; jb.resetNote = true; }   // v1.13: credits reset for everyone, with new symbols (◎ and ✦)
+  jb.v = 4;
 }
 /* the first time this version runs, anything already in use stays yours */
 function grantInUse() {
@@ -8412,21 +8414,24 @@ function grantInUse() {
     for (const L of looks) { for (const f of ['plate', 'btn', 'accent']) giveC(L.ui[f]); for (const f of ['land', 'patch', 'water', 'road', 'moto']) giveC(L.map[f]); }
     if (colorMode === 'custom') customHex.forEach(giveC);
   }
-  if (jb.refunded) setTimeout(() => toast('Colours are now bought one at a time — your colour-picker unlocks were refunded: +#' + jb.refunded, 'good'), 1500);
+  if (jb.refunded) setTimeout(() => toast('Colours are now bought one at a time — your colour-picker unlocks were refunded: +◎' + jb.refunded, 'good'), 1500);
   delete jb.migrateColours; delete jb.refunded; jbFirstRun = false; saveShop();
 }
 function earnBucks(n, at) {
-  const got = n * BUCKS_PER, rgot = diffKey === 'frantic' && !tutorialMode ? n * R_PER : 0;   // R# (rare bucks) only come from Frantic cities
-  if (got) { jb.bucks += got; if (at) popText(bX(at), bY(at) - 38, '+' + got + ' #', '#ffd23a'); bump('v-jb'); }
-  if (rgot) { jb.rbucks += rgot; if (at) popText(bX(at), bY(at) - 52, '+' + rgot + ' R#', '#d58cff'); }
+  jb.toward = (jb.toward || 0) + n; let got = 0;
+  while (jb.toward >= PARCELS_PER_BUCK) { jb.toward -= PARCELS_PER_BUCK; got += BUCKS_EACH; }
+  const rgot = diffKey === 'frantic' && !tutorialMode ? n * R_PER : 0;   // ✦ (rare bucks) only come from Frantic cities
+  if (got) { jb.bucks += got; if (at) popText(bX(at), bY(at) - 38, '+' + got + ' ' + CUR, '#ffd23a'); bump('v-jb'); }
+  if (rgot) { jb.rbucks += rgot; if (at) popText(bX(at), bY(at) - 52, '+' + rgot + ' ' + RCUR, '#d58cff'); }
   saveShop(); renderBucks();
 }
 function renderBucks() {
   const set = (id, t) => { const e = $(id); if (e && e.textContent !== t) e.textContent = t; };
-  const b = '#' + jb.bucks.toLocaleString('en-US');
-const r = 'R#' + jb.rbucks;
-  set('mm-bucks', b); set('mm-rbucks', r); set('mm-store-bal', b + ' Junc Bucks · ' + r);
-  set('v-jb', b); set('v-jbnext', r); set('jb-bal', b + ' Junc Bucks · ' + r); set('jb-pill', b + ' · ' + r); set('cust-bal', b + ' · ' + r);
+  const b = CUR + jb.bucks.toLocaleString('en-US');
+  const r = RCUR + jb.rbucks;
+  const nx = jb.toward + '/' + PARCELS_PER_BUCK;
+  set('mm-bucks', b); set('mm-rbucks', r); set('mm-next', nx); set('mm-store-bal', b + ' Junc Bucks · ' + r);
+  set('v-jb', b); set('v-jbnext', r + ' · ' + nx); set('jb-bal', b + ' Junc Bucks · ' + r); set('jb-pill', b + ' · ' + r); set('cust-bal', b + ' · ' + r);
 }
 const fmtLeft = ms => { const m = Math.ceil(ms / 60000); return m >= 60 ? Math.floor(m / 60) + 'h ' + (m % 60) + 'm' : m + 'm'; };
 /* two taps: the first asks, the second spends. kind is 'buy' or 'hire' (colours only) */
@@ -8437,22 +8442,22 @@ function purchase(id, kind, fn) {
   if (info[2] === 'U') { hint(name + ' is unique — it only comes out of mystery crates in the Store.'); return; }
   if (!inStock(id)) { hint(name + ' isn’t in the Store right now. The Store restocks every hour (new stock in ' + fmtLeft(HOUR_MS - Date.now() % HOUR_MS) + ')' + (info[2] === 'R' ? ' and has one special item a day.' : '.') + ' Crates can have it too.'); buyPending = null; renderLook(); return; }
   const price = kind === 'hire' ? HIRE_PRICE : info[0], rare = kind !== 'hire' && info[2] === 'R';
-  const sym = rare ? 'R#' : '#', have = rare ? jb.rbucks : jb.bucks;
+  const sym = rare ? RCUR : CUR, have = rare ? jb.rbucks : jb.bucks;
   if (have < price) {
-    hint(name + (kind === 'hire' ? ' costs #' + HIRE_PRICE + ' to hire' : ' costs ' + sym + price) + ' — you have ' + sym + have + '. ' +
-      (rare ? 'R# (rare bucks) only come from Frantic cities: one for every parcel.' : 'Every parcel you deliver earns ' + BUCKS_PER + ' #.'));
+    hint(name + (kind === 'hire' ? ' costs ◎' + HIRE_PRICE + ' to hire' : ' costs ' + sym + price) + ' — you have ' + sym + have + '. ' +
+      (rare ? '✦ (rare bucks) only come from Frantic cities: one for every parcel.' : 'You earn ' + BUCKS_EACH + ' ◎ for every ' + PARCELS_PER_BUCK + ' parcels delivered.'));
     buyPending = null; renderLook(); return;
   }
   const nowMs = performance.now();
   if (!buyPending || buyPending.id !== id || buyPending.kind !== kind || nowMs - buyPending.t > 4000) {
     buyPending = {id, kind, t: nowMs};
-    hint((kind === 'hire' ? 'Hire ' + name + ' for 3 hours for #' + HIRE_PRICE : 'Buy ' + name + ' for ' + sym + price) + '? Tap again to confirm.');
+    hint((kind === 'hire' ? 'Hire ' + name + ' for 3 hours for ◎' + HIRE_PRICE : 'Buy ' + name + ' for ' + sym + price) + '? Tap again to confirm.');
     renderLook();
     setTimeout(() => { if (buyPending && buyPending.id === id && performance.now() - buyPending.t >= 4000) { buyPending = null; renderLook(); } }, 4100);
     return;
   }
   buyPending = null; if (rare) jb.rbucks -= price; else jb.bucks -= price;
-  if (kind === 'hire') { jb.hired[id] = Math.max(Date.now(), jb.hired[id] || 0) + HIRE_MS; toast('Hired ' + name + ' for 3 hours (#' + HIRE_PRICE + ')', 'good'); }
+  if (kind === 'hire') { jb.hired[id] = Math.max(Date.now(), jb.hired[id] || 0) + HIRE_MS; toast('Hired ' + name + ' for 3 hours (◎' + HIRE_PRICE + ')', 'good'); }
   else { jb.owned[id] = 1; delete jb.hired[id]; toast('Bought ' + name + ' for ' + sym + price, 'good'); }
   saveShop(); sfx('upgrade'); renderBucks(); if (fn) fn(); renderLook();
 }
@@ -8475,7 +8480,7 @@ function checkHires() {
 }
 setInterval(() => { if (typeof jb !== 'undefined') { checkHires(); if (!$('menu').hidden || !$('cust-panel').hidden || (!$('m-start').hidden && mmPane === 'store')) renderLook(true); } }, 15000);
 
-/* ---- the hourly Store: 6 items and 6 colours every hour, one special item (R#) a day, and three mystery crates.
+/* ---- the hourly Store: 6 items and 6 colours every hour, one special item (✦) a day, and three mystery crates.
    Each hour's stock is shuffled from the hour itself, so everyone's Store is alike, with things you don't own first. */
 const HOUR_MS = 3600e3, DAY_MS = 86400e3;
 const RARITY = {standard: 'Standard', rare: 'Rare', unique: 'Unique', special: 'Special', ach: 'Achievement'};
@@ -8514,10 +8519,10 @@ function openCrate(kind, sure) {
   if (!crateLeft(kind)) { hint('You’ve opened ' + CRATE_MAX + ' ' + C.name.toLowerCase() + 's this hour. More in ' + fmtLeft(HOUR_MS - Date.now() % HOUR_MS) + '.'); return false; }
   const left = crateNew(kind);
   if (!left.length) { hint('You already own everything a ' + C.name.toLowerCase() + ' can hold.'); return false; }
-  if (jb.bucks < C.price) { hint(C.name + 's cost #' + C.price + ' — you have #' + jb.bucks + '. Every parcel you deliver earns ' + BUCKS_PER + ' #.'); return false; }
+  if (jb.bucks < C.price) { hint(C.name + 's cost ◎' + C.price + ' — you have ◎' + jb.bucks + '. You earn ' + BUCKS_EACH + ' ◎ for every ' + PARCELS_PER_BUCK + ' parcels delivered.'); return false; }
   const nowMs = performance.now(), pid = 'crate:' + kind;
   if (!sure && (!buyPending || buyPending.id !== pid || nowMs - buyPending.t > 4000)) {
-    buyPending = {id: pid, kind: 'buy', t: nowMs}; hint('Open a ' + C.name.toLowerCase() + ' for #' + C.price + '? Tap again to confirm.'); renderLook();
+    buyPending = {id: pid, kind: 'buy', t: nowMs}; hint('Open a ' + C.name.toLowerCase() + ' for ◎' + C.price + '? Tap again to confirm.'); renderLook();
     setTimeout(() => { if (buyPending && buyPending.id === pid && performance.now() - buyPending.t >= 4000) { buyPending = null; renderLook(); } }, 4100);
     return false;
   }
@@ -8554,7 +8559,7 @@ function showCrate(kind, id) {
     const it = shopItemById(id);
     $('crate-use').hidden = !(it && it.apply);
     const more = crateLeft(kind) && crateNew(kind).length && jb.bucks >= CRATES[kind].price;
-    $('crate-again').hidden = !more; $('crate-again').textContent = 'Open another · #' + CRATES[kind].price + ' (' + crateLeft(kind) + ' left this hour)';
+    $('crate-again').hidden = !more; $('crate-again').textContent = 'Open another · ◎' + CRATES[kind].price + ' (' + crateLeft(kind) + ' left this hour)';
     sfx('upgrade');
   }, REDUCED_MOTION ? 200 : 1300);
 }
@@ -8576,8 +8581,8 @@ function howToGet(id) {
   if (owns(id)) return 'Owned';
   if (i[2] === 'A') return '\ud83c\udfc6 ' + achName(i[3]);
   if (i[2] === 'U') return 'Crates only';
-  if (i[2] === 'R') return 'Daily special \u00b7 R#' + i[0];
-  return (inStock(id) ? 'In the Store now \u00b7 #' : 'Store or crates \u00b7 #') + i[0];
+  if (i[2] === 'R') return 'Daily special \u00b7 ✦' + i[0];
+  return (inStock(id) ? 'In the Store now \u00b7 ' + CUR : 'Store or crates \u00b7 ' + CUR) + i[0];
 }
 function renderCollection(box) {
   if (!box) return;
@@ -8613,23 +8618,23 @@ function renderStore(box, light) {
   ensureRotation();
   const keepScroll = box.scrollTop, canvases = [], now = Date.now();
   const tLeft = fmtLeft(HOUR_MS - now % HOUR_MS), dLeft = fmtLeft(DAY_MS - now % DAY_MS);
-  const parts = ['<div class="st-head"><div><b>New stock in ' + tLeft + '</b><small>Every hour: 6 items, 6 colours and 3 of each crate. Every parcel earns ' + BUCKS_PER + ' #.</small></div><span class="st-bal num">#' + jb.bucks.toLocaleString('en-US') + ' <i>·</i> <span class="rtag">R#' + jb.rbucks + '</span></span></div>'];
-  if (jb.rescaled) { parts.push('<p class="mnote st-note">Prices have gone up, so your balance was scaled up to match: every # you had is now #15, and every R# is R#5.</p>'); delete jb.rescaled; saveShop(); }
+  const parts = ['<div class="st-head"><div><b>New stock in ' + tLeft + '</b><small>Every hour: 6 items, 6 colours and 3 of each crate. ' + BUCKS_EACH + ' ◎ for every ' + PARCELS_PER_BUCK + ' parcels.</small></div><span class="st-bal num">' + CUR + jb.bucks.toLocaleString('en-US') + ' <i>·</i> <span class="rtag">✦' + jb.rbucks + '</span></span></div>'];
+  if (jb.resetNote) { parts.push('<p class="mnote st-note">New credits! Everyone\u2019s balance started again from zero with new symbols: ◎ coins (2 for every 3 parcels) and ✦ stars (1 for every parcel in Frantic cities). Everything you own is still yours.</p>'); delete jb.resetNote; saveShop(); }
   parts.push('<h3 class="shop-h">Mystery crates <small>' + CRATE_MAX + ' of each per hour · 70% standard · 25% rare · 5% unique · never something you own</small></h3><div class="crates">' +
     Object.keys(CRATES).map(k => {
       const C = CRATES[k], n = crateLeft(k), none = !crateNew(k).length, conf = buyPending && buyPending.id === 'crate:' + k;
       return '<button type="button" class="crate-s k-' + k + (n && !none ? '' : ' spent') + '" data-act="crate" data-kind="' + k + '"><span class="crate-ico"><i></i></span><b>' + C.name + '</b><small>' + C.holds + '</small>' +
-        '<span class="crate-foot"><span class="lock' + (conf ? ' confirm' : '') + '">' + (conf ? 'Tap to open' : '#' + C.price) + '</span><em>' + (none ? 'All owned' : n + ' of ' + CRATE_MAX + ' left') + '</em></span></button>';
+        '<span class="crate-foot"><span class="lock' + (conf ? ' confirm' : '') + '">' + (conf ? 'Tap to open' : CUR + C.price) + '</span><em>' + (none ? 'All owned' : n + ' of ' + CRATE_MAX + ' left') + '</em></span></button>';
     }).join('') + '</div>');
   const sp = jb.daily.id && shopItemById(jb.daily.id);
-  if (sp) parts.push('<h3 class="shop-h">Daily special <small>costs R#, from Frantic cities · a new one in ' + dLeft + '</small></h3><div class="shopgrid st-items st-special">' + storeCard(sp, canvases) + '</div>');
+  if (sp) parts.push('<h3 class="shop-h">Daily special <small>costs ✦, from Frantic cities · a new one in ' + dLeft + '</small></h3><div class="shopgrid st-items st-special">' + storeCard(sp, canvases) + '</div>');
   parts.push('<h3 class="shop-h">This hour’s items</h3><div class="shopgrid st-items">' + jb.rot.items.map(shopItemById).filter(Boolean).map(it => storeCard(it, canvases)).join('') + '</div>');
-  parts.push('<h3 class="shop-h">This hour’s colours <small>buy to keep, or hire for 3 hours for #' + HIRE_PRICE + '</small></h3><div class="shopgrid colours">' + jb.rot.cols.map(id => {
+  parts.push('<h3 class="shop-h">This hour’s colours <small>buy to keep, or hire for 3 hours for ◎' + HIRE_PRICE + '</small></h3><div class="shopgrid colours">' + jb.rot.cols.map(id => {
     const h = id.slice(7), r = rarityOf(id), left = hiredLeft(id), own = !!jb.owned[id], name = colourName(h);
     return '<div class="colcard st-col r-' + r + '"><span class="csw" style="background:' + h + '"></span><em class="rar r-' + r + '">' + RARITY[r] + '</em><b>' + name + '</b>' + (left && !own ? '<small class="hired">Hired · ' + fmtLeft(left) + ' left</small>' : '') +
       (own ? '<span class="using">Owned</span>' : '<span class="colbtns"><button type="button" data-act="buy" data-id="' + id + '">' + priceTag(id, colourPrice(h)) + '</button><button type="button" data-act="hire" data-id="' + id + '">' + priceTag(id, colourPrice(h), 'hire') + '</button></span>') + '</div>';
   }).join('') + '</div>');
-  parts.push('<p class="mnote">Standard items cost #500–700 and rare ones #750–1000. Unique items only come out of crates. 🏆 items still unlock with achievements.</p>');
+  parts.push('<p class="mnote">Standard items cost ◎500–700 and rare ones ◎750–1000. Unique items only come out of crates. 🏆 items still unlock with achievements.</p>');
   const html = parts.join('');
   if (light && box._shopKey === 'st' + html.length) return;
   box._shopKey = 'st' + html.length;
@@ -8734,9 +8739,9 @@ const SHOP_CATS = [['ui', 'Interface themes'], ['style', 'Panel styles'], ['map'
   ['road', 'Road designs'], ['store', 'Store designs'], ['light', 'Traffic light designs'], ['round', 'Roundabout designs'], ['bridge', 'Bridge designs'], ['moto', 'Motorway designs'], ['colour', 'Colours']];
 function priceTag(id, price, kind) {
   const conf = buyPending && buyPending.id === id && buyPending.kind === (kind || 'buy'), info = itemInfo(id), rare = !!info && info[2] === 'R' && kind !== 'hire';
-  if (kind === 'hire') return '<span class="lock hire' + (conf ? ' confirm' : '') + '">' + (conf ? 'Tap to hire' : 'Hire 3h #' + HIRE_PRICE) + '</span>';
+  if (kind === 'hire') return '<span class="lock hire' + (conf ? ' confirm' : '') + '">' + (conf ? 'Tap to hire' : 'Hire 3h ◎' + HIRE_PRICE) + '</span>';
   if (info && info[2] === 'A') return '<span class="lock ach" title="' + achName(info[3]) + '">\ud83c\udfc6 ' + achName(info[3]) + '</span>';
-  return '<span class="lock' + (rare ? ' rare' : '') + (conf ? ' confirm' : '') + '">' + (conf ? 'Tap to buy' : rare ? '★ R#' + price : '#' + price) + '</span>';
+  return '<span class="lock' + (rare ? ' rare' : '') + (conf ? ' confirm' : '') + '">' + (conf ? 'Tap to buy' : rare ? '★ ' + RCUR + price : CUR + price) + '</span>';
 }
 /* one list for all three views: 'store' (things to buy), 'owned' (things to wear) and 'quick' (the Customise drawer) */
 function renderShop(box, mode, light) {
@@ -8767,7 +8772,7 @@ function renderShop(box, mode, light) {
     const sell = cols.filter(c => !jb.owned[c.id]);
     if (sell.length) {
       const groups = [...new Set(sell.map(c => c.group))];
-      parts.push('<h3 class="shop-h">Colours <small>buy to keep, or hire for 3 hours for #' + HIRE_PRICE + '</small></h3>' + groups.map(gn => '<h5 class="shop-sub">' + gn + '</h5><div class="shopgrid colours">' +
+      parts.push('<h3 class="shop-h">Colours <small>buy to keep, or hire for 3 hours for ◎' + HIRE_PRICE + '</small></h3>' + groups.map(gn => '<h5 class="shop-sub">' + gn + '</h5><div class="shopgrid colours">' +
         sell.filter(c => c.group === gn).map(c => {
           const left = hiredLeft(c.id);
           return '<div class="colcard' + (c.rare ? ' rare' : '') + '"><span class="csw" style="background:' + c.hex + '"></span><b>' + c.name + '</b>' + (left ? '<small class="hired">Hired · ' + fmtLeft(left) + ' left</small>' : '') +
@@ -9078,24 +9083,43 @@ function layout() {
 let last = 0, accHud = 0, accMini = 0, accIns = 0, accLife = 0, accLifeSave = 0;
 const SIM_STEP = 1 / 30;
 let simAcc = 0;
+/* Smooth motion: the city moves in steps of 1/30 s, but the screen draws more often than that. Vehicles are drawn
+   part way between their last two positions, so they glide at every speed instead of stepping. (Something that
+   jumped, like a car towed or parked in one go, is simply drawn where it is.) */
+const MOVERS = () => [cars, trucks, ambs];
+function snapPrev() { for (const L of MOVERS()) for (const o of L) { o.px = o.x; o.py = o.y; o.pa = o.ang; } }
+function drawBetween(alpha) {
+  const moved = [];
+  if (alpha < 1) for (const L of MOVERS()) for (const o of L) {
+    if (o.px === undefined) continue;
+    const dx = o.x - o.px, dy = o.y - o.py;
+    if ((dx || dy || o.ang !== o.pa) && dx * dx + dy * dy < 1600) {
+      moved.push([o, o.x, o.y, o.ang]);
+      o.x = o.px + dx * alpha; o.y = o.py + dy * alpha; o.ang = o.pa + angDiff(o.pa, o.ang) * alpha;
+    }
+  }
+  try { draw(); } finally { for (const [o, x, y, a] of moved) { o.x = x; o.y = y; o.ang = a; } }
+}
 function frame(now) {
   requestAnimationFrame(frame);
   const real = Math.min(0.1, (now - last) / 1000); last = now;
   animT += real;
+  let alpha = 1;
   if (running && !over && started && (!modalOpen || demoMode || isoLive())) {     // the menu's background city keeps playing behind it (and a live match never waits)
     simAcc += real * speed;
     let n = 0;
     while (simAcc >= SIM_STEP && n < 12) {
-      update(SIM_STEP); simAcc -= SIM_STEP; n++;
+      snapPrev(); update(SIM_STEP); simAcc -= SIM_STEP; n++;
       if (over || !running) { simAcc = 0; break; }
     }
     if (n === 12) simAcc = 0;                 // drop a backlog after a long stall rather than freeze
+    if (running && !over) alpha = clamp(simAcc / SIM_STEP, 0, 1);
   }
   if (tutorialMode && started && !spectating) { tutCheckT += real; if (tutCheckT > 0.35) { tutCheckT = 0; checkTutorial(); } }
   rollHud();
   stepFX(real);
   if (demoMode) demoCam(real); else camUpdate(real);
-  draw();
+  drawBetween(alpha);
   accHud += real; accMini += real; accIns += real;
   if (accHud > 0.2) { accHud = 0; refreshHud(); musicTick(); }
   if (accMini > 0.25) { accMini = 0; drawMini(); }
