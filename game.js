@@ -11744,7 +11744,7 @@ cityPicture = function (cv2) { distOff = true; try { return _cP62(cv2); } finall
    strolls along the pavement (roadWidth/2 + 3 off the centre line), turns onto a random lane at junctions and leaves
    after 20-40 s. Off when decoration is below 0.6 or the camera is too far out to see them. Math.random, never
    rand(): the seeded expert sim must not notice them. */
-function pedsOn() { return gfx.decor >= 0.6 && cam.z >= 0.8 && !spectating; }
+function pedsOn() { return false; }   // 2.3.1: the walking pavement dots are switched off
 function pedSpawn(p) {
   let h = null;
   for (let tries = 0; tries < 4 && !h; tries++) { const b = buildings[Math.floor(Math.random() * buildings.length)]; if (b && b.type === 'house' && b.acc >= 0 && nodes[b.acc]) h = b; }

@@ -1,5 +1,5 @@
-# Junction: on every push to main, run the browser test suite, then deploy hosting and Firestore rules.
-# Cloud Functions are deployed by hand: firebase deploy --only functions --project junction-rm
+# Junction: on every push to main, run the browser test suite, then deploy hosting.
+# Rules and functions are deployed by hand: firebase deploy --only firestore,functions --project junction-rm
 name: Test and deploy
 on:
   push:
@@ -36,9 +36,3 @@ jobs:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JUNCTION_RM }}
           channelId: live
           projectId: junction-rm
-      - name: Deploy rules and indexes
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS: /tmp/sa.json
-        run: |
-          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_JUNCTION_RM }}' > /tmp/sa.json
-          npx firebase-tools@13 deploy --only firestore --project junction-rm --non-interactive --force
