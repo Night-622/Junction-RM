@@ -280,6 +280,7 @@ const CHANGELOG = [
     'Time-lapse replays: every city is recorded day by day. Watch it back with a cinematic camera or export a video.',
     'Map editor: paint water, place stores and houses, set rules and a goal, then publish with a code. Browse, like and play community maps, each with its own leaderboard.',
     'Living cities: houses grow into blocks and towers, stores into malls, named districts, pedestrians, weather that affects traffic, and streetlights at night.',
+    'Coins are now 1 ◎ for every 2 parcels delivered.',
     'Behind the scenes: automated browser tests on every push, server checks on leaderboard scores and match results, error reporting, and rules deployed from GitHub.']},
   {v: '2.2.1', date: 'October 5, 2026', items: [
     'A pause menu on Esc: stats so far, restart, settings, how to play, and save & quit. You can keep building while paused.',
@@ -2464,7 +2465,7 @@ const TI_CARDS = [
   {t: 'You draw the roads', b: 'Drag to lay road. Houses join on any side; stores only at the <b>ends of their car park</b> (the white arrows); some open at both ends, some at one. Road tiles are limited: you get more each week. Ctrl+Z undoes, and the Erase tool (E) removes road.'},
   {t: 'Keep traffic moving', b: 'Where roads cross, cars take turns. Traffic lights, roundabouts, turn signs, one-way streets and motorways each fix a different kind of jam. You\u2019ll try every one of them in this tutorial.'},
   {t: 'Weeks and rewards', b: 'Each week the map grows and new stores and houses appear. When a week ends you pick one reward: extra roads plus a perk, a bridge, a light, a roundabout or another tool. Plan for the traffic that\u2019s coming, not just what\u2019s there.'},
-  {t: 'Cash, \u25ce coins and \u2726 stars', b: '<b>Cash</b> is earned in each city and spent there on cars, upgrades and the Shop. <b>\u25ce coins</b> (2 for every 3 parcels) stay with you between cities and buy looks in the Store. <b>\u2726 stars</b> come only from Frantic cities and buy the daily special.'},
+  {t: 'Cash, \u25ce coins and \u2726 stars', b: '<b>Cash</b> is earned in each city and spent there on cars, upgrades and the Shop. <b>\u25ce coins</b> (1 for every 2 parcels) stay with you between cities and buy looks in the Store. <b>\u2726 stars</b> come only from Frantic cities and buy the daily special.'},
   {t: 'Getting around', b: 'Scroll or pinch to zoom; right-drag, or hold Shift and drag, to move the map. Keys 1\u20139 pick tools, P pauses, and the speed buttons go from half to 3\u00d7. Tap anything with Inspect (key 1) to see what it\u2019s doing.'}
 ];
 let tiCard = 0, tiRaf = 0, tiT0 = 0;
@@ -8710,7 +8711,7 @@ function setCusTab(t) {
 /* what's new, sliding by above the weekly tile */
 const NEWS = [
   {tag: 'Update', title: 'What’s new in ' + VERSION, text: 'Pause menu, share cards, quality and accessibility settings, daily rewards, 50 of everything, and more.', go: 'whatsnew', art: ['store', 'golden']},
-  {tag: 'New credits', title: '◎ coins and ✦ stars', text: 'Everyone starts fresh: 2 ◎ for every 3 parcels, and ✦ stars from Frantic cities.', go: 'store', art: ['store', 'golden']},
+  {tag: 'New credits', title: '◎ coins and ✦ stars', text: 'Everyone starts fresh: 1 ◎ for every 2 parcels, and ✦ stars from Frantic cities.', go: 'store', art: ['store', 'golden']},
   {tag: 'New mode', title: 'ISO 1v1', text: 'Challenge a player: live side by side, or a daily duel scored category by category.', go: 'iso', art: ['car', 'rainbowstripe']},
   {tag: 'New designs', title: 'Hundreds of new designs', text: 'At least 36 of everything: cars, houses, roads, stores, lights, roundabouts, bridges, motorways, themes, maps, decorations and panel styles.', go: 'store', art: ['car', 'tidal']},
   {tag: 'Collection', title: 'Track your collection', text: 'See everything you own and how to get the rest, in Customise and Account.', go: 'coll', art: ['house', 'observatory']},
@@ -9876,7 +9877,7 @@ function loadModes() {
    The standard light and dark looks and the colour-blind colour modes are always free. Saved on this browser. */
 const SHOP_KEY = 'junction-shop-v1', HIRE_PRICE = 150, HIRE_MS = 3 * 3600 * 1000;
 const CUR = '◎', RCUR = '✦';                     // the credits' symbols: ◎ coins, ✦ stars (rare, from Frantic cities)
-const PARCELS_PER_BUCK = 3, BUCKS_EACH = 2, R_PER = 1;  // 2 ◎ for every 3 parcels delivered; ✦ for every parcel in a Frantic city
+const PARCELS_PER_BUCK = 2, BUCKS_EACH = 1, R_PER = 1;  // 1 ◎ for every 2 parcels delivered; ✦ for every parcel in a Frantic city
 /* prices are written on the old scale (25-90) and stretched onto today's: standard #500-700, rare #750-1000 */
 const newPrice = p => p <= 40 ? 500 + Math.round((p - 25) / 15 * 200 / 25) * 25 : Math.min(1000, 750 + Math.round((p - 45) / 45 * 250 / 25) * 25);
 /* [name, price, currency] — currency 'R' means ✦ (rare bucks, only from Frantic games): the super-rare few */
@@ -10575,7 +10576,7 @@ function renderStore(box, light) {
   const keepScroll = box.scrollTop, canvases = [], now = Date.now();
   const tLeft = fmtLeft(HOUR_MS - now % HOUR_MS), dLeft = fmtLeft(DAY_MS - now % DAY_MS);
   const parts = ['<div class="st-head"><div><b>New stock in ' + tLeft + '</b><small>Every hour: 6 items, 6 colours and 3 of each crate. ' + BUCKS_EACH + ' ◎ for every ' + PARCELS_PER_BUCK + ' parcels.</small></div><span class="st-bal num">' + CUR + jb.bucks.toLocaleString('en-US') + ' <i>·</i> <span class="rtag">✦' + jb.rbucks + '</span></span></div>'];
-  if (jb.resetNote) { parts.push('<p class="mnote st-note">New credits! Everyone\u2019s balance started again from zero with new symbols: ◎ coins (2 for every 3 parcels) and ✦ stars (1 for every parcel in Frantic cities). Everything you own is still yours.</p>'); delete jb.resetNote; saveShop(); }
+  if (jb.resetNote) { parts.push('<p class="mnote st-note">New credits! Everyone\u2019s balance started again from zero with new symbols: ◎ coins (1 for every 2 parcels) and ✦ stars (1 for every parcel in Frantic cities). Everything you own is still yours.</p>'); delete jb.resetNote; saveShop(); }
   parts.push('<h3 class="shop-h">Mystery crates <small>' + CRATE_MAX + ' of each per hour · 70% standard · 25% rare · 5% unique · never something you own</small></h3><div class="crates">' +
     Object.keys(CRATES).map(k => {
       const C = CRATES[k], n = crateLeft(k), none = !crateNew(k).length, conf = buyPending && buyPending.id === 'crate:' + k;
@@ -11321,7 +11322,7 @@ const GUIDES = {
     {t: 'Top 3 and the map', b: 'The three best runs of the week sit on this pane; tap one to see that city. The seed map shows the whole map before you start, so you can plan your roads.'}
   ],
   store: [
-    {t: 'A fresh Store every hour', b: 'The Store restocks on the hour with <b>6 items and 6 colours</b>. You earn \u25ce coins in any city, 2 for every 3 parcels. Tap an item once for its price, again to buy.'},
+    {t: 'A fresh Store every hour', b: 'The Store restocks on the hour with <b>6 items and 6 colours</b>. You earn \u25ce coins in any city, 1 for every 2 parcels. Tap an item once for its price, again to buy.'},
     {t: 'The daily special', b: 'One special a day costs <b>\u2726 stars</b> instead of coins. Stars come only from <b>Frantic</b> cities, 1 for every parcel delivered.'},
     {t: 'Mystery crates', b: 'Crates hold a random colour, item or object, and can hold <b>unique</b> things that are never for sale. Colour \u25ce150, item \u25ce200, object \u25ce250, up to 3 of each per hour.'}
   ],
@@ -11452,7 +11453,7 @@ function drawGuide(t) {
       txt('6 items', W2 * 0.68 + 42, 136, 12, soft, 700);
       for (let j = 0; j < 6; j++) { const x = W2 * 0.68 - 8 + j * 25, c = ['#e0483e', '#2f7de1', '#43d17a', '#ffc933', '#8a5bff', '#ff6fb5'][(j + gen * 2) % 6]; dot(x, 168, 9, c); }
       txt('6 colours', W2 * 0.68 + 54, 192, 12, soft, 700);
-      pill('\u25ce 2 for every 3 parcels', W2 * 0.2, 214, plate, ink, 12);
+      pill('\u25ce 1 for every 2 parcels', W2 * 0.2, 214, plate, ink, 12);
     } else if (k === 'store' && i === 1) {                 // the star coin, a special tag, and where stars come from
       const y = H2 * 0.46 + bob, gr = g.createRadialGradient(W2 * 0.35 - 12, y - 12, 4, W2 * 0.35, y, 44); gr.addColorStop(0, '#efe0ff'); gr.addColorStop(1, '#9a6bff');
       for (let j = 0; j < 5; j++) { const a = t * 0.8 + j * 1.2566, r_ = 58 + Math.sin(t * 3 + j) * 4; dot(W2 * 0.35 + Math.cos(a) * r_, y + Math.sin(a) * r_ * 0.6, 3 + (j % 2), 'rgba(255,255,255,.7)'); }
