@@ -2271,3 +2271,23 @@ ol.board li.sel{box-shadow:inset 0 0 0 1px var(--accent)}
 .ci-list{display:grid;gap:6px;max-height:46vh;overflow:auto;margin-top:4px}
 .ci-row{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:10px;border:1px solid var(--line);background:rgba(var(--ov),.03)}
 .ci-row b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ci-row .mini{opacity:.8}
+
+
+/* ===== 24. Get the app (p66) ===== */
+.getcard{max-width:640px;max-height:calc(100dvh - 24px);overflow-y:auto;-webkit-overflow-scrolling:touch}
+.ga-now{margin:4px 0 12px;font-size:14px;line-height:1.5;color:var(--soft)}
+.ga-list{display:grid;gap:10px;margin-bottom:12px}
+.ga-card{padding:12px 14px;border-radius:14px;background:rgba(var(--ov),.04)}
+.ga-card.mine{background:rgba(var(--accent-rgb),.12);box-shadow:inset 0 0 0 1px rgba(var(--accent-rgb),.4)}
+.ga-card h3{margin:0 0 6px;font-size:15px}.ga-card h3 small{margin-left:6px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;opacity:.7}
+.ga-card ol{margin:0 0 8px;padding-left:20px;font-size:13px;line-height:1.55}.ga-card li{margin:2px 0}
+.ga-card .bigbtn{width:100%}
+.ga-link{margin:4px 0 10px;font-size:13px}.ga-link>span{display:block;margin-bottom:6px;color:var(--soft)}
+.ga-url{display:flex;gap:8px}.ga-url input{flex:1;min-width:0;padding:9px 12px;border-radius:10px;border:1px solid rgba(var(--ov),.18);background:rgba(var(--ov),.05);color:inherit;font:inherit;font-size:13px}
+
+
+/* ===== 25. Downloads (p67) ===== */
+.ga-dls{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;margin:8px 0}
+.ga-dls a{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:12px;text-decoration:none;text-align:left}
+.ga-dls a.act,.ga-dls a.act:visited{color:var(--ink)}.ga-dls a.bigbtn,.ga-dls a.bigbtn:visited{color:var(--on-accent,#10262f)}.ga-dls a b{font-size:14px}.ga-dls a small{font-size:12px;opacity:.8;font-weight:500}
+.ga-note{margin:6px 0 0;font-size:12px;line-height:1.5;color:var(--soft)}

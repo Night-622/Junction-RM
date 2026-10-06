@@ -12970,3 +12970,73 @@ showMM = function (pane) {
 
 /* 2.3: the HUD counters start from the new city's numbers instead of rolling down from the demo's $1,000,000,000 */
 { const _rgHud = resetGame; resetGame = function () { const r = _rgHud.apply(this, arguments); if (typeof hudShown === 'object') { hudShown.money = hudTarget.money = money; hudShown.score = hudTarget.score = score; const m = $('v-money'), sc = $('v-score'); if (m) m.textContent = fmt$(Math.round(money)); if (sc) sc.textContent = String(Math.round(score)); } return r; }; }
+
+
+/* ===== p66: Get the app. A panel on the main menu that installs Junction on this device (PC, Mac, Android, iPhone, iPad) from the
+   website itself, using the browser's own install support. It reuses installPrompt, which setupApp() fills when the browser offers it. ===== */
+function gaDevice() {
+  const ua = navigator.userAgent || '', ios = /iphone|ipad|ipod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const android = /android/i.test(ua), mac = !ios && /mac/i.test(navigator.platform || ua), win = /win/i.test(navigator.platform || ua);
+  const edge = /edg\//i.test(ua), firefox = /firefox|fxios/i.test(ua), chrome = /chrome|crios/i.test(ua) && !edge, safari = /safari/i.test(ua) && !chrome && !edge && !firefox;
+  return {ios, android, mac, win, edge, firefox, chrome, safari, phone: ios || android};
+}
+function gaInstalled() { return matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: window-controls-overlay)').matches || !!navigator.standalone || !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); }
+function gaCards() {
+  const d = gaDevice(), cards = [];
+  const canPrompt = !!installPrompt;
+  const pc = {id: 'pc', title: d.mac ? 'On a Mac' : d.win ? 'On a Windows PC' : 'On a computer', steps: null, btn: canPrompt && !d.phone};
+  if (d.safari && d.mac) pc.steps = ['Open the <b>File</b> menu in Safari.', 'Choose <b>Add to Dock\u2026</b>, then <b>Add</b>.', 'Open Junction from the Dock like any app.'];
+  else if (d.firefox && !d.phone) pc.steps = ['Firefox on a computer can\u2019t install web apps.', 'Open this page in <b>Chrome</b> or <b>Edge</b>, then use the install icon at the right of the address bar.'];
+  else pc.steps = canPrompt && !d.phone ? ['Press the button below.', 'Junction opens in its own window and gets a desktop icon.'] : ['Click the <b>install icon</b> at the right of the address bar (a small screen with a down arrow).', 'Or open the browser menu (\u22ee) and choose <b>' + (d.edge ? 'Apps \u2192 Install this site as an app' : 'Cast, save and share \u2192 Install page as app') + '</b>.', 'Junction opens in its own window and gets a desktop icon.'];
+  const andr = {id: 'android', title: 'On an Android phone or tablet', btn: canPrompt && d.android, steps: canPrompt && d.android ? ['Press the button below and confirm.', 'Junction gets an icon on your home screen.'] : ['Open this page in <b>Chrome</b>.', 'Tap the menu (\u22ee), then <b>Install app</b> (or <b>Add to Home screen</b>).', 'Junction gets an icon on your home screen.']};
+  const ios = {id: 'ios', title: 'On an iPhone or iPad', btn: false, steps: ['Open this page in <b>Safari</b> (other browsers can\u2019t install apps on iPhone).', 'Tap the <b>Share</b> button (a square with an arrow).', 'Scroll and tap <b>Add to Home Screen</b>, then <b>Add</b>.', 'Junction opens full screen from its icon.']};
+  const order = d.ios ? [ios, andr, pc] : d.android ? [andr, ios, pc] : [pc, andr, ios];
+  for (const c of order) cards.push(c);
+  return {cards, mine: d.ios ? 'ios' : d.android ? 'android' : 'pc'};
+}
+function gaRender() {
+  const now = $('ga-now'), list = $('ga-list'); if (!now || !list) return;
+  const inst = gaInstalled(), {cards, mine} = gaCards();
+  now.textContent = inst ? 'You\u2019re already using the installed app. Single player works offline; online features need a connection.' : 'Install Junction like an app: its own window or icon, full screen with no browser bars, and single player works offline. It\u2019s free and updates by itself.';
+  list.innerHTML = cards.map(c => '<section class="ga-card' + (c.id === mine ? ' mine' : '') + '"><h3>' + c.title + (c.id === mine ? ' <small>this device</small>' : '') + '</h3><ol>' + c.steps.map(s => '<li>' + s + '</li>').join('') + '</ol>' + (c.btn && !inst ? '<button class="bigbtn" type="button" data-ga="install">Install Junction</button>' : '') + '</section>').join('');
+  list.querySelectorAll('[data-ga="install"]').forEach(b => b.onclick = async () => {
+    if (!installPrompt) { toast('Use the browser menu to install, see the steps above', 'tip'); return; }
+    installPrompt.prompt(); try { const r = await installPrompt.userChoice; if (r && r.outcome === 'accepted') toast('Installing Junction\u2026', 'ok'); } catch (e) {} installPrompt = null; gaRender();
+  });
+  const u = $('ga-url'); if (u) u.value = location.origin + location.pathname.replace(/index\.html$/, '');
+}
+function openGetApp() { gaRender(); openModal('m-getapp'); }
+{
+  const bind = () => {
+    const b = $('btn-getapp'), c = $('ga-close'), cp = $('ga-copy');
+    if (b) b.onclick = openGetApp;
+    if (c) c.onclick = () => closeModal('m-getapp');
+    if (cp) cp.onclick = async () => { const u = $('ga-url'); try { await navigator.clipboard.writeText(u.value); toast('Link copied', 'ok'); } catch (e) { u.select(); toast('Press Cmd/Ctrl+C to copy the link', 'tip'); } };
+  };
+  bind();
+  window.addEventListener('beforeinstallprompt', () => { const m = $('m-getapp'); if (m && !m.hidden) setTimeout(gaRender, 50); });
+  window.JunctionAPI = window.JunctionAPI || {}; window.JunctionAPI.openGetApp = openGetApp;
+}
+
+
+/* ===== p67: downloads. Installer files are attached to the latest GitHub Release; releases/latest/download/<name> always points at them. ===== */
+const GA_REPO = 'https://github.com/Night-622/Junction-RM/releases/latest/download/';
+const GA_FILES = [
+  {id: 'win', name: 'Junction-Windows.exe', label: 'Windows', sub: 'Installer (.exe) for Windows 10 and 11'},
+  {id: 'macarm', name: 'Junction-Mac-AppleSilicon.dmg', label: 'Mac, Apple chip', sub: 'Disk image (.dmg) for M1, M2, M3 and newer'},
+  {id: 'macintel', name: 'Junction-Mac-Intel.dmg', label: 'Mac, Intel chip', sub: 'Disk image (.dmg) for Intel Macs'},
+  {id: 'apk', name: 'Junction-Android.apk', label: 'Android', sub: 'App file (.apk) for Android phones and tablets'}
+];
+{
+  const _gaRender = gaRender;
+  gaRender = function () {
+    _gaRender();
+    const list = $('ga-list'); if (!list || gaInstalled() || document.getElementById('ga-dl')) return;
+    const d = gaDevice(), mine = d.android ? 'apk' : d.mac ? 'macarm' : d.win ? 'win' : null;
+    const files = GA_FILES.slice().sort((a, b) => (b.id === mine) - (a.id === mine) || (d.mac && /^mac/.test(b.id)) - (d.mac && /^mac/.test(a.id)));
+    const note = d.mac ? '<p class="ga-note">Not sure which Mac you have? Apple menu, then About This Mac. If it says \u201cChip: Apple M\u2026\u201d use Apple chip; if it says Intel, use Intel.</p>' : d.android ? '<p class="ga-note">After downloading, open the file. Android will ask once to allow installs from your browser: allow it, then tap Install.</p>' : '';
+    const sec = document.createElement('section'); sec.className = 'ga-card ga-dl'; sec.id = 'ga-dl';
+    sec.innerHTML = '<h3>Download the app</h3>' + note + '<div class="ga-dls">' + files.map(f => '<a class="' + (f.id === mine ? 'bigbtn' : 'act') + '" href="' + GA_REPO + f.name + '" rel="noopener"><b>' + f.label + '</b><small>' + f.sub + '</small></a>').join('') + '</div><p class="ga-note">Windows may show \u201cunknown publisher\u201d and Mac may say the app is from an unidentified developer. Windows: More info, then Run anyway. Mac: right-click the app, choose Open. Junction is safe; the warning appears because the app isn\u2019t signed with a paid certificate. iPhone and iPad can\u2019t install apps outside the App Store, so use the steps below.</p>';
+    list.insertBefore(sec, list.firstChild);
+  };
+}

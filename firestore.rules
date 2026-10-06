@@ -376,6 +376,18 @@ service cloud.firestore {
       }
     }
 
+    // The installed apps hand a Google sign-in back from a browser tab (p68). The code is a 40-character random string only
+    // the app and its own browser tab know, so a document can be fetched by its id but never listed; the app deletes it at once.
+    match /authHandoff/{code} {
+      allow get: if request.auth != null && code.size() >= 40;
+      allow list, update: if false;
+      allow create: if request.auth != null && code.size() >= 40
+        && request.resource.data.keys().hasOnly(['idToken', 'at'])
+        && request.resource.data.idToken is string && request.resource.data.idToken.size() < 5000
+        && request.resource.data.at == request.time;
+      allow delete: if request.auth != null;
+    }
+
     // Guests' feedback. Players can add a note but nobody can read, edit or delete
     // them from the game — you read them in the Firebase console.
     function validFeedback() {

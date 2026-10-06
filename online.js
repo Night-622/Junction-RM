@@ -2508,3 +2508,70 @@ Object.assign(window.JunctionOnline, {
   coopLeave(silent) { return coopLeave(silent); }, renderCoop(box) { renderCoop(box); },
   coopInfo() { const C = O.coop; return C ? {id: C.id, host: C.host, members: (C.d && C.d.members) || {}, status: C.d && C.d.status} : null; }
 });
+
+
+/* ===== p68: Google sign-in for the installed apps. A browser tab does the Google part; the app collects the result. ===== */
+const NATIVE_APP = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) || /Electron/i.test(navigator.userAgent || '');
+const HANDOFF_HOST = 'https://junction-rm.web.app/';
+const handoffCode = () => { const a = new Uint8Array(20); crypto.getRandomValues(a); return Array.from(a, b => b.toString(16).padStart(2, '0')).join(''); };
+async function openOutside(url) {
+  const B = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Browser;
+  if (B && B.open) { try { await B.open({url}); return; } catch (e) {} }
+  window.open(url, '_blank');
+}
+let handoffRun = 0;
+async function nativeGoogle() {
+  const run = ++handoffRun, err = $('user-err'), name = $('user-name').value.trim(), code = handoffCode(), ref = doc(db, 'authHandoff', code);
+  err.textContent = 'Finish signing in with Google in your browser, then come back here\u2026';
+  await openOutside(HANDOFF_HOST + '?applogin=' + code);
+  const until = Date.now() + 5 * 60e3; let data = null;
+  const check = async () => { try { const s = await getDoc(ref); if (s.exists()) data = s.data(); } catch (e) {} };
+  const onVis = () => { if (!document.hidden && !data) check(); }; document.addEventListener('visibilitychange', onVis);
+  while (run === handoffRun && Date.now() < until && !data) { await new Promise(r => setTimeout(r, 2000)); if (!data) await check(); }
+  document.removeEventListener('visibilitychange', onVis);
+  if (run !== handoffRun) return;
+  if (!data) { err.textContent = 'Google sign-in timed out. Press Continue with Google to try again.'; return; }
+  deleteDoc(ref).catch(() => {});
+  try {
+    err.textContent = '';
+    const cred = GoogleAuthProvider.credential(data.idToken), keep = NAME_RE.test(name) ? name : '';
+    if (O.user && O.user.isAnonymous) {
+      try { await linkWithCredential(O.user, cred); }
+      catch (e) {
+        if (!String(e.code).includes('credential-already-in-use')) throw e;
+        await dropLive(); O.pendingName = keep;
+        await signInWithCredential(auth, GoogleAuthProvider.credentialFromError(e) || cred);   // an existing account: onAuthStateChanged takes over
+        closeM('m-user'); return;
+      }
+    } else { await dropLive(); O.pendingName = keep; await signInWithCredential(auth, cred); closeM('m-user'); return; }
+    await afterPermanent(keep || (O.profile && O.profile.name) || '');
+  } catch (e) { err.textContent = e.code ? friendlyAuthError(e) : e.message; }
+}
+if (NATIVE_APP) {
+  const mu = $('m-user');
+  if (mu) mu.addEventListener('click', ev => { const b = ev.target.closest && ev.target.closest('#user-google'); if (!b) return; ev.stopImmediatePropagation(); ev.preventDefault(); nativeGoogle(); }, true);
+}
+
+/* the browser side: https://junction-rm.web.app/?applogin=CODE shows one Google button and files the result for the app */
+(function () {
+  const code = new URLSearchParams(location.search).get('applogin');
+  if (!code || !/^[0-9a-f]{40}$/.test(code) || NATIVE_APP) return;
+  const wrap = document.createElement('div');
+  wrap.id = 'applogin';
+  wrap.setAttribute('style', 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;background:#0b2029;color:#eef4f3;font:16px/1.5 system-ui,sans-serif');
+  wrap.innerHTML = '<div style="max-width:420px;width:100%;padding:24px;border-radius:18px;background:#143845;box-shadow:0 10px 40px rgba(0,0,0,.4);text-align:center">' +
+    '<div style="font:italic 900 30px/1 system-ui,sans-serif;letter-spacing:.04em;margin-bottom:10px">JUNCTION</div>' +
+    '<p id="al-msg" style="margin:0 0 16px">Sign in with Google for the Junction app. When it\u2019s done, come back to the app: it signs in by itself.</p>' +
+    '<button id="al-go" type="button" style="cursor:pointer;border:0;border-radius:12px;padding:12px 22px;font:800 16px system-ui,sans-serif;background:#ffc933;color:#10262f">Continue with Google</button></div>';
+  document.body.appendChild(wrap);
+  const msg = wrap.querySelector('#al-msg'), go = wrap.querySelector('#al-go');
+  go.addEventListener('click', async () => {
+    go.disabled = true; msg.textContent = 'Opening Google\u2026';
+    try {
+      const r = await signInWithPopup(auth, new GoogleAuthProvider()), c = GoogleAuthProvider.credentialFromResult(r);
+      if (!c || !c.idToken) throw new Error('Google did not return a sign-in token. Try again.');
+      await setDoc(doc(db, 'authHandoff', code), {idToken: c.idToken, at: serverTimestamp()});
+      msg.textContent = 'You\u2019re signed in. You can close this tab and go back to the Junction app.'; go.hidden = true;
+    } catch (e) { msg.textContent = (e && e.code === 'auth/popup-closed-by-user') ? 'The Google window was closed. Press the button to try again.' : 'That didn\u2019t work: ' + (e.message || e.code || e); go.disabled = false; }
+  });
+})();

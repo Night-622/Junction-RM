@@ -468,7 +468,7 @@
         <button type="button" class="rl-tile t-fb" id="btn-feedback-s"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12h5"/></svg> Feedback</small><b>Tell us what you think</b></button>
         <div id="start-online" hidden></div>
       </aside>
-      <div class="rl-foot">Esc closes a panel · Junction v<span id="ver-foot">2.3</span></div>
+      <div class="rl-foot">Esc closes a panel · Junction v<span id="ver-foot">2.3</span> · <button type="button" class="linkbtn" id="btn-getapp">Get the app</button></div>
     </div>
 
     <!-- the whole map of this week's Expert seed -->
@@ -574,6 +574,17 @@
         <h2>Junction <span id="wn-ver">2.3</span></h2>
         <div id="wn-list" class="wn-list"></div>
         <div class="btnrow"><button class="bigbtn" id="wn-close" type="button">Nice</button></div>
+      </div>
+    </div>
+    <!-- get the app (p66) -->
+    <div class="modal" id="m-getapp" hidden>
+      <div class="card plate wide getcard">
+        <small class="over-kicker">Free · no store needed</small>
+        <h2>Get Junction</h2>
+        <p class="ga-now" id="ga-now"></p>
+        <div class="ga-list" id="ga-list"></div>
+        <div class="ga-link"><span>Send the game to another device</span><div class="ga-url"><input id="ga-url" type="text" readonly aria-label="Game link"><button class="act" id="ga-copy" type="button">Copy link</button></div></div>
+        <div class="btnrow"><button class="bigbtn" id="ga-close" type="button">Done</button></div>
       </div>
     </div>
     <!-- the daily reward -->
