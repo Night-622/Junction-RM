@@ -238,7 +238,9 @@ const DIFFS = {
   iso:      {label:'ISO 1v1', note:'Head to head with another player on the same map. Live or daily.',
              pin:0.85, over:0.85, spawn:0.9, roads:-2, cash:-5, grant:0.85, iso:true},
   zen:      {label:'Zen',      note:'Nothing you build can lose the game. Rare weather, gentle traffic, slower camera.',
-             pin:1.4, over:999, spawn:1.3, roads:12, cash:30, grant:1.3, noFail:true, calm:true}
+             pin:1.4, over:999, spawn:1.3, roads:12, cash:30, grant:1.3, noFail:true, calm:true},
+  haunted:  {label:'Haunted Night', note:'Halloween only. Standard rules in the dark: fog rolls in, and pumpkins pop up on the roads for bonus cash.',
+             pin:0.9, over:0.9, spawn:0.95, roads:0, cash:0, grant:1, event:'halloween'}
 };
 
 /* ---- Expert Survival seeds: one per ISO week (Monday to Sunday, UTC), each with a name and a code ---- */
@@ -281,6 +283,7 @@ const CHANGELOG = [
     'Map editor: paint water, place stores and houses, set rules and a goal, then publish with a code. Browse, like and play community maps, each with its own leaderboard.',
     'Living cities: houses grow into blocks and towers, stores into malls, named districts, pedestrians, weather that affects traffic, and streetlights at night.',
     'Coins are now 1 ◎ for every 2 parcels delivered.',
+    'Haunted Night, a Halloween mode: a dark city, rolling fog and pumpkins on the roads for bonus cash. It has its own saves and leaderboard.',
     'Behind the scenes: automated browser tests on every push, server checks on leaderboard scores and match results, error reporting, and rules deployed from GitHub.']},
   {v: '2.2.1', date: 'October 5, 2026', items: [
     'A pause menu on Esc: stats so far, restart, settings, how to play, and save & quit. You can keep building while paused.',
@@ -3928,7 +3931,7 @@ const ACH = [
   {id: 'frantic500', g: 'Modes', name: 'Under pressure',  hint: 'Deliver 500 parcels on Frantic',    hit: () => inMode('frantic') && score >= 500},
   {id: 'chill15',    g: 'Modes', name: 'Easy does it',    hint: 'Reach week 15 on Relaxed',          hit: () => inMode('chill') && week >= 15},
   {id: 'zen1h',      g: 'Modes', name: 'Zen master',      hint: 'Play one Zen city for an hour of game time', hit: () => inMode('zen') && clock >= 3600},
-  {id: 'allmodes',   g: 'Modes', name: 'Well rounded',    hint: 'Play a city on every mode',         life: L => Object.keys(DIFFS).filter(m => !DIFFS[m].expert).every(m => L[m] && L[m].cities > 0)},
+  {id: 'allmodes',   g: 'Modes', name: 'Well rounded',    hint: 'Play a city on every mode',         life: L => Object.keys(DIFFS).filter(m => !DIFFS[m].expert && !DIFFS[m].event).every(m => L[m] && L[m].cities > 0)},
   // lifetime
   {id: 'cities10',  g: 'Lifetime', name: 'Urban planner',  hint: 'Start 10 cities',                 life: L => lifeSum(L, 'cities') >= 10},
   {id: 'cities50',  g: 'Lifetime', name: 'Serial builder', hint: 'Start 50 cities',                 life: L => lifeSum(L, 'cities') >= 50},
@@ -4015,7 +4018,7 @@ function serialize() {
     replay: replayStore(), wx: weather.t > 0 ? {kind: weather.kind, t: +weather.t.toFixed(1)} : null
   };
 }
-const SLOT_KEY = 'junction-slot-v1:', SLOT_MODES = ['chill', 'standard', 'frantic', 'zen', 'expert'];
+const SLOT_KEY = 'junction-slot-v1:', SLOT_MODES = ['chill', 'standard', 'frantic', 'zen', 'haunted', 'expert'];
 let curSlot = '', pendingSlot = '';                     // the local slot ("standard-2") of the city being played
 function readSlot(id) { try { return JSON.parse(localStorage.getItem(SLOT_KEY + id)); } catch (e) { return null; } }
 function writeSlot(final) {
@@ -9438,7 +9441,7 @@ function bindInput() {
   });
   const dp = $('diff-picks'); dp.innerHTML = '';
   for (const k in DIFFS) {
-    if (DIFFS[k].expert) continue;
+    if (DIFFS[k].expert || DIFFS[k].event) continue;
     const b = document.createElement('button'); b.type = 'button'; b.className = 'diff'; b.dataset.id = k; b.setAttribute('aria-pressed', k === startDiff ? 'true' : 'false');
     b.innerHTML = '<b>' + DIFFS[k].label + '</b><small>' + DIFFS[k].note + '</small>';
     b.addEventListener('click', () => { startDiff = k; dp.querySelectorAll('.diff').forEach(x => x.setAttribute('aria-pressed', x.dataset.id === k ? 'true' : 'false')); showStartBest(); });
@@ -10119,7 +10122,7 @@ for (const id in COSMETICS) { const c = COSMETICS[id]; if (!c[2] || c[2] === '#'
 /* ---- seasonal events: a themed fortnight with its own designs, quests and news. Dates are month/day, local time. */
 const EVENTS = [
   {id: 'halloween', name: 'Halloween', start: [10, 1], end: [10, 31], map: 'spooky', decor: 'pumpkin', items: ['design:car:ghost', 'design:store:batwing', 'decor:ghostlight', 'title:ghost'],
-   tag: 'Event', title: 'Halloween in Junction', text: 'Ghost cars, bat-wing stores and ghost lights in the Store until October 31, plus three spooky quests.',
+   tag: 'Event', title: 'Halloween in Junction', text: 'Ghost cars, bat-wing stores and ghost lights in the Store until October 31, plus three spooky quests and a new mode: Haunted Night.',
    quests: [['deliver', 300, 'Deliver 300 parcels on the Spooky map', {c: 120}, 'spooky'], ['build_light', 6, 'Light up 6 junctions in one city', {c: 150}], ['survive', 8, 'Survive to week 8 in the dark', {item: 'design:car:ghost'}]]}
 ];
 function activeEvent(d) {
@@ -13085,4 +13088,90 @@ function verNewer(a, b) { const x = verParts(a), y = verParts(b); for (let i = 0
     requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
+}
+
+
+/* ===== p74: Haunted Night (Halloween event mode) =====
+   Standard rules, with a spooky skin and a bonus to chase. While a Haunted Night city is on screen: the map uses the Spooky look, it stays
+   dark, fog banks roll in every minute or two (traffic lights see half as far), and a pumpkin appears on a random road every few seconds.
+   A car that drives over a pumpkin earns bonus cash. Nothing here is saved with the city: pumpkins are for the moment. ===== */
+const haunt = {on: false, pumpkins: [], spawnT: 5, fogT: 55, got: 0, chip: null};
+const hauntedOn = () => diffKey === 'haunted' && started && !demoMode && !tutorialMode && !spectating;
+{
+  const _palFor = palFor;
+  palFor = function (id, custom) { return hauntedOn() && id === mapPrefs.theme ? _palFor('spooky', {}) : _palFor(id, custom); };
+  const _night = nightAmount;
+  nightAmount = function () { const v = _night(); return hauntedOn() ? Math.max(v, 0.82) : v; };
+}
+function hauntChipUpdate() {
+  if (!haunt.chip) {
+    const st = $('stage'); if (!st) return;
+    const el = document.createElement('div'); el.className = 'camp-hud plate haunt-chip'; el.id = 'haunt-chip'; el.hidden = true; el.setAttribute('aria-live', 'polite');
+    el.innerHTML = '<b>Haunted Night</b><span>Drive over a pumpkin for bonus cash. Pumpkins collected: <strong id="hc-n">0</strong></span>';
+    st.appendChild(el); haunt.chip = el;
+  }
+  haunt.chip.hidden = !haunt.on; const n = $('hc-n'); if (n) n.textContent = haunt.got;
+}
+function hauntSync(fresh) {
+  const on = hauntedOn();
+  if ((fresh && (on || haunt.on)) || on !== haunt.on) {
+    haunt.on = on; haunt.pumpkins.length = 0; haunt.got = 0; haunt.spawnT = 5; haunt.fogT = 45 + Math.random() * 30;
+    applyMap(); hauntChipUpdate();
+    if (on) toast('Haunted Night: it stays dark, fog rolls in, and pumpkins appear on the roads. Drive over them for cash.', 'tip');
+  }
+}
+function hauntSpawn() {
+  const es = edges.filter(e => e && !e.dead && !e.fast && e.L > 30); if (!es.length) return;
+  const e = es[Math.floor(Math.random() * es.length)], s = e.L * (0.25 + Math.random() * 0.5);
+  haunt.pumpkins.push({x: e.ax + e.ux * s, y: e.ay + e.uy * s, t: 0, life: 20});
+}
+function hauntStep(dt) {
+  if (!haunt.on) return;
+  haunt.spawnT -= dt; if (haunt.spawnT <= 0) { haunt.spawnT = 6 + Math.random() * 6; if (haunt.pumpkins.length < 3) hauntSpawn(); }
+  haunt.fogT -= dt; if (haunt.fogT <= 0) { haunt.fogT = 80 + Math.random() * 60; if (!(weather.t > 0)) startWeather('fog', 30 + Math.random() * 20); }
+  for (let i = haunt.pumpkins.length - 1; i >= 0; i--) {
+    const p = haunt.pumpkins[i]; p.t += dt;
+    if (p.t >= p.life) { haunt.pumpkins.splice(i, 1); continue; }
+    if (p.t < 1.5) continue;                                          // it pops in first, so you can see it before a car takes it
+    for (const c of cars) {
+      if (c.state === 'parked' || c.state === 'loading' || c.isBus) continue;
+      const dx = c.x - p.x, dy = c.y - p.y;
+      if (dx * dx + dy * dy < 17 * 17) {
+        const v = 40 + 5 * Math.min(week, 10); money += v; haunt.got++; haunt.pumpkins.splice(i, 1);
+        popText(p.x, p.y - 4, '+' + fmt$(v), '#ffb02e'); sfx('deliver'); bump('v-money'); hauntChipUpdate(); JEvents.emit('pumpkin', {n: haunt.got});
+        break;
+      }
+    }
+  }
+}
+function drawPumpkins() {
+  for (const p of haunt.pumpkins) {
+    const u = p.t / p.life; if (u > 0.78 && Math.floor(animT * 6) % 2) continue;       // blink when it's about to vanish
+    const s = Math.min(1, p.t / 0.35), bob = REDUCED_MOTION ? 0 : Math.sin(animT * 3 + p.x) * 1.2;
+    ctx.save(); ctx.translate(p.x, p.y + bob); ctx.scale(s, s);
+    ctx.globalAlpha = 0.32; ctx.fillStyle = '#ffb02e'; ctx.beginPath(); ctx.arc(0, 0, 13, 0, 6.3); ctx.fill(); ctx.globalAlpha = 1;
+    ctx.fillStyle = '#ff8a1f'; ctx.strokeStyle = '#a84a08'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.ellipse(0, 1, 7.6, 6.4, 0, 0, 6.3); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = '#d9690f'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.ellipse(0, 1, 3.6, 6.2, 0, 0, 6.3); ctx.stroke();
+    ctx.fillStyle = '#4c8f3a'; ctx.fillRect(-1, -7, 2.4, 3.2);
+    ctx.fillStyle = '#3a1d05'; ctx.beginPath(); ctx.moveTo(-4.2, -1.2); ctx.lineTo(-1.6, -1.2); ctx.lineTo(-2.9, -3.2); ctx.closePath(); ctx.moveTo(1.6, -1.2); ctx.lineTo(4.2, -1.2); ctx.lineTo(2.9, -3.2); ctx.closePath();
+    ctx.moveTo(-3.6, 2); ctx.lineTo(3.6, 2); ctx.lineTo(2.4, 4.2); ctx.lineTo(0.8, 3.1); ctx.lineTo(-0.8, 4.2); ctx.lineTo(-2.4, 3.1); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+}
+{
+  const _st = stepTraffic; stepTraffic = function (dt) { _st(dt); if (haunt.on) hauntStep(dt); };
+  const _dfx = drawFX; drawFX = function () { _dfx(); if (haunt.on && haunt.pumpkins.length) drawPumpkins(); };
+  const _rg = resetGame; resetGame = function () { const r = _rg.apply(this, arguments); hauntSync(true); return r; };
+  const _lg = loadGame; loadGame = function () { const r = _lg.apply(this, arguments); hauntSync(true); return r; };
+  const _sd = startDemo; startDemo = function () { const r = _sd.apply(this, arguments); hauntSync(false); return r; };
+  const _gh = goHome; goHome = async function () { const r = await _gh.apply(this, arguments); hauntSync(false); return r; };
+  // the mode shows in the Play menu only while the Halloween event is on
+  const _rp = renderPlay;
+  renderPlay = function () {
+    const ev = activeEvent(), on = !!(ev && ev.id === 'halloween'), i = PLAY_MODES.indexOf('haunted');
+    if (on && i < 0) PLAY_MODES.splice(PLAY_MODES.indexOf('iso'), 0, 'haunted');
+    if (!on && i >= 0) { PLAY_MODES.splice(i, 1); if (playMode === 'haunted') playMode = 'standard'; }
+    return _rp.apply(this, arguments);
+  };
+  window.JunctionAPI = window.JunctionAPI || {}; window.JunctionAPI.haunt = haunt;
 }

@@ -47,7 +47,7 @@ service cloud.firestore {
         allow get, list, delete: if isMe(uid);
         allow create, update: if isMe(uid)
           // five per game mode; the old shared slots 1-5 can still be read and deleted while they're moved over
-          && slot.matches('^(chill|standard|frantic|zen|expert)-[1-5]$')
+          && slot.matches('^(chill|standard|frantic|zen|haunted|expert)-[1-5]$')
           && request.resource.data.keys().hasOnly(['data', 'score', 'week', 'diffKey', 'over', 'updatedAt'])
           && (!('data' in request.resource.data)
               || (request.resource.data.data is string && request.resource.data.data.size() < 1000000));
@@ -140,7 +140,7 @@ service cloud.firestore {
     // Per-mode leaderboards: one document per player per mode.
     match /boards/{mode}/players/{uid} {
       allow read: if signedIn();
-      allow create, update: if isMe(uid) && mode in ['chill', 'standard', 'frantic', 'zen']
+      allow create, update: if isMe(uid) && mode in ['chill', 'standard', 'frantic', 'zen', 'haunted']
         && request.resource.data.keys().hasOnly(['name', 'star', 'ach3', 'title', 'frame', 'parcels', 'weeks', 'goalsSec', 'playSec', 'earned', 'updatedAt'])
         && validName(request.resource.data.name);
       allow delete: if isMe(uid);

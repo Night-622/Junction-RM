@@ -62,7 +62,7 @@ function textOk(t) {
 const RUDE_NAME = 'That name has words we don\u2019t allow. Pick something friendlier.';
 const RUDE_MSG = 'That message has words we don\u2019t allow. Keep it friendly.';
 const SLOTS = ['1', '2', '3', '4', '5'];            // the old shared slots, moved into per-mode slots on sign-in
-const SAVE_MODES = ['chill', 'standard', 'frantic', 'zen', 'expert'];
+const SAVE_MODES = ['chill', 'standard', 'frantic', 'zen', 'haunted', 'expert'];
 const slotIds = mode => SLOTS.map(n => mode + '-' + n);                 // five slots per game mode: "standard-1" ... "standard-5"
 const CLOUD_SAVE_EVERY = 30e3;      // ms between routine cloud autosaves (local autosave still runs every 12s)
 const LIVE_SEND_EVERY = 4e3;        // ms between live snapshots while someone is watching
@@ -727,7 +727,7 @@ window.addEventListener('pagehide', () => { cloudSave(true); });
    Relaxed, Standard and Frantic rank most parcels, furthest week and fastest all-goals.
    Zen can't be lost, so it ranks longest played and most earned in a single city instead.
    The tutorial never counts. */
-const MODES = ['chill', 'standard', 'frantic', 'zen'];
+const MODES = ['chill', 'standard', 'frantic', 'zen', 'haunted'];
 const metricsFor = m => m === 'zen' ? ['playSec', 'earned'] : ['parcels', 'weeks', 'goalsSec'];
 const LOWER_IS_BETTER = {goalsSec: true};
 function emptyBest() { return Object.fromEntries(MODES.map(m => [m, {}])); }
