@@ -4767,7 +4767,7 @@ let W = 900, H = 700, dpr = 1;
 const cam = {x: 0, y: 0, z: 1, auto: true};
 const insets = {l: 0, r: 0, t: 0, b: 0};
 /* ---- quality: shadows, decoration density, smooth motion and a frame cap. Three presets, or your own mix. */
-const GFX_PRESETS = {high: {shadows: 'on', decor: 1, smooth: true, cap: 0}, balanced: {shadows: 'simple', decor: 0.6, smooth: true, cap: 60}, battery: {shadows: 'off', decor: 0.3, smooth: false, cap: 30}};
+const GFX_PRESETS = {high: {shadows: 'on', decor: 1, smooth: true, cap: 0, res: 2}, balanced: {shadows: 'simple', decor: 0.6, smooth: true, cap: 60, res: 1.5}, battery: {shadows: 'off', decor: 0.3, smooth: false, cap: 30, res: 1}};
 const GFX_NOTES = {high: 'Everything on. Best on computers.', balanced: 'Simple shadows, fewer decorations, 60 fps. The phone default.', battery: 'No shadows, few decorations, 30 fps. Easiest on the battery.', custom: 'Your own mix.'};
 let gfx = Object.assign({preset: 'high'}, GFX_PRESETS.high);
 function gfxPresetOf() { for (const k in GFX_PRESETS) { const p = GFX_PRESETS[k]; if (p.shadows === gfx.shadows && +p.decor === +gfx.decor && !!p.smooth === !!gfx.smooth && +p.cap === +gfx.cap) return k; } return 'custom'; }
@@ -9584,6 +9584,7 @@ function loadPrefs() {
         if ([1, 0.6, 0.3].includes(+p.gfx.decor)) gfx.decor = +p.gfx.decor;
         if (typeof p.gfx.smooth === 'boolean') gfx.smooth = p.gfx.smooth;
         if ([0, 60, 30].includes(+p.gfx.cap)) gfx.cap = +p.gfx.cap;
+        if ([1, 1.5, 2].includes(+p.gfx.res)) gfx.res = +p.gfx.res;
         gfx.preset = gfxPresetOf(); gfxSaved = true;
       }
       if (p.a11y && typeof p.a11y === 'object') {
@@ -11023,7 +11024,7 @@ function setTutMin(on, silent) {
 function fitStage() {
   const st = $('stage'); if (!st) return;
   const w = Math.max(320, Math.round(st.clientWidth)), h = Math.max(320, Math.round(st.clientHeight));
-  const d = Math.min(window.devicePixelRatio || 1, 2);
+  const d = Math.min(window.devicePixelRatio || 1, gfx.res || 2);
   if (w !== W || h !== H || d !== dpr || cv.width !== Math.round(w * d) || cv.height !== Math.round(h * d)) {
     const wasW = W, wasH = H; layout();
     if ((wasW > wasH) !== (W > H) && !demoMode) camReset(false);   // turned the phone: fit the city to the new shape
@@ -11032,7 +11033,7 @@ function fitStage() {
 function layout() {
   const stage = $('stage'), r = stage.getBoundingClientRect();
   W = Math.max(320, Math.round(r.width)); H = Math.max(320, Math.round(r.height));
-  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  dpr = Math.min(window.devicePixelRatio || 1, gfx.res || 2);
   cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
   const mobile = W < 820, panelOn = !$('app').classList.contains('panel-off');
   const topH = Math.round($('topbar').getBoundingClientRect().height) + 20;
@@ -13039,4 +13040,48 @@ const GA_FILES = [
     sec.innerHTML = '<h3>Download the app</h3>' + note + '<div class="ga-dls">' + files.map(f => '<a class="' + (f.id === mine ? 'bigbtn' : 'act') + '" href="' + GA_REPO + f.name + '" rel="noopener"><b>' + f.label + '</b><small>' + f.sub + '</small></a>').join('') + '</div><p class="ga-note">Windows may show \u201cunknown publisher\u201d and Mac may say the app is from an unidentified developer. Windows: More info, then Run anyway. Mac: right-click the app, choose Open. Junction is safe; the warning appears because the app isn\u2019t signed with a paid certificate. iPhone and iPad can\u2019t install apps outside the App Store, so use the steps below.</p>';
     list.insertBefore(sec, list.firstChild);
   };
+}
+
+
+/* ===== p69: Settings > App: the download button, and a "new version" notice for the Android app ===== */
+function verParts(v) { return String(v || '0').split('.').map(n => parseInt(n, 10) || 0); }
+function verNewer(a, b) { const x = verParts(a), y = verParts(b); for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d > 0; } return false; }
+{
+  const g = $('btn-getapp2'), isApp = gaInstalled(), isElectron = /Electron/i.test(navigator.userAgent || ''), native = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  if (g) { g.onclick = openGetApp; if (native || isElectron) g.hidden = true; }
+  const note = $('app-note');
+  if (note && isElectron) note.textContent = 'You\u2019re playing the Junction desktop app. It updates itself each time you open it while you\u2019re online.';
+  else if (note && native) note.textContent = 'You\u2019re playing the Junction app. Single player works offline; online features need a connection.';
+  if (native) {
+    fetch('https://junction-rm.web.app/sw.js', {cache: 'no-store'}).then(r => r.text()).then(t => {
+      const m = /const VERSION = '([^']+)'/.exec(t); if (!m || !verNewer(m[1], VERSION)) return;
+      if (note) note.innerHTML = 'A newer version of Junction is out (' + m[1] + '; you have ' + VERSION + '). <button type="button" class="linkbtn" id="app-newver">Get it</button>';
+      const b = $('app-newver'); if (b) b.onclick = () => { const url = 'https://github.com/Night-622/Junction-RM/releases/latest/download/Junction-Android.apk', B = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Browser; if (B && B.open) B.open({url}); else window.open(url, '_blank'); };
+      setTimeout(() => toast('A newer version of Junction is out. Open Settings to get it.', 'tip'), 4000);
+    }).catch(() => {});
+  }
+}
+
+
+/* ===== p70: adaptive render resolution. If the game can't hold its frame rate, draw fewer pixels (2x, then 1.5x, then 1x). ===== */
+{
+  const _setGfx = setGfx;
+  setGfx = function (o) { _setGfx(o); fitStage(); };
+  let last = performance.now(), acc = 0, n = 0, told = false;
+  const tick = t => {
+    const dt = t - last; last = t;
+    if (!document.hidden && dt < 250 && (running || demoMode)) {
+      acc += dt; n++;
+      if (n >= 60 || (acc >= 2000 && n >= 8)) {
+        const avg = acc / n, limit = gfx.cap === 30 ? 45 : 31; acc = 0; n = 0;
+        const res = gfx.res || 2;
+        if (avg > limit && res > 1) {
+          gfx.res = res > 1.5 ? 1.5 : 1; savePrefs(true); fitStage();
+          if (!told && !demoMode) { told = true; toast('Lowered the sharpness for smoother play. Settings, Quality has more.', 'tip'); }
+        }
+      }
+    } else { acc = 0; n = 0; }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
 }
