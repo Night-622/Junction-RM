@@ -298,7 +298,7 @@ const CHANGELOG = [
     'Quests: three a day and three a week, with coins, stars and crates. One free reroll a day.',
     'Traffic flow view (F2): roads tinted by how busy they are, junctions ringed by wait, the worst spots listed, and a five-minute chart on every junction.',
     'Profile looks: banners, avatar frames and titles, and three pinned achievements, shown on leaderboards, chats and player cards.',
-    'Seasonal events, starting with Halloween in the last two weeks of October: ghost cars, bat-wing stores, ghost lights and event quests.',
+    'Seasonal events, starting with Halloween all through October: ghost cars, bat-wing stores, ghost lights and event quests.',
     'Short guides the first time you open ISO 1v1, Weeklys, the Store, Chats or Friends.']},
   {v: '2.1', date: 'October 2026', items: ['Chats in a messaging layout, and Friends with head-to-head records.', 'ISO 1v1: live and daily duels on the same map.', 'Player cards from any leaderboard, with Watch live.', 'Cars drive round roundabouts and reverse into their parking.', 'Smoother motion at 1\u00d7.', 'Credits reset: \u25ce coins (2 per 3 parcels) and \u2726 stars from Frantic cities.']},
   {v: '2.0', date: 'September 2026', items: ['An hourly Store, mystery crates and the Collection.', 'Weekly Expert Survival seeds, with a map of the seed.', 'Hundreds of designs, themes, maps and panel styles.', 'A new main menu with a live city behind it.']}
@@ -10118,7 +10118,7 @@ for (const k in TITLES) COSMETICS['title:' + k] = TITLES[k][2] ? [TITLES[k][1], 
 for (const id in COSMETICS) { const c = COSMETICS[id]; if (!c[2] || c[2] === '#') c[0] = newPrice(c[0]); }
 /* ---- seasonal events: a themed fortnight with its own designs, quests and news. Dates are month/day, local time. */
 const EVENTS = [
-  {id: 'halloween', name: 'Halloween', start: [10, 18], end: [10, 31], map: 'spooky', decor: 'pumpkin', items: ['design:car:ghost', 'design:store:batwing', 'decor:ghostlight', 'title:ghost'],
+  {id: 'halloween', name: 'Halloween', start: [10, 1], end: [10, 31], map: 'spooky', decor: 'pumpkin', items: ['design:car:ghost', 'design:store:batwing', 'decor:ghostlight', 'title:ghost'],
    tag: 'Event', title: 'Halloween in Junction', text: 'Ghost cars, bat-wing stores and ghost lights in the Store until October 31, plus three spooky quests.',
    quests: [['deliver', 300, 'Deliver 300 parcels on the Spooky map', {c: 120}, 'spooky'], ['build_light', 6, 'Light up 6 junctions in one city', {c: 150}], ['survive', 8, 'Survive to week 8 in the dark', {item: 'design:car:ghost'}]]}
 ];
