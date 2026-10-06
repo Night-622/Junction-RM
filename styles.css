@@ -2291,3 +2291,9 @@ ol.board li.sel{box-shadow:inset 0 0 0 1px var(--accent)}
 .ga-dls a{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:12px;text-decoration:none;text-align:left}
 .ga-dls a.act,.ga-dls a.act:visited{color:var(--ink)}.ga-dls a.bigbtn,.ga-dls a.bigbtn:visited{color:var(--on-accent,#10262f)}.ga-dls a b{font-size:14px}.ga-dls a small{font-size:12px;opacity:.8;font-weight:500}
 .ga-note{margin:6px 0 0;font-size:12px;line-height:1.5;color:var(--soft)}
+
+
+/* p71 logo: the splash shows the app icon */
+.sp-mark{margin-bottom:12px}.sp-mark img{display:block;width:112px;height:112px;border-radius:26px;box-shadow:0 12px 32px rgba(0,0,0,.4);animation:sp-pop .7s cubic-bezier(.2,.9,.3,1.2) both}
+@keyframes sp-pop{from{transform:scale(.7);opacity:0}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){.sp-mark img{animation:none}}
