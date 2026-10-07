@@ -272,8 +272,15 @@ function expertSeed(weeksAgo) {
   const fmt = d => d.toLocaleDateString('en-US', {day: 'numeric', month: 'short', timeZone: 'UTC'});
   return {key: w.key, num: h, name: SEED_NAMES[h % SEED_NAMES.length], code, label: fmt(w.mon) + ' \u2013 ' + fmt(w.sun) + ', ' + w.sun.getUTCFullYear()};
 }
-const VERSION = '2.3';
+const VERSION = '2.4.0.1';
 const CHANGELOG = [
+  {v: '2.4.0.1', date: 'October 7, 2026', items: [
+    'Apps for Windows, Mac and Android: download them from Settings or the main menu. The desktop app updates itself each time you open it.',
+    'Everything is saved in your account: campaign stars, quests, the Halloween story and easter eggs, settings, looks and map drafts follow you to any device.',
+    'A new logo, and smoother drawing: the game lowers its resolution by itself when it can\u2019t keep up.',
+    'Coins are now 1 ◎ for every 2 parcels delivered.',
+    'Halloween part two: a Season tab with 30 objectives and five exclusive rewards, plus a story for Haunted Night (The Hollow Hour, 13 chapters), the Witching Hour, golden pumpkins, a ghost van and six easter eggs.',
+    'Haunted Night, a Halloween mode: a dark city, rolling fog and pumpkins on the roads for bonus cash. It has its own saves and leaderboard.']},
   {v: '2.3', date: 'October 6, 2026', items: [
     'Campaign: 30 handcrafted levels in three chapters, each with a goal and 1–3 stars. Stars open the next chapter and unlock the Mayor house, Medal roundabout and Trophy car.',
     'New transport: railways (trains shuttle 6 parcels between stations, with level crossings), bus routes (a bus loops up to 4 houses from a store) and delivery drones (a perk, 50 drone designs in the Store).',
@@ -282,9 +289,6 @@ const CHANGELOG = [
     'Time-lapse replays: every city is recorded day by day. Watch it back with a cinematic camera or export a video.',
     'Map editor: paint water, place stores and houses, set rules and a goal, then publish with a code. Browse, like and play community maps, each with its own leaderboard.',
     'Living cities: houses grow into blocks and towers, stores into malls, named districts, pedestrians, weather that affects traffic, and streetlights at night.',
-    'Coins are now 1 ◎ for every 2 parcels delivered.',
-    'Halloween part two: a Season tab with 30 objectives and five exclusive rewards, plus a story for Haunted Night (The Hollow Hour, 13 chapters), the Witching Hour, golden pumpkins, a ghost van and six easter eggs.',
-    'Haunted Night, a Halloween mode: a dark city, rolling fog and pumpkins on the roads for bonus cash. It has its own saves and leaderboard.',
     'Behind the scenes: automated browser tests on every push, server checks on leaderboard scores and match results, error reporting, and rules deployed from GitHub.']},
   {v: '2.2.1', date: 'October 5, 2026', items: [
     'A pause menu on Esc: stats so far, restart, settings, how to play, and save & quit. You can keep building while paused.',
@@ -8714,7 +8718,7 @@ function setCusTab(t) {
 }
 /* what's new, sliding by above the weekly tile */
 const NEWS = [
-  {tag: 'Update', title: 'What’s new in ' + VERSION, text: 'Pause menu, share cards, quality and accessibility settings, daily rewards, 50 of everything, and more.', go: 'whatsnew', art: ['store', 'golden']},
+  {tag: 'Update', title: 'What’s new in ' + VERSION, text: 'Windows, Mac and Android apps, a Halloween season with its own story, everything saved in your account, and more.', go: 'whatsnew', art: ['store', 'golden']},
   {tag: 'New credits', title: '◎ coins and ✦ stars', text: 'Everyone starts fresh: 1 ◎ for every 2 parcels, and ✦ stars from Frantic cities.', go: 'store', art: ['store', 'golden']},
   {tag: 'New mode', title: 'ISO 1v1', text: 'Challenge a player: live side by side, or a daily duel scored category by category.', go: 'iso', art: ['car', 'rainbowstripe']},
   {tag: 'New designs', title: 'Hundreds of new designs', text: 'At least 36 of everything: cars, houses, roads, stores, lights, roundabouts, bridges, motorways, themes, maps, decorations and panel styles.', go: 'store', art: ['car', 'tidal']},
@@ -13201,7 +13205,7 @@ function drawPumpkins() {
 const HK = 'junction-haunt-v1';
 const hs = {lore: 0, eggs: {}};
 try { const d = JSON.parse(localStorage.getItem(HK)); if (d && typeof d === 'object') { hs.lore = clamp(d.lore | 0, 0, 13); if (d.eggs && typeof d.eggs === 'object') for (const k in d.eggs) if (d.eggs[k]) hs.eggs[k] = 1; } } catch (e) {}
-const hsSave = () => { try { localStorage.setItem(HK, JSON.stringify(hs)); } catch (e) {} };
+const hsSave = () => { try { localStorage.setItem(HK, JSON.stringify(hs)); } catch (e) {} JEvents.emit('progress', {}); };
 const LORE = [
   ['The Night Shift', 'The Hollowmere Post Office has been dark since the first frost, but the lamp over the sorting desk is lit and a note says: Keep the parcels moving. Do not ask who they are for. You are the new night dispatcher. Nobody remembers hiring you.'],
   ['Return to Sender', 'The first parcels arrive with no sender and no stamp. The addresses are real streets, but the names on the labels belong to people who left town years ago. Some of them left a long time ago, and not on foot.'],
@@ -13414,3 +13418,100 @@ let questTab = 'daily';
     box.querySelectorAll('[data-qreroll]').forEach(b => b.onclick = () => rerollQuest(b.dataset.qreroll));
   };
 }
+
+
+/* ===== p76: progress in the account. progressSnapshot / mergeProgress are what online.js saves to and loads from the cloud. ===== */
+function progressSnapshot() {
+  return {v: 1, camp: campaignSnapshot(), haunt: {lore: hs.lore, eggs: Object.assign({}, hs.eggs)}, guides: guideFlags(), tips: [...seenTips]};
+}
+function mergeProgress(d) {
+  if (!d || typeof d !== 'object') return false;
+  let changed = false;
+  try { if (d.camp && typeof d.camp === 'object' && mergeCampaign(d.camp)) changed = true; } catch (e) {}
+  if (d.haunt && typeof d.haunt === 'object') {
+    const lore = clamp(+d.haunt.lore | 0, 0, 13); if (lore > hs.lore) { hs.lore = lore; changed = true; }
+    if (d.haunt.eggs && typeof d.haunt.eggs === 'object') for (const k in EGGS) if (d.haunt.eggs[k] && !hs.eggs[k]) { hs.eggs[k] = 1; changed = true; }
+    if (changed) hsSave();
+  }
+  if (d.guides && typeof d.guides === 'object') {
+    const f = guideFlags(); let n = 0; for (const k in d.guides) if (d.guides[k] === true && /^[a-z0-9_-]{1,24}$/i.test(k) && !f[k]) { f[k] = true; n++; }
+    if (n) { try { localStorage.setItem(GUIDES_KEY, JSON.stringify(f)); } catch (e) {} changed = true; }
+  }
+  if (Array.isArray(d.tips)) {
+    let n = 0; for (const id of d.tips) if (typeof id === 'string' && TIPS[id] && !seenTips.has(id)) { seenTips.add(id); n++; }
+    if (n) { try { localStorage.setItem(TIPS_KEY, JSON.stringify([...seenTips])); } catch (e) {} changed = true; }
+  }
+  return changed;
+}
+{
+  // anything that changes saved progress tells online.js to save it
+  const _sc = saveCamp; saveCamp = function () { _sc.apply(this, arguments); JEvents.emit('progress', {}); };
+  const _mg = markGuide; markGuide = function () { _mg.apply(this, arguments); JEvents.emit('progress', {}); };
+  const _to = tipOnce; tipOnce = function () { const n = seenTips.size; _to.apply(this, arguments); if (seenTips.size !== n) JEvents.emit('progress', {}); };
+  // quests merge quest by quest: the higher progress wins, a claimed reward stays claimed on every device
+  const _ms = mergeShop;
+  mergeShop = function (d) {
+    const r = _ms.apply(this, arguments);
+    try {
+      if (d && d.quests && typeof d.quests === 'object' && jb.quests) {
+        let ch = false;
+        for (const k of ['daily', 'weekly', 'event']) {
+          const a = jb.quests[k], b = d.quests[k]; if (!Array.isArray(a) || !Array.isArray(b) || jb.quests === d.quests) continue;
+          for (const x of a) {
+            const y = b.find(z => z && z.id === x.id); if (!y) continue;
+            if ((+y.p || 0) > x.p) { x.p = Math.min(Math.floor(+y.p), x.n); ch = true; }
+            if (y.done === true && !x.done) { x.done = true; x.p = x.n; ch = true; }
+            if (y.claimed === true && !x.claimed) { x.claimed = true; x.done = true; x.p = x.n; ch = true; }
+          }
+        }
+        if (ch) { saveShop(); renderQuestBadge(); if (mmPane === 'quests') renderQuests(); return true; }
+      }
+    } catch (e) {}
+    return r;
+  };
+  Object.assign(window.JunctionAPI, {progressSnapshot, mergeProgress, mergeShop});
+}
+
+
+/* ===== p77: settings, looks and map drafts follow the account. These helpers read and write the browser's copy; online.js moves them to and from the cloud.
+   Graphics quality, panel layout and the coach position are kept per device type (phone or computer), so a phone never inherits a computer's settings. ===== */
+const devClass = () => { try { return (matchMedia('(pointer: coarse)').matches || innerWidth < 820) ? 'phone' : 'desktop'; } catch (e) { return 'desktop'; } };
+const rawGet = k => { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } };
+function settingsSnapshot() {
+  const shared = {}, dev = {}; let prefs = null;
+  try { prefs = JSON.parse(rawGet(PREFS_KEY)); } catch (e) {}
+  if (prefs && typeof prefs === 'object') { const g = prefs.gfx; delete prefs.gfx; shared.prefs = JSON.stringify(prefs); if (g) dev.gfx = JSON.stringify(g); }
+  const ui = rawGet(UI_KEY), modes = rawGet(MODES_KEY), map = rawGet(MAP_KEY); if (ui) shared.ui = ui; if (modes) shared.modes = modes; if (map) shared.map = map;
+  const lay = rawGet(LAY_KEY), coach = rawGet(COACH_KEY); if (lay) dev.lay = lay; if (coach) dev.coach = coach;
+  const dv = {}; dv[devClass()] = dev;
+  return {v: 1, shared, dev: dv};
+}
+function settingsApply(c) {
+  if (!c || typeof c !== 'object') return false;
+  let changed = false;
+  const put = (k, v) => { if (typeof v === 'string' && v && v.length < 200000 && rawGet(k) !== v) { try { JSON.parse(v); localStorage.setItem(k, v); changed = true; } catch (e) {} } };
+  const sh = c.shared && typeof c.shared === 'object' ? c.shared : {}, dv = c.dev && c.dev[devClass()] && typeof c.dev[devClass()] === 'object' ? c.dev[devClass()] : null;
+  if (typeof sh.prefs === 'string') {
+    try {
+      const p = JSON.parse(sh.prefs); let g = null;
+      if (dv && typeof dv.gfx === 'string') g = JSON.parse(dv.gfx); else { const cur = JSON.parse(rawGet(PREFS_KEY) || 'null'); g = cur && cur.gfx; }
+      if (g) p.gfx = g; put(PREFS_KEY, JSON.stringify(p));
+    } catch (e) {}
+  }
+  put(UI_KEY, sh.ui); put(MODES_KEY, sh.modes); put(MAP_KEY, sh.map);
+  if (dv) { put(LAY_KEY, dv.lay); put(COACH_KEY, dv.coach); }
+  return changed;
+}
+const draftsRaw = () => rawGet(MAPS_KEY);
+function draftsMerge(json) {
+  let cloud = null; try { cloud = JSON.parse(json); } catch (e) { return false; }
+  if (!cloud || typeof cloud !== 'object' || !cloud.drafts || typeof cloud.drafts !== 'object') return false;
+  const mine = readDrafts(); let changed = false;
+  for (const id in cloud.drafts) {
+    const d = cloud.drafts[id]; if (!d || typeof d !== 'object' || typeof d.data !== 'object') continue;
+    const m = mine.drafts[id]; if (!m || (+d.at || 0) > (+m.at || 0)) { mine.drafts[id] = d; changed = true; }
+  }
+  if (changed) writeDrafts(mine);
+  return changed;
+}
+Object.assign(window.JunctionAPI, {settingsSnapshot, settingsApply, draftsRaw, draftsMerge, inCity: () => !!(started && !demoMode && !over)});

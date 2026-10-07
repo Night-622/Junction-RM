@@ -2575,3 +2575,75 @@ if (NATIVE_APP) {
     } catch (e) { msg.textContent = (e && e.code === 'auth/popup-closed-by-user') ? 'The Google window was closed. Press the button to try again.' : 'That didn\u2019t work: ' + (e.message || e.code || e); go.disabled = false; }
   });
 })();
+
+
+/* ===== p76: campaign stars, the Hollow Hour story and eggs, and the guides and tips you have seen follow your account ===== */
+const progressRef = uid => doc(db, 'users', uid, 'stats', 'progress');
+let progressLoaded = false, progressTimer = 0;
+async function pushProgress() {
+  if (!progressLoaded || !O.user) return;
+  clearTimeout(progressTimer); progressTimer = 0;
+  try { await setDoc(progressRef(O.user.uid), Object.assign(API.progressSnapshot(), {updatedAt: serverTimestamp()})); } catch (e) { console.warn('Progress sync failed', e); }
+}
+function pushProgressSoon() { if (!progressLoaded || !O.user) return; clearTimeout(progressTimer); progressTimer = setTimeout(pushProgress, 2500); }
+async function loadProgressCloud() {
+  if (!O.user) return;
+  try { const s = await getDoc(progressRef(O.user.uid)); if (s.exists()) API.mergeProgress(s.data()); } catch (e) { console.warn('Progress load failed', e); }
+  progressLoaded = true; pushProgress();
+}
+{
+  const _lsc = loadShopCloud;
+  loadShopCloud = async function () { await _lsc.apply(this, arguments); await loadProgressCloud(); };
+}
+API.events.on('progress', pushProgressSoon);
+window.addEventListener('pagehide', () => { pushProgress(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) pushProgress(); });
+
+
+/* ===== p77: settings, looks and map drafts follow the account =====
+   The newest write wins for settings; a device only applies another device's settings, never its own. Applying them needs a reload, so it
+   happens only at the menu. Map drafts merge draft by draft (the newer copy wins). */
+const settingsRef = uid => doc(db, 'users', uid, 'stats', 'settings'), draftsRef = uid => doc(db, 'users', uid, 'stats', 'drafts');
+const DEV_KEY = 'junction-device-v1', SYNC_KEY = 'junction-sync-v1';
+const devId = (() => { try { let d = localStorage.getItem(DEV_KEY); if (!d) { d = Math.random().toString(36).slice(2, 12); localStorage.setItem(DEV_KEY, d); } return d; } catch (e) { return 'x'; } })();
+function syncStamp(uid, k, v) {
+  try { const o = JSON.parse(localStorage.getItem(SYNC_KEY) || '{}') || {}; o[uid] = o[uid] || {}; if (v !== undefined) { o[uid][k] = v; localStorage.setItem(SYNC_KEY, JSON.stringify(o)); } return o[uid][k] || 0; } catch (e) { return 0; }
+}
+let setLoaded = false, setHash = '', setTimer = 0, drHash = '', drTimer = 0, syncPoll = 0;
+async function pushSettings() {
+  if (!setLoaded || !O.user) return; clearTimeout(setTimer); setTimer = 0;
+  const at = Date.now(), snap = API.settingsSnapshot();
+  try { await setDoc(settingsRef(O.user.uid), Object.assign({}, snap, {at, by: devId, updatedAt: serverTimestamp()}), {merge: true}); syncStamp(O.user.uid, 'settingsAt', at); } catch (e) { console.warn('Settings sync failed', e); }
+}
+async function pushDrafts() {
+  if (!setLoaded || !O.user) return; clearTimeout(drTimer); drTimer = 0;
+  const json = API.draftsRaw(); if (!json || json.length > 800000) return;
+  try { await setDoc(draftsRef(O.user.uid), {v: 1, json, at: Date.now(), by: devId, updatedAt: serverTimestamp()}); } catch (e) { console.warn('Drafts sync failed', e); }
+}
+async function loadSettingsCloud() {
+  if (!O.user) return; const uid = O.user.uid; let reload = false, hadSettings = false;
+  try {
+    const s = await getDoc(settingsRef(uid));
+    if (s.exists()) {
+      hadSettings = true; const c = s.data();
+      if (c.by !== devId && (+c.at || 0) > syncStamp(uid, 'settingsAt')) {
+        syncStamp(uid, 'settingsAt', +c.at || 0);
+        if (API.settingsApply(c)) { if (API.inCity()) API.toast('Your account’s settings will apply the next time you open the game.', 'tip'); else reload = true; }
+      }
+    }
+  } catch (e) { console.warn('Settings load failed', e); }
+  try { const d = await getDoc(draftsRef(uid)); if (d.exists() && d.data().json) API.draftsMerge(d.data().json); } catch (e) { console.warn('Drafts load failed', e); }
+  if (reload) { location.reload(); return; }
+  setHash = JSON.stringify(API.settingsSnapshot()); drHash = API.draftsRaw(); setLoaded = true;
+  if (!hadSettings) pushSettings(); if (drHash) pushDrafts();
+  if (!syncPoll) syncPoll = setInterval(() => {
+    if (!setLoaded || !O.user) return;
+    const h = JSON.stringify(API.settingsSnapshot()); if (h !== setHash) { setHash = h; clearTimeout(setTimer); setTimer = setTimeout(pushSettings, 2500); }
+    const dr = API.draftsRaw(); if (dr !== drHash) { drHash = dr; clearTimeout(drTimer); drTimer = setTimeout(pushDrafts, 2500); }
+  }, 6000);
+}
+{
+  const _lsc2 = loadShopCloud;
+  loadShopCloud = async function () { await _lsc2.apply(this, arguments); await loadSettingsCloud(); };
+}
+window.addEventListener('pagehide', () => { if (setLoaded) { if (setTimer) pushSettings(); if (drTimer) pushDrafts(); } });

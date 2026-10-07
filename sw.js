@@ -1,5 +1,5 @@
 /* Junction service worker: offline single player. The cache name carries the version, so a new release replaces it. */
-const VERSION = '2.3';
+const VERSION = '2.4.0.1';
 const CACHE = 'junction-' + VERSION;
 const CORE = ['./', './index.html', './game.js', './online.js', './styles.css', './manifest.json', './icons/icon-192.png', './icons/icon-512.png'];
 self.addEventListener('install', e => {

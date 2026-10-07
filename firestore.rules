@@ -58,6 +58,14 @@ service cloud.firestore {
         allow get: if isMe(uid);
         allow create, update: if isMe(uid) && (
           (sid == 'life' && request.resource.data.keys().hasOnly(['modes', 'ach', 'updatedAt']))
+          || (sid == 'settings' && request.resource.data.keys().hasOnly(['v', 'shared', 'dev', 'at', 'by', 'updatedAt'])
+              && request.resource.data.shared is map && request.resource.data.dev is map && request.resource.data.at is int && request.resource.data.by is string && request.resource.data.by.size() < 40)
+          || (sid == 'drafts' && request.resource.data.keys().hasOnly(['v', 'json', 'at', 'by', 'updatedAt'])
+              && request.resource.data.json is string && request.resource.data.json.size() < 900000 && request.resource.data.at is int)
+          || (sid == 'progress' && request.resource.data.keys().hasOnly(['v', 'camp', 'haunt', 'guides', 'tips', 'updatedAt'])
+              && request.resource.data.camp is map && request.resource.data.haunt is map
+              && (!('guides' in request.resource.data) || request.resource.data.guides is map)
+              && (!('tips' in request.resource.data) || (request.resource.data.tips is list && request.resource.data.tips.size() < 200)))
           || (sid == 'shop' && request.resource.data.keys().hasOnly(['v', 'bucks', 'toward', 'rbucks', 'owned', 'hired', 'designs', 'streak', 'prof', 'quests', 'updatedAt'])
               && request.resource.data.bucks is int && request.resource.data.bucks >= 0 && request.resource.data.bucks < 100000000));
       }
