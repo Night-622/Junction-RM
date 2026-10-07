@@ -1627,7 +1627,7 @@ function onChal(d, old) {
     if (res[d.from] && res[d.to]) finishMatch(d, null);
     else if (tms(d.expiresAt) && Date.now() > tms(d.expiresAt)) finishMatch(d, res[d.from] ? d.from : res[d.to] ? d.to : 'none', 'Time ran out before both runs were in.');
   }
-  if (d.status === 'done' && old && old.status !== 'done') showMatchResult(d);
+  if (d.status === 'done' && old && old.status !== 'done') showMatchResult(d, true);
 }
 function beginMatch(d) {
   if (!O.ready) return;
@@ -1700,13 +1700,27 @@ async function finishMatch(d, winner, reason) {
   } catch (e) { console.warn('Settling the match failed', e); }
   O.finishing = null;
 }
-function showMatchResult(d) {
+/* Winning an ISO match pays out as well as moving your rating: 200 to 600 Junc Bucks and 50 to 300 rare bucks, more the
+   bigger the win. The margin is the points lead over the five categories (5 to 0 pays the most; a win with no lead, such as the
+   other player leaving, pays the least). Each match pays once: paid ids are remembered in this browser. */
+const ISO_PAID_KEY = 'junction-iso-paid-v1';
+function isoReward(d, sc) {
+  let paid = []; try { paid = JSON.parse(localStorage.getItem(ISO_PAID_KEY)) || []; } catch (e) {}
+  if (paid.includes(d.id)) return null;
+  paid.push(d.id); try { localStorage.setItem(ISO_PAID_KEY, JSON.stringify(paid.slice(-200))); } catch (e) {}
+  const m = Math.max(0, Math.min(1, (sc.pa - sc.pb) / 5));
+  const bucks = Math.round(200 + 400 * m), rare = Math.round(50 + 250 * m);
+  API.grantReward(bucks, rare);
+  return {bucks, rare};
+}
+function showMatchResult(d, pay) {
   const me = O.user.uid, opp = oppOf(d), res = d.res || {}, a = res[me] || (O.iso && O.iso.id === d.id ? myStats() : {});
   const b = res[opp.uid] || (O.iso && O.iso.id === d.id && O.iso.lastOpp) || null;
   const sc = scoreDaily(a, b || {});
   const outcome = d.winner === 'draw' || d.winner === 'none' ? 'draw' : d.winner === me ? 'win' : 'lose';
   const mine = myName(), why = String(d.reason || '').replace(mine + '\u2019s city', 'Your city').replace(mine + ' left', 'You left');
-  API.showIsoResult({kind: d.kind, oppName: opp.name, outcome, reason: why,
+  const reward = pay && outcome === 'win' ? isoReward(d, sc) : null;
+  API.showIsoResult({kind: d.kind, oppName: opp.name, outcome, reason: why, reward,
     rows: sc.rows.map(r => ({label: r.label, me: r.fmt(r.x), them: b ? r.fmt(r.y) : '\u2014', win: r.win === 'a' ? 'me' : r.win === 'b' ? 'them' : ''})),
     points: d.kind === 'daily' ? [sc.pa, sc.pb] : null});
   chalWith = opp;

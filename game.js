@@ -9107,6 +9107,7 @@ function showIsoResult(r) {
   $('ir-kind').textContent = 'ISO 1v1 \u00b7 ' + (r.kind === 'live' ? 'Live' : 'Daily') + ' vs ' + r.oppName;
   $('ir-title').textContent = r.outcome === 'win' ? 'You won!' : r.outcome === 'lose' ? r.oppName + ' won' : 'A draw';
   $('ir-sub').textContent = r.reason || '';
+  const rw = $('ir-reward'); rw.hidden = !r.reward; if (r.reward) rw.innerHTML = '<b>Reward</b> <span>' + CUR + r.reward.bucks.toLocaleString('en-US') + ' Junc Bucks</span> <span class="rr">' + RCUR + r.reward.rare + ' rare bucks</span>';
   $('ir-table').innerHTML = '<table><tr><th></th><th>You</th><th>' + escH(r.oppName) + '</th></tr>' + r.rows.map(x =>
     '<tr><td>' + x.label + '</td><td class="' + (x.win === 'me' ? 'w' : '') + '">' + x.me + '</td><td class="' + (x.win === 'them' ? 'w' : '') + '">' + x.them + '</td></tr>').join('') +
     (r.points ? '<tr class="tot"><td>Points</td><td>' + r.points[0] + '</td><td>' + r.points[1] + '</td></tr>' : '') + '</table>';
@@ -11448,6 +11449,7 @@ if (typeof window !== 'undefined' && (location.hostname === 'localhost' || locat
     get iso() { return iso && diffKey === 'iso' ? {id: iso.id, kind: iso.kind, over} : null; },
     isoOpp(st) { if (!iso) return; iso.oppSt = st; renderIsoHud(); },
     isoProp(p) { if (!iso) return; iso.prop = p; renderIsoHud(); if (p && !p.mine) sfx('click'); },
+    grantReward(bucks, rare) { jb.bucks += bucks; jb.rbucks += rare; saveShop(); renderBucks(); },
     isoNote(t) { if (!iso) return; iso.note = t || ''; renderIsoHud(); },
     isoControl(c) {                                        // what both players agreed: applied the same on both sides
       if (!iso || diffKey !== 'iso' || over) return;

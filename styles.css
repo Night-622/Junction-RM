@@ -3342,3 +3342,7 @@ html[data-lay="D"][data-short="1"] .rl-logo{top:28px}
 @media (min-width:901px){#panel{width:310px}}
 html[data-lay="D"] #panel .minibox{display:none}
 @media (min-height:1000px){html[data-lay="D"] #panel .minibox{display:block}}
+
+.ir-reward{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px;margin:0 0 12px;padding:10px 16px;border-radius:999px;background:rgba(var(--accent-rgb),.14);box-shadow:inset 0 0 0 1px rgba(var(--accent-rgb),.5);font-weight:800}
+.ir-reward[hidden]{display:none}.ir-reward b{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+.ir-reward span{color:var(--mid)}.ir-reward .rr{color:#d6aaff}
