@@ -280,6 +280,7 @@ const CHANGELOG = [
     'A new logo, and smoother drawing: the game lowers its resolution by itself when it can\u2019t keep up.',
     'Coins are now 1 ◎ for every 2 parcels delivered.',
     'Halloween part two: a Season tab with 30 objectives and five exclusive rewards, plus a story for Haunted Night (The Hollow Hour, 13 chapters), the Witching Hour, golden pumpkins, a ghost van and six easter eggs.',
+    'The Halloween drop: collect pumpkins in Haunted Night, then spend 20 on a drop (five an hour) for one of 50 Halloween-only items: 20 animated colours that work on anything, and 30 patterned designs for houses, stores, lights, roundabouts, bridges, motorways, roads and drones.',
     'Haunted Night, a Halloween mode: a dark city, rolling fog and pumpkins on the roads for bonus cash. It has its own saves and leaderboard.']},
   {v: '2.3', date: 'October 6, 2026', items: [
     'Campaign: 30 handcrafted levels in three chapters, each with a goal and 1–3 stars. Stars open the next chapter and unlock the Mayor house, Medal roundabout and Trophy car.',
@@ -5203,6 +5204,35 @@ GEN.drone = [
   ['aurora', 'Aurora', 0, 'U', {body: '#0e1b2e', rotor: '#3dffb0', k: 'glow', c: '#4dffc3'}], ['toxic', 'Toxic', 0, 'U', {body: '#2a3a1a', rotor: '#7dff3a', k: 'glow', c: '#7dff3a'}],
   ['starlight', 'Starlight', 0, 'U', {body: '#e8e4ff', rotor: '#8a5bff', k: 'dots', c: '#8a5bff'}]
 ];
+/* p80: the Halloween drop, 50 designs. [category, id, name, tier, look]; the look is what the generators of each category understand. */
+const HD = [
+  /* houses */
+  ['house', 'hw_manor', 'Haunted manor', 's', {shape: 'box', roof: '#3a2d4a', pat: 'shingle', x: ['turret', 'lantern']}], ['house', 'hw_cornhouse', 'Candy corn cottage', 's', {shape: 'pill', roof: '#ffd23a', pat: 'stripes'}],
+  ['house', 'hw_webhut', 'Web hut', 's', {shape: 'round', roof: '#cfc8d8', pat: 'rings'}], ['house', 'hw_pumpkinhouse', 'Pumpkin house', 's', {shape: 'round', roof: '#ff8a1f', pat: 'arcs', x: ['lantern']}],
+  ['house', 'hw_gravestone', 'Gravestone', 's', {shape: 'box', roof: '#8b8f96', pat: 'chips'}],
+  ['house', 'hw_witchcheck', 'Witch’s checker', 'r', {shape: 'box', roof: '#2a1a33', pat: 'checker', x: ['chimney']}], ['house', 'hw_batcave', 'Bat cave', 'r', {shape: 'dome', roof: '#2a2238', pat: 'craters', x: ['antenna']}],
+  ['house', 'hw_cobwebdome', 'Cobweb dome', 'u', {shape: 'dome', roof: '#e8e4f0', pat: 'lattice', x: ['hedge']}],
+  /* stores */
+  ['store', 'hw_ghoulmart', 'Ghoul mart', 's', {base: '#2b3036', pat: 'stripes', acc: '#ff8a1f'}], ['store', 'hw_candyshop', 'Candy corn shop', 's', {base: '#fbf8f1', pat: 'stripes', acc: '#ff8a1f'}],
+  ['store', 'hw_webmarket', 'Cobweb market', 's', {base: '#e8e4f0', pat: 'rings', acc: '#6b6480'}],
+  ['store', 'hw_pumpkinfarm', 'Pumpkin farm', 'r', {base: '#6fae55', pat: 'dots', acc: '#ff8a1f'}], ['store', 'hw_boochequer', 'Boo chequer', 'r', {base: '#1a1024', pat: 'checker', acc: '#ff8a1f'}],
+  ['store', 'hw_belfry', 'Bat belfry', 'u', {base: '#2a1a33', pat: 'batwing', acc: '#c59bff'}],
+  /* traffic lights */
+  ['light', 'hw_pumpkinlamp', 'Pumpkin lamp', 's', {h: '#ff8a1f', ring: '#3a1d05', shape: 'blob'}], ['light', 'hw_witchlight', 'Witch light', 'r', {h: '#6fd13a', ring: '#2f7a1a', shape: 'flower', glow: '#7dff3a'}],
+  ['light', 'hw_ghostlamp', 'Ghost lamp', 'u', {h: '#e9fbff', ring: '#9fb8d8', shape: 'cloud', glow: '#cfe8ff'}],
+  /* roundabouts */
+  ['round', 'hw_pumpkinbed', 'Pumpkin bed', 's', {fill: '#4a6a3a', pat: 'dots', acc: '#ff8a1f'}], ['round', 'hw_gravecircle', 'Graveyard circle', 'r', {fill: '#4a4558', pat: 'wedges', acc: ['#6b6480']}],
+  ['round', 'hw_webcircle', 'Spider web', 'u', {fill: '#e8e4f0', pat: 'spiral', acc: '#3a2d4a'}],
+  /* bridges, motorways, roads */
+  ['bridge', 'hw_batbridge', 'Bat bridge', 's', ['#2a1a33', '#c59bff', '#120b1f']], ['bridge', 'hw_bonebridge', 'Bone bridge', 'r', ['#f1ede0', '#b8b09c', '#8c8472']],
+  ['moto', 'hw_witchdeck', 'Witching deck', 's', ['#2a1a33', '#ff8a1f']], ['moto', 'hw_ectoplasm', 'Ectoplasm', 'r', ['#7dff3a', '#2a3a1a', '#3a5a1a']],
+  ['road', 'hw_hauntlane', 'Haunted lane', 's', {road: '#3a3446', edge: '#1a1424', lane: '#ff8a1f'}], ['road', 'hw_slimetrail', 'Slime trail', 'r', {road: '#3a5a1a', edge: '#1f3a0e', lane: '#b8ff5a'}],
+  /* drones */
+  ['drone', 'hw_batdrone', 'Bat drone', 's', {body: '#1a1024', rotor: '#c59bff', k: 'band', c: '#ff8a1f'}], ['drone', 'hw_pumpkindrone', 'Pumpkin drone', 's', {body: '#ff8a1f', rotor: '#4c8f3a', k: 'stripe', c: '#c9560b'}],
+  ['drone', 'hw_ghostdrone', 'Ghost drone', 's', {body: '#f4fbff', rotor: '#9fb8d8', k: 'dots', c: '#cfe8ff'}], ['drone', 'hw_witchdrone', 'Witch drone', 'u', {body: '#2a1a4a', rotor: '#6fd13a', k: 'glow', c: '#7dff3a'}]
+];
+const HD_TIER = {s: 'hstd', r: 'hrare', u: 'hunique'}, HD_RARITY = {}, HD_IDS = new Set();
+for (const [cat, id, name, t, look] of HD) { GEN[cat].push([id, name, 0, 'P', look]); HD_RARITY['design:' + cat + ':' + id] = HD_TIER[t]; HD_IDS.add('design:' + cat + ':' + id); }
 const GEN_P = {}; for (const c in GEN) { GEN_P[c] = {}; for (const e of GEN[c]) GEN_P[c][e[0]] = e[4]; }
 /* a generated house: one rounded body (box, pill, round or dome), a roof pattern, a trim in the house's colour, a door and a few extras */
 function houseGen(p, b, col, model) {
@@ -9555,7 +9585,7 @@ function bindLayout() {
   window.addEventListener('resize', () => { if (layDevice() !== layDev) applyLayout(); });
 }
 function savePrefs(noCity) {
-  try { localStorage.setItem(PREFS_KEY, JSON.stringify({muted, nightOn, showGrid, fxOn, colorMode, customHex, showSymbols, tipsOn, notesMode, showMoto, audio: audioPrefs, gfx, a11y})); } catch (e) {}
+  try { localStorage.setItem(PREFS_KEY, JSON.stringify({muted, nightOn, showGrid, fxOn, colorMode, customHex, animSlots, showSymbols, tipsOn, notesMode, showMoto, audio: audioPrefs, gfx, a11y})); } catch (e) {}
   if (!noCity && started && !over && !tutorialMode && !spectating && running) saveGame();   // the open city keeps these colours
 }
 function renderNotesUI() {
@@ -9609,6 +9639,7 @@ function loadPrefs() {
       if (['all', 'warn', 'off'].includes(p.notesMode)) notesMode = p.notesMode;
       if (typeof p.colorMode === 'string' && PALETTES[p.colorMode]) colorMode = p.colorMode;
       if (Array.isArray(p.customHex) && p.customHex.length === COLORS.length && p.customHex.every(h => /^#[0-9a-f]{6}$/i.test(h))) customHex = p.customHex.slice();
+      if (Array.isArray(p.animSlots)) p.animSlots.slice(0, COLORS.length).forEach((v, i) => { if (typeof v === 'string' && HCOLS[v]) animSlots[i] = v; });
     }
   } catch (e) {}
   // phones start on Balanced
@@ -10121,6 +10152,51 @@ Object.assign(COSMETICS, {
   'style:opal': [0, 'Opal glass panels', 'U']
 });
 for (const cat in DESIGNS) for (const k in DESIGNS[cat].items) { const [n, pr, cur, achId] = DESIGNS[cat].items[k]; if (pr || cur) COSMETICS['design:' + cat + ':' + k] = [pr, n + ' ' + DESIGNS[cat].one, cur || '#', achId]; }
+/* p81: animated Halloween colours (they live before boot(), so owned ones survive loading). kind: cycle (smooth loop), pulse (swell between two),
+   blink (hard steps), flicker (candle), rainbow. period is seconds for a loop; spread is how far apart neighbouring buildings run (0 together, 1 a full loop apart). */
+const HCOLS = {
+  hw_candycorn: {name: 'Candy corn', tier: 's', kind: 'cycle', cols: ['#ffd23a', '#ff8a1f', '#f6f1e4'], period: 4.5, spread: 0.6},
+  hw_jacklantern: {name: 'Jack-o-lantern', tier: 's', kind: 'flicker', cols: ['#ff8a1f', '#ffd23a'], period: 1, spread: 1},
+  hw_cobweb: {name: 'Cobweb', tier: 's', kind: 'pulse', cols: ['#e8e4f0', '#8b86a0'], period: 3, spread: 0.5},
+  hw_batwing: {name: 'Bat wing', tier: 's', kind: 'blink', cols: ['#2a1a33', '#5b2a86'], period: 1, step: 0.55, spread: 0.8},
+  hw_swamp: {name: 'Swamp glow', tier: 's', kind: 'pulse', cols: ['#4a8a2a', '#b8ff5a'], period: 2.8, spread: 1},
+  hw_ghost: {name: 'Ghost', tier: 's', kind: 'cycle', cols: ['#f4fbff', '#9fb8d8'], period: 5, spread: 0.4},
+  hw_toffee: {name: 'Toffee apple', tier: 's', kind: 'cycle', cols: ['#c0392b', '#7a2a14'], period: 6, spread: 0.3},
+  hw_witchpurple: {name: 'Witch purple', tier: 's', kind: 'cycle', cols: ['#7a3fb8', '#c59bff'], period: 3.5, spread: 0.7},
+  hw_bloodmoon: {name: 'Blood moon', tier: 's', kind: 'pulse', cols: ['#8b0f1f', '#ff3d3d'], period: 2.2, spread: 0.3},
+  hw_mist: {name: 'Graveyard mist', tier: 's', kind: 'cycle', cols: ['#6b6480', '#9fb0c4'], period: 7, spread: 0.9},
+  hw_zombie: {name: 'Zombie green', tier: 's', kind: 'flicker', cols: ['#4a6a3a', '#9fcc5a'], period: 1, spread: 1},
+  hw_mummy: {name: 'Mummy wraps', tier: 's', kind: 'blink', cols: ['#e9e2cf', '#b8b09c'], period: 1, step: 0.4, spread: 1},
+  hw_orangeblack: {name: 'Orange and black', tier: 's', kind: 'blink', cols: ['#ff8a1f', '#1a1024'], period: 1, step: 0.6, spread: 1},
+  hw_potion: {name: 'Potion', tier: 'r', kind: 'cycle', cols: ['#6fd13a', '#a066ff'], period: 4, spread: 0.8},
+  hw_hellfire: {name: 'Hellfire', tier: 'r', kind: 'flicker', cols: ['#ff3d1f', '#ffb347'], period: 0.6, spread: 1},
+  hw_aurora: {name: 'Spirit lights', tier: 'r', kind: 'cycle', cols: ['#4dffc3', '#7a5bff', '#ff6fb5'], period: 6, spread: 0.7},
+  hw_neonboo: {name: 'Neon boo', tier: 'r', kind: 'pulse', cols: ['#ff3df2', '#22e6ff'], period: 1.6, spread: 0.6},
+  hw_spectral: {name: 'Spectral rainbow', tier: 'r', kind: 'rainbow', cols: ['#ff4d4d'], period: 8, spread: 0.9},
+  hw_witching: {name: 'Witching hour', tier: 'u', kind: 'cycle', cols: ['#ff8a1f', '#a066ff', '#6fd13a', '#1a1024'], period: 8, spread: 1},
+  hw_midnightsun: {name: 'Midnight sun', tier: 'u', kind: 'cycle', cols: ['#1a1024', '#ffd23a'], period: 5, spread: 0.8}
+};
+var animSlots = ['', '', '', '', '', ''], animDraw = false, colPhase = 0, animFrame = 0;
+for (const id in HCOLS) { const k = 'hcol:' + id; COSMETICS[k] = [0, HCOLS[id].name + ' colour', 'P']; HD_IDS.add(k); HD_RARITY[k] = HD_TIER[HCOLS[id].tier]; }
+function hslHex(h, s, l) { const a = s * Math.min(l, 1 - l), f = n => { const k = (n + h / 30) % 12, c = l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)); return Math.round(255 * c).toString(16).padStart(2, '0'); }; return '#' + f(0) + f(8) + f(4); }
+const hcMemo = {f: -1, m: {}};
+function hcolAt(id, t, ph) {
+  const d = HCOLS[id]; if (!d) return '#888888';
+  if (REDUCED_MOTION) return d.cols[0];
+  const tt = t + ph * d.spread * d.period, cs = d.cols;
+  if (d.kind === 'cycle') { const u = (((tt / d.period) % 1) + 1) % 1 * cs.length, i = Math.floor(u), f = u - i, s = f * f * (3 - 2 * f); return mixHex(cs[i % cs.length], cs[(i + 1) % cs.length], s); }
+  if (d.kind === 'pulse') return mixHex(cs[0], cs[1], 0.5 - 0.5 * Math.cos(tt / d.period * 6.2832));
+  if (d.kind === 'blink') { const i = Math.floor(tt / d.step); return cs[((i % cs.length) + cs.length) % cs.length]; }
+  if (d.kind === 'flicker') { const n = (Math.sin(tt * 13.1) + Math.sin(tt * 7.7 + 1.3) + Math.sin(tt * 21.3 + 2.1)) / 3 * 0.5 + 0.5; return mixHex(cs[0], cs[1], Math.max(0, Math.min(1, n))); }
+  return hslHex((((tt / d.period) % 1) + 1) % 1 * 360, 0.85, 0.55);
+}
+function hcolNow(id) {
+  if (hcMemo.f !== animFrame) { hcMemo.f = animFrame; hcMemo.m = {}; }
+  const k = id + '|' + Math.round(colPhase * 24); let v = hcMemo.m[k];
+  if (!v) v = hcMemo.m[k] = hcolAt(id, performance.now() / 1000, colPhase);
+  return v;
+}
+
 Object.assign(DESIGNS.car.items, {season_bronze: ['Bronze season', 0, 'S'], season_silver: ['Silver season', 0, 'S'], season_gold: ['Gold season', 0, 'S'], season_platinum: ['Platinum season', 0, 'S'], season_diamond: ['Diamond season', 0, 'S']});
 for (const k of ['season_bronze', 'season_silver', 'season_gold', 'season_platinum', 'season_diamond']) COSMETICS['design:car:' + k] = [0, DESIGNS.car.items[k][0] + ' car design', 'S'];
 for (const k in BANNERS) COSMETICS['banner:' + k] = BANNERS[k][3] ? [BANNERS[k][1], BANNERS[k][0] + ' banner', BANNERS[k][3]] : [BANNERS[k][1], BANNERS[k][0] + ' banner'];
@@ -10130,7 +10206,7 @@ for (const id in COSMETICS) { const c = COSMETICS[id]; if (!c[2] || c[2] === '#'
 /* ---- seasonal events: a themed fortnight with its own designs, quests and news. Dates are month/day, local time. */
 const EVENTS = [
   {id: 'halloween', rev: 'b', name: 'Halloween', start: [10, 1], end: [10, 31], map: 'spooky', decor: 'pumpkin', items: ['design:car:ghost', 'design:store:batwing', 'decor:ghostlight', 'title:ghost'],
-   tag: 'Event', title: 'Halloween in Junction', text: 'Ghost cars, bat-wing stores and ghost lights in the Store until October 31, plus 30 season objectives and a new mode with its own story: Haunted Night.',
+   tag: 'Event', title: 'Halloween in Junction', text: 'Ghost cars, bat-wing stores and ghost lights in the Store until October 31, plus 30 season objectives, a new mode with its own story (Haunted Night), and a Halloween drop with 50 Halloween-only items you buy with pumpkins: animated colours and patterned designs.',
    quests: [
      ['deliver', 50, 'Deliver 50 parcels in any city', {c: 40}], ['trips', 40, 'Make 40 trips', {c: 40}], ['build_light', 3, 'Place 3 traffic lights in one city', {c: 50}],
      ['pumpkin', 5, 'Collect 5 pumpkins', {c: 60}], ['lore', 2, 'Unlock 2 chapters of The Hollow Hour', {c: 70}],
@@ -10161,7 +10237,7 @@ for (const g of COLOR_LIBRARY) g.cols.forEach(([n, h, pr], i) => {
 });
 const colourName = hex => LIB_NAME[hex] || hueName(hex);
 const colourPrice = hex => hex in COLOUR_PRICE ? COLOUR_PRICE[hex] : 700;
-let jb = {v: 4, bucks: 0, toward: 0, rbucks: 0, rtoward: 0, owned: {}, hired: {}, designs: {}, rot: null, daily: null, prof: {banner: '', frame: '', title: '', pins: []}, quests: null}, jbFirstRun = false, buyPending = null;
+let jb = {v: 4, bucks: 0, toward: 0, rbucks: 0, rtoward: 0, pumpkins: 0, hd: {h: 0, n: 0}, owned: {}, hired: {}, designs: {}, rot: null, daily: null, prof: {banner: '', frame: '', title: '', pins: []}, quests: null}, jbFirstRun = false, buyPending = null;
 const design = cat => (jb.designs && DESIGNS[cat] && DESIGNS[cat].items[jb.designs[cat]]) ? jb.designs[cat] : 'standard';
 const storeDesign = () => design('store');
 function itemInfo(id) {                                // [price, name] for anything that can be bought
@@ -10189,13 +10265,14 @@ function cleanProf(p) {
 }
 /* what's worth keeping with your account (B1): balances, what you own and wear, your streak, quests and profile look */
 function shopSnapshot() {
-  return {v: 4, bucks: jb.bucks, toward: jb.toward, rbucks: jb.rbucks, owned: Object.keys(jb.owned), hired: jb.hired, designs: jb.designs, streak: jb.streak || null, prof: jb.prof, quests: jb.quests || null};
+  return {v: 4, bucks: jb.bucks, toward: jb.toward, rbucks: jb.rbucks, owned: Object.keys(jb.owned), hired: jb.hired, designs: jb.designs, streak: jb.streak || null, prof: jb.prof, quests: jb.quests || null, pumpkins: jb.pumpkins || 0, hd: jb.hd || null};
 }
 /* merge what the account holds into this browser: the higher balance wins, owned items are the union, the longer streak stays */
 function mergeShop(d) {
   if (!d || typeof d !== 'object') return false;
   let changed = false;
-  for (const k of ['bucks', 'rbucks']) { const v = Math.max(0, Math.floor(+d[k] || 0)); if (v > jb[k]) { jb[k] = v; changed = true; } }
+  for (const k of ['bucks', 'rbucks', 'pumpkins']) { const v = Math.max(0, Math.floor(+d[k] || 0)); if (v > (jb[k] || 0)) { jb[k] = v; changed = true; } }
+  if (d.hd && typeof d.hd === 'object') { const h = Math.floor(Date.now() / HOUR_MS); if (+d.hd.h === h && Math.floor(+d.hd.n || 0) > (jb.hd && jb.hd.h === h ? jb.hd.n : 0)) { jb.hd = {h, n: Math.floor(+d.hd.n)}; changed = true; } }
   if (jb.bucks === Math.floor(+d.bucks || 0) && +d.toward > (jb.toward || 0)) jb.toward = clamp(Math.floor(+d.toward), 0, PARCELS_PER_BUCK - 1);
   for (const id of Array.isArray(d.owned) ? d.owned : Object.keys(d.owned || {})) if ((COSMETICS[id] || /^colour:#[0-9a-f]{6}$/.test(id)) && !jb.owned[id]) { jb.owned[id] = 1; changed = true; }
   if (d.hired && typeof d.hired === 'object') for (const k in d.hired) if (/^colour:#[0-9a-f]{6}$/.test(k) && +d.hired[k] > (jb.hired[k] || 0) && +d.hired[k] > Date.now()) { jb.hired[k] = +d.hired[k]; changed = true; }
@@ -10220,6 +10297,7 @@ function loadShop() {
   if (!d || typeof d !== 'object') { jbFirstRun = true; return; }
   jb.bucks = Math.max(0, Math.floor(+d.bucks || 0)); jb.toward = clamp(Math.floor(+d.toward || 0), 0, 9);
   jb.rbucks = Math.max(0, Math.floor(+d.rbucks || 0)); jb.rtoward = 0;
+  jb.pumpkins = Math.max(0, Math.floor(+d.pumpkins || 0)); jb.hd = d.hd && typeof d.hd === 'object' ? {h: +d.hd.h || 0, n: Math.max(0, Math.floor(+d.hd.n || 0))} : {h: 0, n: 0};
   const strs = a => Array.isArray(a) ? a.filter(x => typeof x === 'string') : [];
   if (d.rot && typeof d.rot === 'object') { const c = d.rot.crates || {}; jb.rot = {h: +d.rot.h || 0, n: +d.rot.n || 0, items: strs(d.rot.items), cols: strs(d.rot.cols), crates: {colour: +c.colour || 0, item: +c.item || 0, object: +c.object || 0}}; }
   if (d.daily && typeof d.daily === 'object') jb.daily = {d: +d.daily.d || 0, id: typeof d.daily.id === 'string' ? d.daily.id : ''};
@@ -10279,6 +10357,7 @@ function purchase(id, kind, fn) {
   if (info[2] === 'U') { hint(name + ' is unique — it only comes out of mystery crates in the Store.'); return; }
   if (info[2] === 'S') { hint(name + ' is a ranked season reward: finish a season in that division.'); return; }
   if (info[2] === 'H') { hint(name + ' is a Halloween season reward: finish its objective in Quests, Season.'); return; }
+  if (info[2] === 'P') { hint(name + ' comes out of Halloween drops: collect pumpkins in Haunted Night and open one in the Store.'); return; }
   if (!inStock(id)) { hint(name + ' isn’t in the Store right now. The Store restocks every hour (new stock in ' + fmtLeft(HOUR_MS - Date.now() % HOUR_MS) + ')' + (info[2] === 'R' ? ' and has one special item a day.' : '.') + ' Crates can have it too.'); buyPending = null; renderLook(); return; }
   const price = kind === 'hire' ? HIRE_PRICE : info[0], rare = kind !== 'hire' && info[2] === 'R';
   const sym = rare ? RCUR : CUR, have = rare ? jb.rbucks : jb.bucks;
@@ -10461,8 +10540,8 @@ function renderQuests() {
 /* ---- the hourly Store: 6 items and 6 colours every hour, one special item (✦) a day, and three mystery crates.
    Each hour's stock is shuffled from the hour itself, so everyone's Store is alike, with things you don't own first. */
 const HOUR_MS = 3600e3, DAY_MS = 86400e3;
-const RARITY = {standard: 'Standard', rare: 'Rare', unique: 'Unique', special: 'Special', ach: 'Achievement', camp: 'Campaign'};
-function rarityOf(id) { const i = itemInfo(id); if (!i) return 'standard'; return i[2] === 'C' ? 'camp' : i[2] === 'A' || i[2] === 'S' || i[2] === 'H' ? 'ach' : i[2] === 'R' ? 'special' : i[2] === 'U' ? 'unique' : i[0] >= 750 ? 'rare' : 'standard'; }
+const RARITY = {standard: 'Standard', rare: 'Rare', unique: 'Unique', special: 'Special', ach: 'Achievement', camp: 'Campaign', hstd: 'Halloween', hrare: 'Halloween rare', hunique: 'Halloween unique'};
+function rarityOf(id) { const i = itemInfo(id); if (!i) return 'standard'; if (i[2] === 'P') return HD_RARITY[id] || 'hstd'; return i[2] === 'C' ? 'camp' : i[2] === 'A' || i[2] === 'S' || i[2] === 'H' ? 'ach' : i[2] === 'R' ? 'special' : i[2] === 'U' ? 'unique' : i[0] >= 750 ? 'rare' : 'standard'; }
 const CRATES = {
   colour: {name: 'Colour crate', price: 150, holds: 'a colour', test: id => id.startsWith('colour:')},
   item:   {name: 'Item crate', price: 200, holds: 'a theme, map, panel style, decoration, banner, frame or title', test: id => /^(ui|style|map|decor|banner|frame|title):/.test(id)},
@@ -10488,11 +10567,13 @@ function ensureRotation() {
   if (dirty) saveShop();
 }
 function inStock(id) { ensureRotation(); if (EVENT_ITEMS.has(id)) { const e = eventOf(id); return !!(e && activeEvent() === e); } return jb.rot.items.includes(id) || jb.rot.cols.includes(id) || jb.daily.id === id; }
-const crateLeft = kind => { ensureRotation(); return Math.max(0, CRATE_MAX - (jb.rot.crates[kind] || 0)); };
+const crateMax = k => (CRATES[k] && CRATES[k].max) || CRATE_MAX;
+const crateLeft = kind => { ensureRotation(); if (kind === 'halloween') return Math.max(0, crateMax(kind) - hdUsed()); return Math.max(0, crateMax(kind) - (jb.rot.crates[kind] || 0)); };
 const crateNew = kind => allShopIds().filter(id => CRATES[kind].test(id) && ['standard', 'rare', 'unique'].includes(rarityOf(id)) && !owns(id) && (!EVENT_ITEMS.has(id) || activeEvent() === eventOf(id)));
 /* two taps (like buying), then the crate shakes open and shows what was inside */
 let crateKind = '', crateGot = '';
 function openCrate(kind, sure, free) {
+  if (kind === 'halloween') return openHDrop(sure);
   const C = CRATES[kind]; if (!C) return;
   if (!free && !crateLeft(kind)) { hint('You’ve opened ' + CRATE_MAX + ' ' + C.name.toLowerCase() + 's this hour. More in ' + fmtLeft(HOUR_MS - Date.now() % HOUR_MS) + '.'); return false; }
   const left = crateNew(kind);
@@ -10536,8 +10617,8 @@ function showCrate(kind, id) {
     $('crate-name').textContent = info ? info[1] : id;
     const it = shopItemById(id);
     $('crate-use').hidden = !(it && it.apply);
-    const more = crateLeft(kind) && crateNew(kind).length && jb.bucks >= CRATES[kind].price;
-    $('crate-again').hidden = !more; $('crate-again').textContent = 'Open another · ◎' + CRATES[kind].price + ' (' + crateLeft(kind) + ' left this hour)';
+    const more = crateLeft(kind) && (kind === 'halloween' ? hdNew().length : crateNew(kind).length) && (CRATES[kind].pumpkins ? (jb.pumpkins || 0) : jb.bucks) >= CRATES[kind].price;
+    $('crate-again').hidden = !more; $('crate-again').textContent = 'Open another · ' + (CRATES[kind].pumpkins ? PCUR : '◎') + CRATES[kind].price + ' (' + crateLeft(kind) + ' left this hour)';
     sfx('upgrade');
   }, REDUCED_MOTION ? 200 : 1300);
 }
@@ -10561,6 +10642,7 @@ function howToGet(id) {
   if (i[2] === 'A') return '🏆 ' + achName(i[3]);
   if (i[2] === 'S') return 'Ranked season reward';
   if (i[2] === 'H') return 'Halloween season reward';
+  if (i[2] === 'P') return 'Halloween drop · ' + (HD_RARITY[id] === 'hunique' ? 'unique' : HD_RARITY[id] === 'hrare' ? 'rare' : 'standard');
   if (EVENT_ITEMS.has(id)) { const e = eventOf(id); return e.name + ' event · ' + eventWhen(e) + (activeEvent() === e ? ' · in the Store now' : ''); }
   if (i[2] === 'C') return 'Campaign reward';
   if (i[2] === 'U') return 'Crates only';
@@ -10604,10 +10686,10 @@ function renderStore(box, light) {
   const parts = ['<div class="st-head"><div><b>New stock in ' + tLeft + '</b><small>Every hour: 6 items, 6 colours and 3 of each crate. ' + BUCKS_EACH + ' ◎ for every ' + PARCELS_PER_BUCK + ' parcels.</small></div><span class="st-bal num">' + CUR + jb.bucks.toLocaleString('en-US') + ' <i>·</i> <span class="rtag">✦' + jb.rbucks + '</span></span></div>'];
   if (jb.resetNote) { parts.push('<p class="mnote st-note">New credits! Everyone\u2019s balance started again from zero with new symbols: ◎ coins (1 for every 2 parcels) and ✦ stars (1 for every parcel in Frantic cities). Everything you own is still yours.</p>'); delete jb.resetNote; saveShop(); }
   parts.push('<h3 class="shop-h">Mystery crates <small>' + CRATE_MAX + ' of each per hour · 70% standard · 25% rare · 5% unique · never something you own</small></h3><div class="crates">' +
-    Object.keys(CRATES).map(k => {
-      const C = CRATES[k], n = crateLeft(k), none = !crateNew(k).length, conf = buyPending && buyPending.id === 'crate:' + k;
+    Object.keys(CRATES).filter(crateShown).map(k => {
+      const C = CRATES[k], n = crateLeft(k), none = !(k === 'halloween' ? hdNew().length : crateNew(k).length), conf = buyPending && buyPending.id === 'crate:' + k;
       return '<button type="button" class="crate-s k-' + k + (n && !none ? '' : ' spent') + '" data-act="crate" data-kind="' + k + '"><span class="crate-ico"><i></i></span><b>' + C.name + '</b><small>' + C.holds + '</small>' +
-        '<span class="crate-foot"><span class="lock' + (conf ? ' confirm' : '') + '">' + (conf ? 'Tap to open' : CUR + C.price) + '</span><em>' + (none ? 'All owned' : n + ' of ' + CRATE_MAX + ' left') + '</em></span></button>';
+        '<span class="crate-foot"><span class="lock' + (conf ? ' confirm' : '') + '">' + (conf ? 'Tap to open' : (C.pumpkins ? PCUR : CUR) + C.price) + '</span><em>' + (none ? 'All owned' : n + ' of ' + crateMax(k) + ' left') + '</em></span></button>';
     }).join('') + '</div>');
   const ev = activeEvent();
   if (ev) parts.push('<h3 class="shop-h ev-h">' + ev.name + ' event <small>until ' + eventWhen(ev).split('–')[0].split(' ')[0] + ' ' + ev.end[1] + ' · these are only sold during the event</small></h3><div class="shopgrid st-items">' + ev.items.map(shopItemById).filter(Boolean).map(it => storeCard(it, canvases)).join('') + '</div>');
@@ -13251,7 +13333,7 @@ hauntChipUpdate = function () {
     $('hc-journal').addEventListener('click', () => openJournal());
   }
   haunt.chip.hidden = !haunt.on;
-  const l = $('hc-line'); if (l) l.textContent = 'Pumpkins: ' + haunt.got + (haunt.combo > 1 ? ' · Combo x' + haunt.combo : '') + (haunt.witchT > 0 ? ' · Witching Hour ' + Math.ceil(haunt.witchT) + 's' : '') + (haunt.ghost ? ' · A pale van is out' : '');
+  const l = $('hc-line'); if (l) l.textContent = 'Pumpkins: ' + haunt.got + ' (\ud83c\udf83' + (jb.pumpkins || 0) + ' banked)' + (haunt.combo > 1 ? ' · Combo x' + haunt.combo : '') + (haunt.witchT > 0 ? ' · Witching Hour ' + Math.ceil(haunt.witchT) + 's' : '') + (haunt.ghost ? ' · A pale van is out' : '');
   haunt.chip.classList.toggle('witching', haunt.witchT > 0);
   const j = $('hc-journal'); if (j) j.classList.toggle('pulse', !!haunt.newChap);
 };
@@ -13264,7 +13346,7 @@ function hauntCollect(p) {
   const base = 40 + 5 * Math.min(week, 10);
   haunt.combo = haunt.comboT > 0 ? haunt.combo + 1 : 1; haunt.comboT = 8;
   const mult = Math.min(2.5, 1 + 0.25 * (haunt.combo - 1)) * (haunt.witchT > 0 ? 2 : 1) * (p.gold ? 5 : 1), v = Math.round(base * mult);
-  money += v; haunt.got++;
+  money += v; haunt.got++; jb.pumpkins = (jb.pumpkins || 0) + (p.gold ? 3 : 1); saveShop();
   popText(p.x, p.y - 4, '+' + fmt$(v) + (haunt.combo > 1 ? '  x' + haunt.combo : ''), p.gold ? '#ffe066' : '#ffb02e'); sfx(p.gold ? 'claim' : 'deliver'); bump('v-money');
   questEvent('pumpkin', 1); questEvent('combo', haunt.combo);
   if (p.gold) { haunt.golds++; questEvent('golden', 1); hauntEgg('golden'); }
@@ -13595,4 +13677,105 @@ function drawLinks() {
     linksSelect(hit);
   });
   window.JunctionAPI.links = {get on() { return links.on; }, set, info: () => linksInfo(), select: linksSelect, get selected() { return links.sel; }, get targets() { return links.targets; }};
+}
+
+
+/* ===== p80: pumpkins and the Halloween drop. Pumpkins collected in Haunted Night bank in your account; a drop costs 20, five an hour. ===== */
+var PCUR = '🎃';
+CRATES.halloween = {name: 'Halloween drop', price: 20, max: 5, pumpkins: true, event: 'halloween', holds: 'an animated colour for any house, store or car, or a patterned house, store, light, roundabout, bridge, motorway, road or drone', test: id => HD_IDS.has(id)};
+function crateShown(k) { const c = CRATES[k]; return !c.event || !!(activeEvent() && activeEvent().id === c.event); }
+function hdUsed() { const h = Math.floor(Date.now() / HOUR_MS); return jb.hd && jb.hd.h === h ? (jb.hd.n | 0) : 0; }
+function hdNew() { return [...HD_IDS].filter(id => !jb.owned[id]); }
+function openHDrop(sure) {
+  const C = CRATES.halloween, ev = activeEvent();
+  if (!ev || ev.id !== 'halloween') { hint('Halloween drops are only here during the Halloween event.'); return false; }
+  if (!crateLeft('halloween')) { hint('You’ve opened ' + C.max + ' Halloween drops this hour. More in ' + fmtLeft(HOUR_MS - Date.now() % HOUR_MS) + '.'); return false; }
+  const left = hdNew(); if (!left.length) { hint('You already own every Halloween drop design.'); return false; }
+  if ((jb.pumpkins || 0) < C.price) { hint('A Halloween drop costs ' + PCUR + C.price + ' pumpkins and you have ' + PCUR + (jb.pumpkins || 0) + '. Collect pumpkins in Haunted Night.'); return false; }
+  const nowMs = performance.now(), pid = 'crate:halloween';
+  if (!sure && (!buyPending || buyPending.id !== pid || nowMs - buyPending.t > 4000)) {
+    buyPending = {id: pid, kind: 'buy', t: nowMs}; hint('Open a Halloween drop for ' + PCUR + C.price + '? Tap again to confirm.'); renderLook();
+    setTimeout(() => { if (buyPending && buyPending.id === pid && performance.now() - buyPending.t >= 4000) { buyPending = null; renderLook(); } }, 4100);
+    return false;
+  }
+  buyPending = null;
+  let roll = Math.random() * 100, tier = 'standard';
+  for (const [t, w] of CRATE_ODDS) { if (roll < w) { tier = t; break; } roll -= w; }
+  const want = {standard: 'hstd', rare: 'hrare', unique: 'hunique'}[tier]; let got = '';
+  for (const t of [want, 'hrare', 'hstd', 'hunique']) { const l = left.filter(id => HD_RARITY[id] === t); if (l.length) { got = l[Math.floor(Math.random() * l.length)]; break; } }
+  const h = Math.floor(Date.now() / HOUR_MS);
+  jb.pumpkins = (jb.pumpkins || 0) - C.price; jb.hd = jb.hd && jb.hd.h === h ? {h, n: (jb.hd.n | 0) + 1} : {h, n: 1};
+  jb.owned[got] = 1; saveShop(); renderBucks(); renderLook(); showCrate('halloween', got); questEvent('crate', 1);
+  return true;
+}
+{
+  const _rs = renderStore;
+  renderStore = function (box) {
+    _rs.apply(this, arguments);
+    const bal = box && box.querySelector ? box.querySelector('.st-bal') : null, ev = activeEvent();
+    if (bal && ev && ev.id === 'halloween') {
+      let pk = bal.querySelector('.st-pk');
+      if (!pk) { bal.insertAdjacentHTML('beforeend', ' <i>·</i> <span class="st-pk" title="Pumpkins from Haunted Night. A Halloween drop costs 20."></span>'); pk = bal.querySelector('.st-pk'); }
+      pk.textContent = PCUR + (jb.pumpkins || 0);
+    }
+  };
+}
+
+
+/* ===== p81: animated colours. A colour slot with an animated colour reads its colour from the clock while the map is being drawn, so every house,
+   store, car, bus and parcel of that colour animates; outside drawing (menus, badges, rings) the slot keeps its plain colour. ===== */
+COLORS.forEach((c, i) => {
+  let base = c.hex;
+  Object.defineProperty(c, 'hex', {configurable: true, enumerable: true,
+    get() { const id = animDraw ? animSlots[i] : ''; return id && jb.owned['hcol:' + id] ? hcolNow(id) : base; },
+    set(v) { base = v; }});
+});
+{
+  const _draw = draw; draw = function () { animDraw = animSlots.some(Boolean); animFrame++; try { return _draw.apply(this, arguments); } finally { animDraw = false; } };
+  const _dh = drawHouse; drawHouse = function (b) { colPhase = hash01(b.k, 7); try { return _dh.apply(this, arguments); } finally { colPhase = 0; } };
+  const _ds = drawStore; drawStore = function (b) { colPhase = hash01(b.k, 7); try { return _ds.apply(this, arguments); } finally { colPhase = 0; } };
+  const _dss = drawStoreSmall; drawStoreSmall = function (b) { colPhase = hash01(b.k, 7); try { return _dss.apply(this, arguments); } finally { colPhase = 0; } };
+  const _dhb = drawHouseBadge; drawHouseBadge = function (b) { colPhase = hash01(b.k, 7); try { return _dhb.apply(this, arguments); } finally { colPhase = 0; } };
+  const _dsb = drawStoreBadge; drawStoreBadge = function (b) { colPhase = hash01(b.k, 7); try { return _dsb.apply(this, arguments); } finally { colPhase = 0; } };
+  const _dc = drawCar;      // a car shares its home's phase, so a family shimmers together
+  drawCar = function (c) { const hb = buildings[c.home]; colPhase = hb ? hash01(hb.k, 7) : hash01((c.id | 0) + 1, 3); try { return _dc.apply(this, arguments); } finally { colPhase = 0; } };
+}
+function hcolTick() {
+  const t = performance.now() / 1000;
+  document.querySelectorAll('[data-hc]').forEach(el => { el.style.background = hcolAt(el.dataset.hc, t, +el.dataset.ph || 0); });
+}
+setInterval(hcolTick, 120);
+function setAnim(slot, id, toggle) {
+  if (id && !jb.owned['hcol:' + id]) { hint('Open Halloween drops in the Store to get that colour.'); return; }
+  animSlots[slot] = toggle && animSlots[slot] === id ? '' : id; savePrefs(); renderPaletteUI(); refreshHud();
+}
+{
+  const _rp = renderPaletteUI;
+  renderPaletteUI = function () {
+    _rp.apply(this, arguments);
+    const sw = $('pal-swatches'); if (!sw) return;
+    sw.querySelectorAll('.slot').forEach((b, i) => { const id = animSlots[i], ic = b.querySelector('i'); if (ic) { if (id && jb.owned['hcol:' + id]) ic.dataset.hc = id; else delete ic.dataset.hc; } });
+    const owned = Object.keys(HCOLS).filter(id => jb.owned['hcol:' + id]), ev = activeEvent();
+    const wrap = document.createElement('div'); wrap.className = 'libgrid hcol-grid';
+    if (owned.length) {
+      wrap.insertAdjacentHTML('beforeend', '<p class="mnote liblock">Halloween colours — animated, and they can go on any slot. Tap the one in use again to switch it off.</p>');
+      const row = document.createElement('div'); row.className = 'librow';
+      for (const id of owned) {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'libsw hcsw'; b.dataset.hc = id; b.dataset.tip = HCOLS[id].name; b.setAttribute('aria-label', HCOLS[id].name + (animSlots[palSlot] === id ? ', selected' : ''));
+        b.setAttribute('aria-pressed', animSlots[palSlot] === id ? 'true' : 'false'); b.addEventListener('click', () => setAnim(palSlot, id, true)); row.append(b);
+      }
+      wrap.append(row);
+    } else if (ev && ev.id === 'halloween') wrap.insertAdjacentHTML('beforeend', '<p class="mnote liblock">Halloween colours: animated colours that go on anything come out of Halloween drops in the Store (20 pumpkins each).</p>');
+    if (wrap.children.length) sw.append(wrap);
+    hcolTick();
+  };
+  const _pl = pickLibColour; pickLibColour = function () { animSlots[palSlot] = ''; return _pl.apply(this, arguments); };
+  const _si = shopItems;
+  shopItems = function (cat) {
+    if (cat !== 'hcol') return _si.apply(this, arguments);
+    return Object.keys(HCOLS).map(id => ({id: 'hcol:' + id, name: HCOLS[id].name + ' colour', active: animSlots.includes(id),
+      apply: () => { setAnim(palSlot, id, false); toast(HCOLS[id].name + ' is on the ' + COLORS[palSlot].name + ' slot. Change slots in Settings, Colours.', 'good'); },
+      html: '<span class="csw hcsw" data-hc="' + id + '"></span>'}));
+  };
+  SHOP_CATS.push(['hcol', 'Halloween colours']);
 }

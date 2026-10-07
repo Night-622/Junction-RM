@@ -66,7 +66,9 @@ service cloud.firestore {
               && request.resource.data.camp is map && request.resource.data.haunt is map
               && (!('guides' in request.resource.data) || request.resource.data.guides is map)
               && (!('tips' in request.resource.data) || (request.resource.data.tips is list && request.resource.data.tips.size() < 200)))
-          || (sid == 'shop' && request.resource.data.keys().hasOnly(['v', 'bucks', 'toward', 'rbucks', 'owned', 'hired', 'designs', 'streak', 'prof', 'quests', 'updatedAt'])
+          || (sid == 'shop' && request.resource.data.keys().hasOnly(['v', 'bucks', 'toward', 'rbucks', 'pumpkins', 'hd', 'owned', 'hired', 'designs', 'streak', 'prof', 'quests', 'updatedAt'])
+              && (!('pumpkins' in request.resource.data) || (request.resource.data.pumpkins is int && request.resource.data.pumpkins >= 0 && request.resource.data.pumpkins < 100000000))
+              && (!('hd' in request.resource.data) || request.resource.data.hd == null || request.resource.data.hd is map)
               && request.resource.data.bucks is int && request.resource.data.bucks >= 0 && request.resource.data.bucks < 100000000));
       }
 

@@ -2328,3 +2328,21 @@ ol.board li.sel{box-shadow:inset 0 0 0 1px var(--accent)}
 .season-head{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:12px 14px;border-radius:14px;background:rgba(255,138,31,.12);box-shadow:inset 0 0 0 1px rgba(255,138,31,.4);margin-bottom:6px}
 .season-head>div{flex:1;min-width:0;display:grid;gap:4px}.season-head small{opacity:.8;font-size:12px}
 .season-head .q-bar{display:block;height:6px;border-radius:99px;background:rgba(var(--ov),.14);overflow:hidden}.season-head .q-bar i{display:block;height:100%;background:#ff8a1f;border-radius:99px}
+
+
+/* ===== 28. Halloween drop (p80) ===== */
+.k-halloween{--c:255,138,31}
+.rar.r-hstd{background:#ff8a1f;color:#1a1024}.rar.r-hrare{background:#7a3fb8;color:#fff}.rar.r-hunique{background:linear-gradient(90deg,#ff8a1f,#6fd13a,#a066ff);color:#fff;text-shadow:0 1px 1px rgba(0,0,0,.3)}
+.st-card.r-hstd{border-color:rgba(255,138,31,.6);background:linear-gradient(160deg,rgba(255,138,31,.12),transparent)}
+.st-card.r-hrare{border-color:rgba(160,102,255,.7);background:linear-gradient(160deg,rgba(160,102,255,.16),transparent)}
+.st-card.r-hunique{border-color:rgba(111,209,58,.7);background:linear-gradient(160deg,rgba(255,138,31,.16),rgba(111,209,58,.1))}
+.crate-card.r-hstd{--glow:255,138,31}.crate-card.r-hrare{--glow:160,102,255}.crate-card.r-hunique{--glow:111,209,58}
+.coll-i.r-hstd{border-color:rgba(255,138,31,.55)}.coll-i.r-hrare{border-color:rgba(160,102,255,.55)}.coll-i.r-hunique{border-color:rgba(111,209,58,.6)}
+.st-pk{color:#ffb02e;font-weight:800}
+
+
+/* ===== 29. Animated Halloween colours (p81) ===== */
+.hcsw{display:inline-block;border-radius:50%;box-shadow:inset 0 0 0 2px rgba(255,255,255,.35),0 2px 6px rgba(0,0,0,.3)}
+.csw.hcsw{width:44px;height:44px}
+.libsw.hcsw{width:34px;height:34px;border:0;cursor:pointer}.libsw.hcsw[aria-pressed="true"]{box-shadow:0 0 0 3px #ffb02e,0 2px 6px rgba(0,0,0,.3)}
+.slot i[data-hc]{box-shadow:0 0 0 2px #ffb02e}
