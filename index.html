@@ -84,62 +84,11 @@
       <div class="plate menu" id="menu" hidden role="dialog" aria-label="Settings">
         <div class="mhead">
           <b>Settings</b>
-          <div class="seg mtabs" id="menu-tabs" role="tablist">
-            <button type="button" data-mtab="settings" aria-pressed="true">Settings</button>
-            <button type="button" data-mtab="store" aria-pressed="false">Store</button>
-            <button type="button" data-mtab="owned" aria-pressed="false">Owned</button>
-          </div>
           <span class="jbpill num" id="jb-pill" title="Junc Bucks">#0</span>
           <button class="iclose" id="menu-close" type="button" aria-label="Close">×</button>
         </div>
         <div class="mtab-pane" data-mtab="settings">
-        
-        <section class="msec" id="online-sec" hidden>
-          <h4>Account and online</h4>
-          <div class="acctline" id="acct-line"></div>
-          <div class="livecode">
-            <div><small>Your live code</small><b id="live-code" class="num">······</b></div>
-            <button class="act small" id="live-copy" type="button">Copy</button>
-            <button class="act small" id="live-refresh" type="button" hidden>New code</button>
-          </div>
-          <p class="mnote" id="live-note"></p>
-          <div class="mgrid">
-            <button class="act" id="btn-saves2" type="button">Save files</button>
-            <button class="act" id="btn-board" type="button">Leaderboard</button>
-            <button class="act" id="btn-watch" type="button">Watch a player</button>
-            <button class="act" id="btn-account" type="button">Account</button>
-          </div>
-        </section>
-        
-        
-        <section class="msec">
-          <h4>Layout</h4>
-          <div class="seg laypre" id="lay-pre" role="group" aria-label="Layout">
-            <button type="button" data-pre="full">Full</button>
-            <button type="button" data-pre="compact">Compact</button>
-            <button type="button" data-pre="minimal">Minimal</button>
-          </div>
-          <label class="tgl"><input type="checkbox" id="lay-stats"><span>Small stats bar</span></label>
-          <label class="tgl"><input type="checkbox" id="lay-ctrl"><span>Small controls</span></label>
-          <label class="tgl"><input type="checkbox" id="lay-dock"><span>Tools as icons only</span></label>
-          <label class="tgl"><input type="checkbox" id="lay-panel"><span>Side panel</span></label>
-          <p class="mnote" id="lay-note">Saved separately for phones and bigger screens. The <b>–</b> buttons on each bar do the same.</p>
-        </section>
-        <section class="msec">
-          <h4>Display</h4>
-          <label class="tgl"><input type="checkbox" id="opt-night" checked><span>Day and night</span></label>
-          <label class="tgl"><input type="checkbox" id="opt-grid"><span>Tile grid</span><kbd>G</kbd></label>
-          <label class="tgl"><input type="checkbox" id="opt-fx" checked><span>Pop-ups and rings</span></label>
-          <label class="tgl"><input type="checkbox" id="opt-moto" checked><span>Show motorways</span><kbd>M</kbd></label>
-          <div class="notesrow"><span>Notifications while playing</span>
-            <div class="seg" id="opt-notes" role="group" aria-label="Notifications while playing">
-              <button type="button" data-notes="all" aria-pressed="true">All</button>
-              <button type="button" data-notes="warn" aria-pressed="false">Warnings</button>
-              <button type="button" data-notes="off" aria-pressed="false">Off</button>
-            </div>
-          </div>
-          <p class="mnote" id="notes-note"></p>
-        </section>
+        <div class="mcol">
         <section class="msec" id="gfx-sec">
           <h4>Quality</h4>
           <div class="seg" id="gfx-pre" role="group" aria-label="Quality preset"><button type="button" data-gfx="high">High</button><button type="button" data-gfx="balanced">Balanced</button><button type="button" data-gfx="battery">Battery saver</button></div>
@@ -156,24 +105,33 @@
           <div class="gfxrow"><span>Motion</span><div class="seg small" id="acc-motion" role="group" aria-label="Motion"><button type="button" data-v="auto">System</button><button type="button" data-v="reduce">Reduce</button><button type="button" data-v="full">Full</button></div></div>
           <p class="mnote">Reduce motion turns off zooms, sways and pulses. Every icon button also has a label for screen readers.</p>
         </section>
-        <section class="msec" id="snd-sec">
-          <h4>Sound</h4>
-          <label class="tgl"><input type="checkbox" id="snd-music" checked><span>Music <small class="tglsub">a calm, slowly changing soundtrack</small></span></label>
-          <label class="slid"><span>Music volume</span><input type="range" id="snd-musicvol" min="0" max="100" value="60"></label>
-          <label class="slid"><span>Traffic in the distance</span><input type="range" id="snd-traffic" min="0" max="100" value="45"></label>
-          <label class="tgl"><input type="checkbox" id="snd-sfx" checked><span>Sound effects</span></label>
-          <label class="slid"><span>Effects volume</span><input type="range" id="snd-sfxvol" min="0" max="100" value="100"></label>
-          <label class="tgl"><input type="checkbox" id="snd-ui" checked><span>Button clicks</span></label>
-          <label class="tgl" id="snd-haptics-wrap"><input type="checkbox" id="snd-haptics" checked><span>Vibration <small class="tglsub">on phones: deliveries, week ends, game over, crates</small></span></label>
-          <p class="mnote">The speaker button, or <kbd>N</kbd>, mutes everything.</p>
+        <section class="msec">
+          <h4>Display</h4>
+          <label class="tgl"><input type="checkbox" id="opt-night" checked><span>Day and night</span></label>
+          <label class="tgl"><input type="checkbox" id="opt-grid"><span>Tile grid</span><kbd>G</kbd></label>
+          <label class="tgl"><input type="checkbox" id="opt-fx" checked><span>Pop-ups and rings</span></label>
+          <label class="tgl"><input type="checkbox" id="opt-moto" checked><span>Show motorways</span><kbd>M</kbd></label>
+          <div class="notesrow"><span>Notifications while playing</span>
+            <div class="seg" id="opt-notes" role="group" aria-label="Notifications while playing">
+              <button type="button" data-notes="all" aria-pressed="true">All</button>
+              <button type="button" data-notes="warn" aria-pressed="false">Warnings</button>
+              <button type="button" data-notes="off" aria-pressed="false">Off</button>
+            </div>
+          </div>
+          <p class="mnote" id="notes-note"></p>
         </section>
         <section class="msec">
-          <h4>Colour mode</h4>
-          <p class="mnote">Every house, store and car uses these six colours. Pick a mode that's easy for you to tell apart, or choose a slot below and swap in any colour from the library.</p>
-          <div class="palpicks" id="pal-picks"></div>
-          <div class="swpicks" id="pal-swatches"></div>
-          <label class="tgl"><input type="checkbox" id="opt-symbols"><span>Shapes on houses and stores</span></label>
-          <button class="linkbtn" id="pal-reset" type="button">Reset to standard colours</button>
+          <h4>Layout</h4>
+          <div class="seg laypre" id="lay-pre" role="group" aria-label="Layout">
+            <button type="button" data-pre="full">Full</button>
+            <button type="button" data-pre="compact">Compact</button>
+            <button type="button" data-pre="minimal">Minimal</button>
+          </div>
+          <label class="tgl"><input type="checkbox" id="lay-stats"><span>Small stats bar</span></label>
+          <label class="tgl"><input type="checkbox" id="lay-ctrl"><span>Small controls</span></label>
+          <label class="tgl"><input type="checkbox" id="lay-dock"><span>Tools as icons only</span></label>
+          <label class="tgl"><input type="checkbox" id="lay-panel"><span>Side panel</span></label>
+          <p class="mnote" id="lay-note">Saved separately for phones and bigger screens. The <b>–</b> buttons on each bar do the same.</p>
         </section>
         <section class="msec">
           <h4>City</h4>
@@ -185,8 +143,43 @@
           </div>
           <input type="file" id="file-import" accept=".json,application/json" hidden>
         </section>
+        </div>
+        <div class="mcol">
+        <section class="msec" id="snd-sec">
+          <h4>Sound</h4>
+          <label class="tgl"><input type="checkbox" id="snd-music" checked><span>Music <small class="tglsub">a calm, slowly changing soundtrack</small></span></label>
+          <label class="slid"><span>Music volume</span><input type="range" id="snd-musicvol" min="0" max="100" value="60"></label>
+          <label class="slid"><span>Traffic in the distance</span><input type="range" id="snd-traffic" min="0" max="100" value="45"></label>
+          <label class="tgl"><input type="checkbox" id="snd-sfx" checked><span>Sound effects</span></label>
+          <label class="slid"><span>Effects volume</span><input type="range" id="snd-sfxvol" min="0" max="100" value="100"></label>
+          <label class="tgl"><input type="checkbox" id="snd-ui" checked><span>Button clicks</span></label>
+          <label class="tgl" id="snd-haptics-wrap"><input type="checkbox" id="snd-haptics" checked><span>Vibration <small class="tglsub">on phones: deliveries, week ends, game over, crates</small></span></label>
+          <p class="mnote">The speaker button, or <kbd>N</kbd>, mutes everything.</p>
+        </section>
+        <section class="msec" id="online-sec" hidden>
+          <h4>Account and online</h4>
+          <div class="acctline" id="acct-line"><section class="msec" hidden>
+          <h4>Feedback</h4>
+          <p class="mnote">Found a bug or have an idea? It goes straight to the developer.</p>
+          <button class="act" id="btn-feedback" type="button">Send feedback</button>
+        </section>
+        </div>
+          <div class="livecode">
+            <div><small>Your live code</small><b id="live-code" class="num">······</b></div>
+            <button class="act small" id="live-copy" type="button">Copy</button>
+            <button class="act small" id="live-refresh" type="button" hidden>New code</button>
+          </div>
+          <p class="mnote" id="live-note"></p>
+          <div class="mgrid">
+            <button class="act" id="btn-saves2" type="button">Save files</button>
+            <button class="act" id="btn-board" type="button">Leaderboard</button>
+            <button class="act" id="btn-watch" type="button">Watch a player</button>
+            <button class="act" id="btn-account" type="button">Account</button>
+          </div>
+        </section>
+        
         <section class="msec" id="app-sec">
-          <h4>App</h4>
+          <h4>Get the app</h4>
           <p class="mnote" id="app-note">Junction can be installed like an app: it opens full screen with no browser bars, and single player works offline.</p>
           <div class="mgrid"><button class="act" id="btn-getapp2" type="button">Download the app</button><button class="act" id="btn-install" type="button" hidden>Install app</button><button class="act" id="btn-update" type="button" hidden>Update available — reload</button></div>
         </section>
@@ -195,13 +188,17 @@
           <p class="mnote">Short guides pop up the first time you open ISO 1v1, Weeklys, the Store, a crate, Chats and Friends.</p>
           <button class="act" id="btn-guides" type="button">Replay guides</button>
         </section>
-        <section class="msec">
-          <h4>Feedback</h4>
-          <p class="mnote">Found a bug or have an idea? It goes straight to the developer.</p>
-          <button class="act" id="btn-feedback" type="button">Send feedback</button>
+        <section class="msec" id="more-sec">
+          <h4>Help</h4>
+          <div class="mgrid">
+            <button class="act" id="btn-cust2" type="button">Customise</button>
+            <button class="act" id="btn-tut2" type="button">Tutorial</button>
+            <button class="act" id="btn-fb2" type="button">Feedback</button>
+          </div>
+          
         </section>
-      
-          <p class="ver"><button type="button" class="linkbtn" id="ver-btn">Junction v<span id="ver">2.4.0.1</span> · What’s new</button></p>
+        </div>
+        <p class="ver"><button type="button" class="linkbtn" id="ver-btn">Junction v<span id="ver">2.4.0.1</span> · What’s new</button></p>
         </div>
         <div class="mtab-pane" data-mtab="store" hidden>
           <div class="jbbar"><span class="jbcoin" aria-hidden="true">◎</span><div><b id="jb-bal">◎0 Junc Bucks</b><small>You earn 1 ◎ for every 2 parcels. The Store restocks every hour with 6 items and 6 colours; the daily special costs <b class="rtag">✦</b>, which only come from <b>Frantic</b> cities (1 for every parcel). Mystery crates can hold unique items you can't buy. Tap once to see the price, again to buy.</small></div></div>
@@ -373,55 +370,84 @@
 
     <!-- modals -->
     <div class="modal mainmenu rl" id="m-start">
-      <!-- top bar: balance on the left, who you are and quick icons on the right -->
+      <!-- top: daily streak, your balances, chat -->
       <div class="rl-top">
-        <div class="rl-bal" data-tip="Your balance" data-sub="1 Junc Buck (◎) for every 2 parcels; rare bucks (✦) from Frantic cities">
-          <span class="jbcoin" aria-hidden="true">◎</span><div><b id="mm-bucks" class="num">◎0</b><small><span id="mm-rbucks" class="rtag num">✦0</span> · <span id="mm-next">0/3</span> to next ◎</small></div>
-        </div>
         <button type="button" class="rl-streak" id="mm-streak" aria-label="Daily reward streak"></button>
+        <div class="rl-bal" data-tip="Your balance" data-sub="1 Junc Buck (◎) for every 2 parcels; rare bucks (✦) from Frantic cities. Pumpkins come from Haunted Night."><span class="rl-pill coin"><b id="mm-bucks" class="num">◎0</b></span><span class="rl-pill rare"><b id="mm-rbucks" class="rtag num">✦ 0</b></span><span class="rl-pill pump" id="mm-pump-pill" hidden><b id="mm-pump" class="num">🎃 0</b></span><small class="rl-next"><span id="mm-next">0/3</span> to next ◎</small></div>
         <div class="rl-topr">
-          <div class="acct-strip" id="start-account" hidden></div>
+          
           <button type="button" class="rl-icon" data-mm="chats" aria-pressed="false" title="Chats"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg><em class="tabbadge mm-chat-badge" hidden>0</em></button>
           <button type="button" class="rl-icon" data-mm="friends" aria-pressed="false" title="Friends"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><circle cx="17.5" cy="9" r="2.6"/><path d="M16 14.2c3 .2 5.5 2.3 5.5 5.3"/></svg></button>
           <button type="button" class="rl-icon" id="mm-settings2" title="Settings"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg></button>
         </div>
       </div>
-      <div class="rl-logo"><h1>JUNCTION</h1><span>keep the city moving</span></div>
-      <!-- the menu, down the left -->
-      <nav class="rl-menu" aria-label="Main menu">
-        <button type="button" class="rl-item big" data-mm="play" aria-pressed="false"><span>Play</span></button>
-        <button type="button" class="rl-item" data-mm="saves" aria-pressed="false"><span>Saves</span></button>
-        <button type="button" class="rl-item" data-mm="custom" aria-pressed="false"><span>Customise</span></button>
-        <button type="button" class="rl-item" id="mm-settings"><span>Settings</span></button>
-        <button type="button" class="rl-item" id="mm-account"><span>Account</span></button>
-      </nav>
+      <div class="rl-logo"><h1>JUNCTION</h1><span>Draw roads. Deliver parcels.</span></div>
+      <!-- the main column: Play, Continue and six tiles -->
+      <div class="rl-left">
+        <nav class="rl-menu" aria-label="Main menu">
+          <button type="button" class="rl-item big" data-mm="play" aria-pressed="false"><span>Play</span></button>
+          <button type="button" class="rl-continue" id="btn-continue"><span class="rc-t">Continue<small id="continue-sub">Pick up your last city</small></span><span class="rc-go" aria-hidden="true">›</span></button>
+        </nav>
+        <div class="rl-six">
+          <button type="button" class="rl-tile t-camp" data-mm="campaign" aria-pressed="false"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19l5-2 6 2 5-2V5l-5 2-6-2-5 2z"/><path d="M9 5v12M15 7v12"/></svg> Campaign</small><b>30 levels, 3 chapters</b><span class="cp-tilest">0 / 90 ★</span></button>
+          <button type="button" class="rl-tile t-iso" data-mm="iso" aria-pressed="false"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8l4 4 5-7 5 7 4-4v10H3z"/></svg> ISO ranked</small><b>Play online 1v1</b></button>
+          <button type="button" class="rl-tile t-store" data-mm="store" aria-pressed="false"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h16l-1.5 11h-13z"/><path d="M8 9V7a4 4 0 018 0v2"/></svg> Store</small><b>New designs</b></button>        <button type="button" class="rl-tile t-quests" data-mm="quests" aria-pressed="false"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3 7-7"/><path d="M20 12v6a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h9"/></svg> Quests</small><b>Daily and weekly<em class="tabbadge q-badge" hidden>0</em></b></button>
+          
+          <button type="button" class="rl-tile t-board" id="btn-board-s"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 01-10 0z"/><path d="M7 6H4v2a3 3 0 003 3M17 6h3v2a3 3 0 01-3 3"/></svg> Leaderboard</small><b>Top cities</b></button>
+          <button type="button" class="rl-tile t-set" id="mm-settings"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg> Settings</small><b>Sound, layout, quality</b></button>
+        </div>
+        <button type="button" class="rl-getapp" id="btn-getapp">⬇ Get the app</button>
+      </div>
+      <div class="rl-profile"><div class="acct-strip" id="start-account" hidden></div></div>
       <!-- the section that's open -->
       <section class="rl-panel" id="mm-panel" hidden>
-        <header class="rl-phead"><b id="mm-ptitle">Play</b><button type="button" class="rl-x" id="mm-close" aria-label="Close">×</button></header>
+        <header class="rl-phead"><b id="mm-ptitle">Play</b><span class="iso-status" id="iso-status" hidden><i></i>Online</span><button type="button" class="rl-x" id="mm-close" aria-label="Close">×</button></header>
         <div class="rl-pbody">
           <div class="mm-pane" data-mm="play" hidden>
-            <div class="rl-modes" id="mm-modes"></div>
-            <h3 id="mm-play-h">Your five saves</h3>
-            <div class="slots" id="mm-play-slots"></div>
-            <div class="btnrow"><button class="bigbtn ghost" id="btn-resume" type="button" hidden>Continue last city</button><button class="bigbtn ghost" id="btn-tutorial" type="button">How to Play</button></div>
-            <p class="mini" id="start-best"></p>
-            <p class="mini">New here? Try the <button class="linkbtn inl" type="button" data-mm-go="tutorial">tutorial</button> first.</p>
-            <div id="diff-picks" hidden></div><button id="btn-start" type="button" hidden></button>
+            <div class="play-wrap">
+              <div class="rl-modes" id="mm-modes"></div>
+              <div class="play-main">
+                <h3 id="mm-play-h">Your five saves</h3>
+                <div class="slots" id="mm-play-slots"></div>
+                <div class="btnrow"><button class="bigbtn ghost" id="btn-resume" type="button" hidden>Continue last city</button><button class="bigbtn ghost" id="btn-tutorial" type="button">How to Play</button></div>
+                <p class="mini" id="start-best"></p>
+                <p class="mini">New here? Try the <button class="linkbtn inl" type="button" data-mm-go="tutorial">tutorial</button> first.</p>
+                <div id="diff-picks" hidden></div><button id="btn-start" type="button" hidden></button>
+              </div>
+            </div>
           </div>
           <div class="mm-pane" data-mm="saves" hidden>
             <p class="mini">Five save slots for every game mode.</p>
             <div id="mm-slots"></div>
             <div class="btnrow"><button class="bigbtn ghost" id="btn-saves" type="button" hidden>Open save files</button><button class="bigbtn ghost" id="mm-resume" type="button" hidden>Continue last city</button></div>
           </div>
-          <div class="mm-pane" data-mm="friends" hidden><div id="mm-friends"></div></div>
+          <div class="mm-pane" data-mm="haunted" hidden>
+            <div class="play-main haunt-main">
+              <p class="haunt-lead" id="haunt-lead"></p>
+              <h3 id="haunt-h">Haunted Night saves</h3>
+              <div class="slots" id="mm-haunt-slots"></div>
+            </div>
+          </div>
+          <div class="mm-pane" data-mm="iso" hidden><div id="mm-iso"></div></div>
+          <div class="mm-pane" data-mm="friends" hidden><div class="fr-top"><button type="button" class="act" data-mm="coop">Co-op games <em class="tabbadge coop-badge" hidden>0</em></button></div><div id="mm-friends"></div></div>
           <div class="mm-pane" data-mm="chats" hidden><div id="mm-chats"></div></div>
           <div class="mm-pane" data-mm="custom" hidden>
-            <div class="seg cus-tabs"><button type="button" data-cus="mine" aria-pressed="true">My stuff</button><button type="button" data-cus="coll" aria-pressed="false">Collection</button></div>
+            <div class="seg st-tabs" role="group" aria-label="Store"><button type="button" data-mm-go="store" data-sttab="store" aria-pressed="false">Shop</button><button type="button" data-mm-go="custom" data-sttab="custom" aria-pressed="false">Owned</button></div>
+            <div class="seg cus-tabs" role="group" aria-label="Owned"><button type="button" data-cus="mine" aria-pressed="true">My stuff</button><button type="button" data-cus="coll" aria-pressed="false">Collection</button></div>
             <p class="mini" id="mm-cus-lead">Everything you own. Tap to use it. <button class="linkbtn inl" type="button" data-mm-go="store">Get more in the Store</button></p>
             <div class="shoplist" id="mm-custom"></div>
+            <section class="msec" id="colour-sec">
+          <h4>House colours</h4>
+          <p class="mnote">Every house, store and car uses these six colours. Pick a set that is easy for you to tell apart, or choose a slot below and swap in any colour you own.</p>
+          <div class="palpicks" id="pal-picks"></div>
+          <div class="swpicks" id="pal-swatches"></div>
+          <label class="tgl"><input type="checkbox" id="opt-symbols"><span>Shapes on houses and stores</span></label>
+          <button class="linkbtn" id="pal-reset" type="button">Reset to standard colours</button>
+        </section>
             <div class="coll" id="mm-coll" hidden></div>
           </div>
           <div class="mm-pane" data-mm="store" hidden>
+            <div class="seg st-tabs" role="group" aria-label="Store"><button type="button" data-mm-go="store" data-sttab="store" aria-pressed="false">Shop</button><button type="button" data-mm-go="custom" data-sttab="custom" aria-pressed="false">Owned</button></div>
             <b id="mm-store-bal" hidden>#0</b>
             <div class="shoplist" id="mm-store"></div>
           </div>
@@ -456,22 +482,25 @@
           </div>
                 </div>
       </section>
-      <!-- event tiles, bottom right -->
-      <aside class="rl-tiles" aria-label="More">
-        <div class="rl-news" id="mm-news" aria-roledescription="carousel" aria-label="What's new"><div class="news-track" id="news-track"></div><div class="news-dots" id="news-dots"></div></div>
-        <button type="button" class="rl-tile wide t-weekly" data-mm="weekly" aria-pressed="false"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M9.5 14.5l1.8 1.8 3.5-3.5"/></svg> Weekly · Expert Survival</small><b id="tile-seed">—</b><span id="tile-seedwk"></span></button>
-        <button type="button" class="rl-tile t-store" data-mm="store" aria-pressed="false"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h16l-1.5 11h-13z"/><path d="M8 9V7a4 4 0 018 0v2"/></svg> Store</small><b>New designs</b></button>
-        <button type="button" class="rl-tile t-board" id="btn-board-s"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 01-10 0z"/><path d="M7 6H4v2a3 3 0 003 3M17 6h3v2a3 3 0 01-3 3"/></svg> Leaderboard</small><b>Top cities</b></button>
-        <button type="button" class="rl-tile t-tut" id="btn-try-tutorial"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8l9-4 9 4-9 4z"/><path d="M7 10v5c0 1.7 2.2 3 5 3s5-1.3 5-3v-5M21 8v6"/></svg> Tutorial</small><b>Learn to play</b></button>
-        <button type="button" class="rl-tile t-watch" id="btn-watch-s"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg> Watch</small><b>A live city</b></button>
-        <button type="button" class="rl-tile wide t-camp" data-mm="campaign" aria-pressed="false"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19l5-2 6 2 5-2V5l-5 2-6-2-5 2z"/><path d="M9 5v12M15 7v12"/></svg> Campaign</small><b>30 levels, 3 chapters</b><span class="cp-tilest">0 / 90 ★</span></button>
-        <button type="button" class="rl-tile t-editor" data-mm="editor" aria-pressed="false"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/></svg> Map editor</small><b>Build and share maps</b></button>
-        <button type="button" class="rl-tile t-coop" data-mm="coop" aria-pressed="false"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="3"/><circle cx="16.5" cy="9.5" r="2.5"/><path d="M2.5 19c0-3.3 2.5-5.5 5.5-5.5s5.5 2.2 5.5 5.5M14 18.5c0-2.4 1.6-4 3.5-4s3.5 1.6 3.5 4"/></svg> Co-op</small><b>Build a city together<em class="tabbadge coop-badge" hidden>0</em></b></button>
-        <button type="button" class="rl-tile t-quests" data-mm="quests" aria-pressed="false"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3 7-7"/><path d="M20 12v6a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h9"/></svg> Quests</small><b>Daily and weekly<em class="tabbadge q-badge" hidden>0</em></b></button>
-        <button type="button" class="rl-tile t-fb" id="btn-feedback-s"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12h5"/></svg> Feedback</small><b>Tell us what you think</b></button>
-        <div id="start-online" hidden></div>
-      </aside>
-      <div class="rl-foot">Esc closes a panel · Junction v<span id="ver-foot">2.4.0.1</span> · <button type="button" class="linkbtn" id="btn-getapp">Get the app</button></div>
+      <!-- news slides, then the quick links under them -->
+      <div class="rl-right">
+        <aside class="rl-tiles" aria-label="News">
+          <div class="rl-news" id="mm-news" aria-roledescription="carousel" aria-label="What's new"><div class="news-track" id="news-track"></div><div class="news-dots" id="news-dots"></div></div>
+          <div id="start-online" hidden></div>
+        </aside>
+        <aside class="rl-corner" aria-label="Quick links">
+          <button type="button" class="rl-tile t-season" id="btn-seasonal" hidden><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2.4 5 5.6.8-4 3.9.9 5.5L12 15.6 7.1 18.2l.9-5.5-4-3.9 5.6-.8z"/></svg> <i id="season-name">Seasonal</i></small><b id="season-sub">Limited-time mode</b></button>
+          <button type="button" class="rl-tile t-weekly" data-mm="weekly" aria-pressed="false"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M9.5 14.5l1.8 1.8 3.5-3.5"/></svg> Weekly</small><b id="tile-seed">—</b><span id="tile-seedwk"></span></button>
+          
+        </aside>
+      </div>
+        <div hidden aria-hidden="true" id="mm-legacy">
+          <button type="button" class="rl-tile t-tut" id="btn-try-tutorial"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8l9-4 9 4-9 4z"/><path d="M7 10v5c0 1.7 2.2 3 5 3s5-1.3 5-3v-5M21 8v6"/></svg> Tutorial</small><b>Learn to play</b></button>
+          <button type="button" class="rl-tile t-fb" id="btn-feedback-s"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12h5"/></svg> Feedback</small><b>Tell us what you think</b></button>
+          <button type="button" class="rl-tile t-watch" id="btn-watch-s"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg> Watch</small><b>A live city</b></button>
+          <button type="button" class="rl-tile t-acct" id="mm-account"><small><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg> Account</small><b>Profile and stats</b></button>
+        </div>
+      <div class="rl-foot">Esc closes a panel · Junction v<span id="ver-foot">2.4.0.1</span></div>
     </div>
 
     <!-- the whole map of this week's Expert seed -->
@@ -766,9 +795,9 @@
           <button type="button" data-pane="stats" aria-pressed="false">Stats</button>
           <button type="button" data-pane="ach" aria-pressed="false">Achievements</button>
           <button type="button" data-pane="coll" aria-pressed="false">Collection</button>
-          <button type="button" data-pane="saves" aria-pressed="false">Save files</button>
-          <button type="button" data-pane="watch" aria-pressed="false">Watch</button>
-          <button type="button" data-pane="msgs" aria-pressed="false">Messages <span class="tabbadge" id="msg-tabbadge" hidden></span></button>
+          <button type="button" data-pane="saves" aria-pressed="false" hidden>Save files</button>
+          <button type="button" data-pane="watch" aria-pressed="false" hidden>Watch</button>
+          <button type="button" data-pane="msgs" aria-pressed="false" hidden>Messages <span class="tabbadge" id="msg-tabbadge" hidden></span></button>
           <button type="button" data-pane="security" aria-pressed="false" id="acct-tab-sec">Security</button>
         </div>
         <div class="acct-pane" data-pane="saves" hidden>
@@ -804,10 +833,12 @@
           <p class="formerr" id="acct-err" role="alert"></p>
           <h3>Online</h3>
           <div class="acct-grid">
-            <button class="act" id="acct-saves" type="button">Save files</button>
+            <button class="act" id="acct-saves" type="button" hidden>Save files</button>
             <button class="act" id="acct-board" type="button">Leaderboard</button>
-            <button class="act" id="acct-watch" type="button">Watch a player</button>
+            <button class="act" id="acct-watch" type="button" hidden>Watch a player</button>
+            <button class="act" id="acct-customise" type="button">Customise</button>
             <button class="act" id="acct-feedback" type="button">Send feedback</button>
+            <button class="act" id="acct-open-sec" type="button" hidden>Security and sign-in</button>
           </div>
           <div class="acct-box" id="acct-guest-box">
             <h3><span class="star" aria-hidden="true">★</span> Make it a permanent account</h3>
@@ -838,6 +869,7 @@
         </div>
 
         <div class="acct-pane" data-pane="security" hidden>
+          <button class="linkbtn" id="sec-back" type="button">← Back to profile</button>
           <h3>Email</h3>
           <p class="sec-line" id="sec-email"></p>
           <button class="act" id="sec-verify" type="button" hidden>Send verification email</button>

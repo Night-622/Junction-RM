@@ -352,13 +352,26 @@ $('user-signin').addEventListener('click', () => busy(null, async () => {
 }));
 
 /* ------------------------------------------------------ account widgets */
+/* the player card, bottom left of the menu: banner, avatar and frame, name, level and progress, account button.
+   There is no XP in the game, so the level is worked out from all-time parcels delivered: level n starts at 25 x (n-1)^2. */
+function renderProfileCard() {
+  const sa = $('start-account'); if (!sa || !O.user) return;
+  let look = {}, parcels = 0;
+  try { look = API.prof() || {}; const L = API.life(); parcels = API.modes().reduce((t, m) => t + ((L[m] && L[m].parcels) || 0), 0); } catch (e) {}
+  const lvl = Math.floor(Math.sqrt(parcels / 25)) + 1, lo = 25 * (lvl - 1) * (lvl - 1), hi = 25 * lvl * lvl, pct = Math.max(0, Math.min(100, Math.round((parcels - lo) / (hi - lo) * 100)));
+  sa.hidden = false;
+  sa.style.setProperty('--banner', API.bannerCSS(look.banner));
+  sa.innerHTML = '<span class="as-av' + (look.frame ? ' f-' + look.frame : '') + '" aria-hidden="true" style="' + (look.frame ? '--fr:' + API.frameCSS(look.frame) : '') + '">' + esc(String(myName() || '?').charAt(0).toUpperCase()) + '</span>' +
+    '<span class="as-who"><b>' + nameHTML(myName(), isPerm(), myAch3(), look) + '</b><small>' + (isPerm() ? 'Account' : 'Guest') + ' \u00b7 Level ' + lvl + '</small>' +
+    '<span class="as-xp" title="' + parcels.toLocaleString('en-US') + ' of ' + hi.toLocaleString('en-US') + ' parcels to level ' + (lvl + 1) + '"><i style="width:' + pct + '%"></i></span></span>' +
+    '<button class="as-btn" type="button" id="start-acct-btn" aria-label="Account">Account</button>';
+  $('start-acct-btn').addEventListener('click', () => openUserModal());
+}
+setInterval(() => { if ($('m-start') && !$('m-start').hidden) renderProfileCard(); }, 8000);
 function renderAccount() {
   startInbox(); startChallenges(); loadBlocked(); migrateLegacySaves();
   const sa = $('start-account');
-  sa.hidden = false;
-  sa.innerHTML = '<span>Playing as <b>' + nameHTML(myName(), isPerm(), myAch3()) + '</b>' + (isPerm() ? '' : ' <small>(guest)</small>') + '</span>' +
-    '<button class="linkbtn" type="button" id="start-acct-btn">Account</button>';
-  $('start-acct-btn').addEventListener('click', () => openUserModal());
+  renderProfileCard();
   if (!$('m-acct').hidden) renderAcct();
   $('btn-saves').hidden = false;
   $('start-online').hidden = false;
@@ -398,7 +411,7 @@ function renderAcct() {
   $('acct-sub').textContent = perm
     ? (O.user.email || 'Permanent account') + ' \u00b7 ' + (pv.includes('google.com') ? 'Google' : 'Email') + (since ? ' \u00b7 joined ' + since : '')
     : 'Guest on this browser' + (since ? ' \u00b7 since ' + since : '');
-  $('acct-tab-sec').hidden = !perm;
+  $('acct-tab-sec').hidden = !perm; $('acct-open-sec').hidden = !perm;
   if (!perm && acctPane === 'security') acctPane = 'profile';
   document.querySelectorAll('#acct-tabs button').forEach(b => b.setAttribute('aria-pressed', b.dataset.pane === acctPane ? 'true' : 'false'));
   document.querySelectorAll('#m-acct .acct-pane').forEach(p => { p.hidden = p.dataset.pane !== acctPane; });
@@ -439,6 +452,8 @@ function renderAch() {
       (t ? ' \u00b7 ' + new Date(t).toLocaleDateString(undefined, {day: 'numeric', month: 'short', year: 'numeric'}) : '') + '</span></div></div>';
   }).join('')).join('');
 }
+$('acct-open-sec').addEventListener('click', () => { acctPane = 'security'; renderAcct(); acctPaneOpened(); });
+$('sec-back').addEventListener('click', () => { acctPane = 'profile'; renderAcct(); acctPaneOpened(); });
 $('acct-tabs').addEventListener('click', e => { const b = e.target.closest('button[data-pane]'); if (b) { acctPane = b.dataset.pane; renderAcct(); acctPaneOpened(); } });
 function acctPaneOpened() {
   if (acctPane === 'profile') renderBlockedList();
@@ -469,6 +484,7 @@ $('acct-newname').addEventListener('keydown', e => { if (e.key === 'Enter') $('a
 $('acct-saves').addEventListener('click', () => { closeM('m-acct'); openSaves('load'); });
 $('acct-board').addEventListener('click', () => { closeM('m-acct'); openBoard(null, currentMode()); });
 $('acct-watch').addEventListener('click', () => { closeM('m-acct'); openWatch(); });
+$('acct-customise').addEventListener('click', () => { closeM('m-acct'); if (window.__junctionCustomise) window.__junctionCustomise(); });
 $('acct-feedback').addEventListener('click', () => { closeM('m-acct'); $('btn-feedback').click(); });
 $('acct-upgrade').addEventListener('click', () => { closeM('m-acct'); openUserModal(true); });
 $('acct-signout').addEventListener('click', () => acctBusy('acct-err', async () => {
@@ -1732,14 +1748,26 @@ async function mergeGrants() {
   try { const g = await getDoc(doc(db, 'users', O.user.uid, 'stats', 'grants')); if (!g.exists()) return; const items = g.data().items || []; let n = 0; for (const id of items) if (API.grantItem && API.grantItem(id)) n++; if (n) API.toast('Season reward unlocked: ' + n + ' new design' + (n > 1 ? 's' : ''), 'good'); } catch (e) {}
 }
 const rankedBadge = r => { const d = (r && r.division) || 'bronze'; return '<span class="div-badge d-' + d + '" title="' + DIV_LABEL[d] + ' \u00b7 ' + Math.round((r && r.rating) || 1000) + '">' + DIV_LABEL[d] + '</span>'; };
+/* the ISO ranked screen: tabs, your division and progress, and a card for each way to queue (see the .iso-* rules in styles.css) */
 function rankedHTML(rk) {
   const r = rk || {rating: 1000, division: 'bronze', games: 0, wins: 0, losses: 0, draws: 0};
-  const next = Object.keys(DIV_MIN).find(k => DIV_MIN[k] > r.rating), toNext = next ? DIV_MIN[next] - r.rating : 0;
+  const cur = r.division || 'bronze', next = Object.keys(DIV_MIN).find(k => DIV_MIN[k] > r.rating), curMin = DIV_MIN[cur] || 0;
+  const span = next ? DIV_MIN[next] - curMin : 1, into = Math.max(0, Math.round(r.rating - curMin)), pct = next ? Math.max(0, Math.min(100, Math.round(into / span * 100))) : 100;
   const q = O.queued;
-  return '<div class="rk-card d-' + (r.division || 'bronze') + '"><div class="rk-l"><small>Ranked ISO \u00b7 season ' + seasonLabel() + '</small><b>' + DIV_LABEL[r.division || 'bronze'] + ' <span class="num">' + Math.round(r.rating) + '</span></b>' +
-    '<span>' + (r.games ? r.wins + 'W \u00b7 ' + r.losses + 'L \u00b7 ' + r.draws + 'D this season' : 'No ranked games yet') + (next ? ' \u00b7 ' + toNext + ' to ' + DIV_LABEL[next] : ' \u00b7 top division') + '</span></div>' +
-    '<div class="rk-r">' + (q ? '<button class="bigbtn" type="button" id="rk-cancel">In queue (' + (q.kind === 'live' ? 'live' : 'daily') + ')\u2026 cancel</button>' : '<button class="bigbtn" type="button" id="rk-live">Quick match \u00b7 live</button><button class="act" type="button" id="rk-daily">Quick match \u00b7 daily</button>') +
-    '<button class="act small" type="button" id="rk-board">Ranked board</button><button class="act small" type="button" id="rk-tour">Tournaments</button><span class="rk-q" id="rk-q">' + queueLine() + '</span></div></div>';
+  const card = (kind, kicker, name, desc, btnId, btnText) => '<div class="iso-q k-' + kind + (q && q.kind === kind ? ' on' : '') + '"><small>' + kicker + '</small><b>' + name + '</b><p>' + desc + '</p>' +
+    (q && q.kind === kind ? '<span class="iso-wait"><i></i>In the queue</span><button class="bigbtn iso-go" type="button" id="rk-cancel">Cancel</button>'
+      : q ? '<span class="iso-wait off">You are already in a queue</span>'
+      : '<button class="bigbtn iso-go" type="button" id="' + btnId + '">' + btnText + '</button>') + '</div>';
+  return {
+    tabs: '<div class="iso-tabs" role="group" aria-label="ISO ranked"><button class="iso-tab" type="button" aria-pressed="true">Queue</button><button class="iso-tab" type="button" id="rk-tour">Tournaments</button><button class="iso-tab" type="button" id="rk-board">Ranked board</button></div>',
+    div: '<div class="iso-div d-' + cur + '"><span class="iso-medal">' + DIV_LABEL[cur].charAt(0) + '</span><div><small>Division \u00b7 season ' + seasonLabel() + '</small><b>' + DIV_LABEL[cur] + '</b><span class="num">' + Math.round(r.rating).toLocaleString('en-US') + ' rating</span></div></div>',
+    prog: '<div class="iso-prog"><div class="iso-prog-h"><span>' + (next ? 'To ' + DIV_LABEL[next] : 'Top division') + '</span><span>' + (next ? into + ' / ' + span : '') + '</span></div><div class="iso-bar"><i style="width:' + pct + '%"></i></div>' +
+      '<p>' + (r.games ? r.wins + 'W \u00b7 ' + r.losses + 'L \u00b7 ' + r.draws + 'D this season. ' : 'No ranked games yet. ') + 'Win a ranked match to climb. Ratings reset a third of the way to 1000 each month.</p></div>',
+    queues: '<div class="iso-queues">' +
+      card('live', 'Live \u00b7 quick match', 'Live', 'Play side by side on the same map against a player near your rating. Same speed for both. The last city standing wins.', 'rk-live', 'Find match') +
+      card('daily', 'Daily duel', 'Daily', 'Each of you plays the same map within 24 hours. One point per category: time, parcels, money, trips, fewest tow trucks.', 'rk-daily', 'Start daily') +
+      '<span class="rk-q" id="rk-q">' + queueLine() + '</span></div>'
+  };
 }
 const seasonLabel = () => new Date().toLocaleDateString('en-US', {month: 'long', year: 'numeric'});
 function bindRanked(box) {
@@ -1904,11 +1932,12 @@ async function renderIso(box) {
   const friends = await loadFriends();
   if (!isoBox) return;
   const rk = await loadRanked(); if (!isoBox) return;
-  isoBox.innerHTML = rankedHTML(rk) + '<div class="iso-intro"><p><b>Live</b> \u2014 play side by side, right now. Same speed for both of you; pausing or speeding up needs you both to agree. The last city standing wins.</p>' +
-      '<p><b>Daily</b> \u2014 each of you plays the same map within 24 hours, pausing and speeding up as you like. A point for each category you win: time survived, parcels, money, trips and fewest tow trucks.</p></div>' +
-    '<h3>Your challenges</h3>' + (list.length ? list.map(line).join('') : '<p class="mini">None yet. Challenge a friend below, or tap a player on any leaderboard.</p>') +
-    '<h3>Challenge someone</h3><div class="fradd"><input id="iso-name" type="text" maxlength="16" placeholder="Their username" autocomplete="off" spellcheck="false"><button class="bigbtn" id="iso-go" type="button">Challenge</button></div><p class="formerr" id="iso-err" role="alert"></p>' +
-    (friends.length ? '<div class="iso-friends">' + friends.map(f => '<button type="button" class="act" data-chf="' + esc(f.uid) + '" data-name="' + esc(f.name) + '">' + esc(f.name) + '</button>').join('') + '</div>' : '');
+  const R = rankedHTML(rk);
+  isoBox.innerHTML = '<div class="iso-wrap">' + R.tabs + R.div + R.prog +
+    '<div class="iso-card"><small class="iso-k">Your challenges</small>' + (list.length ? list.map(line).join('') : '<p class="mini">None waiting. Challenge a friend from the Friends tab, or tap a player on any leaderboard.</p>') + '</div>' +
+    '<div class="iso-card"><small class="iso-k">Challenge someone</small><div class="fradd"><input id="iso-name" type="text" maxlength="16" placeholder="Their username" autocomplete="off" spellcheck="false"><button class="bigbtn" id="iso-go" type="button">Challenge</button></div><p class="formerr" id="iso-err" role="alert"></p>' +
+    (friends.length ? '<div class="iso-friends">' + friends.map(f => '<button type="button" class="act" data-chf="' + esc(f.uid) + '" data-name="' + esc(f.name) + '">' + esc(f.name) + '</button>').join('') + '</div>' : '') + '</div>' +
+    R.queues + '</div>';
   isoBox.querySelectorAll('[data-ch]').forEach(b => b.onclick = () => { const d = O.chals[b.dataset.ch]; if (d) answerChal(d, b.dataset.act); });
   bindRanked(isoBox);
   isoBox.querySelectorAll('[data-chf]').forEach(b => b.onclick = () => openChallenge(b.dataset.chf, b.dataset.name));

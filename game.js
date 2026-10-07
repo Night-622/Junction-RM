@@ -6715,9 +6715,29 @@ function drawDepot(d) {
 const SYS_REDUCED = (() => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
 let REDUCED_MOTION = SYS_REDUCED;
 let a11y = {scale: 100, contrast: false, motion: 'auto'};
+/* Fluid interface size. Three layouts are designed: a phone held upright (390 x 844), a phone held sideways (780 x 390)
+   and everything else (1300 x 850). The interface is scaled by how much bigger or smaller the screen is than the one it
+   was designed on, so it fills a small phone, a tablet and an ultrawide monitor alike. --z is that scale times the
+   player's own Interface size setting; the CSS zooms the menus, bars and cards by it. */
+function autoScale() {
+  const root = document.documentElement, w = innerWidth, h = innerHeight;
+  const lay = h <= 520 && w > h ? 'L' : w <= 900 && h > w ? 'P' : 'D';
+  const D = {L: [780, 390, 0.7, 1.5], P: [390, 844, 0.7, 1.5], D: [1300, 850, 0.72, 1.85]}[lay];
+  const mu = Math.max(D[2], Math.min(D[3], Math.min(w / D[0], h / D[1])));
+  root.dataset.lay = lay; root.dataset.short = h / mu < 880 ? '1' : '0';
+  root.style.setProperty('--mu', mu.toFixed(3));
+  root.style.setProperty('--z', (mu * (a11y.scale / 100)).toFixed(3));
+  // the in-game bars and side panel are scaled less, so they never take the whole height of a short window
+  const hu = Math.max(0.75, Math.min(mu, h / (lay === 'D' ? 800 : 560), lay === 'D' ? 1.45 : 1.25));
+  root.style.setProperty('--zh', (hu * (a11y.scale / 100)).toFixed(3));
+  root.style.setProperty('--zp', (Math.min(hu * (lay === 'D' ? 1.12 : 1), lay === 'D' ? 1.6 : 1.25) * (a11y.scale / 100)).toFixed(3));
+}
+addEventListener('resize', () => { autoScale(); });
+addEventListener('orientationchange', () => setTimeout(autoScale, 200));
 function applyA11y() {
   const root = document.documentElement;
   root.style.setProperty('--ui-zoom', String(a11y.scale / 100));
+  autoScale();
   root.setAttribute('data-contrast', a11y.contrast ? 'high' : 'normal');
   REDUCED_MOTION = a11y.motion === 'reduce' || (a11y.motion === 'auto' && SYS_REDUCED);
   root.setAttribute('data-motion', REDUCED_MOTION ? 'reduce' : 'full');
@@ -8768,6 +8788,7 @@ function renderNews() {
   const tr = $('news-track'); if (!tr) return;
   const ev = activeEvent();
   if (ev && !NEWS.some(n => n.go === 'event')) NEWS.unshift({tag: ev.tag, title: ev.title, text: ev.text, go: 'event', art: ['car', COSMETICS['design:car:ghost'] ? 'ghost' : 'galaxy']});
+  if (NEWS.length > 4) NEWS.length = 4;                   // only the four latest slides
   if (!tr.childElementCount) {
     tr.innerHTML = NEWS.map((n, i) => '<button type="button" class="news-s" data-n="' + i + '"><span class="news-t"><em>' + n.tag + '</em><b>' + n.title + '</b><small>' + n.text + '</small></span><canvas width="' + (n.art === 'seed' ? 120 : 132) + '" height="' + (n.art === 'seed' ? 120 : 88) + '"></canvas></button>').join('');
     $('news-dots').innerHTML = NEWS.map((n, i) => '<button type="button" data-nd="' + i + '" aria-label="' + n.title + '"></button>').join('');
@@ -8783,13 +8804,60 @@ function showNews() {
   document.querySelectorAll('#news-dots [data-nd]').forEach((d, i) => d.setAttribute('aria-pressed', i === newsAt ? 'true' : 'false'));
 }
 setInterval(() => { if (!newsHover && !REDUCED_MOTION && $('m-start') && !$('m-start').hidden && !mmPane) { newsAt = (newsAt + 1) % NEWS.length; showNews(); } }, 6000);
-const MM_TITLES = {play: 'Play', saves: 'Saves', chats: 'Chats', friends: 'Friends', custom: 'Customise', store: 'Store', weekly: 'Weeklys', quests: 'Quests'};
+const MM_TITLES = {haunted: 'Haunted Night', iso: 'ISO ranked', play: 'Play', saves: 'Saves', chats: 'Chats', friends: 'Friends', custom: 'Store', store: 'Store', weekly: 'Weekly', quests: 'Quests'};
+/* the seasonal mode button (bottom left of the menu) shows only while a seasonal mode is on */
+/* Haunted Night has its own tab (the Seasonal button opens it) with its five saves */
+function renderHauntPane() {
+  $('haunt-lead').textContent = DIFFS.haunted.note;
+  renderSlotsFor($('mm-haunt-slots'), 'haunted', false);
+}
+/* the ISO ranked screen: the online module draws the queue, division and challenges into it */
+function renderIsoPane() {
+  const box = $('mm-iso'), on = window.JunctionOnline;
+  if (on && on.ready && on.renderIso && on.renderIso(box)) { $('iso-status').hidden = false; return; }
+  $('iso-status').hidden = true;
+  box.innerHTML = '<p class="mini">ISO matches are played online. The online service is still connecting, or isn\u2019t available right now.</p>';
+}
+/* Continue: pick up the last city, and say where it was */
+function lastPlayed() {
+  let best = null;
+  for (const m of SLOT_MODES) for (let n = 1; n <= 5; n++) { const id = m + '-' + n, d = readSlot(id); if (d && d.data && (!best || d.at > best.d.at)) best = {id, d, mode: m}; }
+  return best;
+}
+function continueLast() {
+  const lp = lastPlayed();
+  if (lp && loadGame(lp.d.data)) { curSlot = lp.id; closeModal('m-start'); running = true; refreshHud(); layout(); return; }
+  if (hasSave()) $('btn-resume').click(); else showMM('play');
+}
+function syncContinue() {
+  const sub = $('continue-sub'); if (!sub) return;
+  let t = 'Start with Play';
+  const lp = lastPlayed();
+  if (lp) t = DIFFS[lp.mode].label + ' \u00b7 week ' + lp.d.week + ' \u00b7 ' + (lp.d.score || 0).toLocaleString('en-US') + ' parcels';
+  else if (hasSave()) t = 'Pick up your last city';
+  if (sub.textContent !== t) sub.textContent = t;
+}
+function syncSeasonal() {
+  syncContinue();
+  const bt = $('btn-seasonal'); if (!bt) return;
+  let ev = null; try { ev = activeEvent(); } catch (e) {}   // the events table is defined further down, so it may not exist yet at load
+  const on = !!(ev && ev.id === 'halloween');
+  bt.hidden = !on;
+  const pp = $('mm-pump-pill'); if (pp) { pp.hidden = !on; const pm = $('mm-pump'); if (pm) pm.textContent = '\ud83c\udf83 ' + (typeof jb !== 'undefined' && jb.pumpkins || 0); }
+  if (on) { $('season-name').textContent = 'Haunted Night'; $('season-sub').textContent = 'Halloween mode'; }
+}
+setInterval(syncSeasonal, 5000);
+{ const bt = $('btn-seasonal'); if (bt) bt.addEventListener('click', () => showMM(mmPane === 'haunted' ? null : 'haunted'));
+  const ct = $('btn-continue'); if (ct) ct.addEventListener('click', continueLast); }
 function showMM(pane) {
   mmPane = pane || null;
   document.querySelectorAll('#m-start [data-mm]').forEach(b => { if (b.matches('.rl-item,.rl-tile,.rl-icon')) b.setAttribute('aria-pressed', b.dataset.mm === mmPane ? 'true' : 'false'); });
   document.querySelectorAll('#m-start .mm-pane').forEach(p => { p.hidden = p.dataset.mm !== mmPane; });
   $('mm-panel').hidden = !mmPane; $('m-start').classList.toggle('has-panel', !!mmPane);
-  $('m-start').classList.toggle('center-pane', ['store', 'weekly', 'chats', 'friends', 'quests', 'campaign'].includes(mmPane));
+  syncSeasonal();
+  document.querySelectorAll('#m-start .st-tabs [data-sttab]').forEach(b => b.setAttribute('aria-pressed', b.dataset.sttab === mmPane ? 'true' : 'false'));
+  $('m-start').dataset.pane = mmPane || '';
+  $('m-start').classList.toggle('center-pane', ['store', 'custom', 'weekly', 'chats', 'friends', 'quests', 'campaign'].includes(mmPane));
   if (mmPane) { $('mm-ptitle').textContent = MM_TITLES[mmPane] || ''; const pb = $('mm-panel'); pb.classList.remove('slide'); void pb.offsetWidth; pb.classList.add('slide'); }
   const on = window.JunctionOnline;
   if (mmPane === 'play') renderPlay();
@@ -8797,7 +8865,9 @@ function showMM(pane) {
   if (mmPane === 'chats') { if (on && on.renderChats) on.renderChats($('mm-chats')); else $('mm-chats').innerHTML = '<p class="mini">Chats need the online service, which isn\u2019t available right now.</p>'; }
   if (mmPane === 'friends') { if (on && on.renderFriends) on.renderFriends($('mm-friends')); else $('mm-friends').innerHTML = '<p class="mini">Friends need the online service, which isn\u2019t available right now.</p>'; }
   if (mmPane === 'weekly') { renderExpertCard(); renderWeekly(); }
-  if (mmPane === 'custom') setCusTab(cusTab);
+  if (mmPane === 'iso') renderIsoPane();
+  if (mmPane === 'haunted') renderHauntPane();
+  if (mmPane === 'custom') { setCusTab(cusTab); renderPaletteUI(); }
   if (mmPane === 'quests') renderQuests();
   renderLook();
 }
@@ -8942,13 +9012,13 @@ function renderWeeks() {
   box.querySelectorAll('[data-wk]').forEach(b => b.onclick = () => { if (window.JunctionOnline && window.JunctionOnline.openExpert) window.JunctionOnline.openExpert(+b.dataset.wk); else toast('Leaderboards need the online service.', 'warn'); });
 }
 /* Play: pick a game mode, then one of its five save slots */
-const PLAY_MODES = ['chill', 'standard', 'frantic', 'zen', 'iso'];
+const PLAY_MODES = ['chill', 'standard', 'frantic', 'zen'];       // Haunted Night (Seasonal button) and ISO (ISO ranked) have their own entries
 let isoPending = 0;                                    // challenges waiting on you (shown on the ISO button)
 function renderPlay() {
   const box = $('mm-modes'); if (!box) return;
   const sd = expertSeed();
-  box.innerHTML = PLAY_MODES.map(m => '<button type="button" class="rl-mode' + (m === 'expert' ? ' expert' : '') + '" data-pmode="' + m + '" aria-pressed="' + (m === playMode) + '"><b>' + DIFFS[m].label + '</b><small>' +
-    (m === 'iso' ? 'Challenge a player: live, or a daily duel' : DIFFS[m].note) + (m === 'iso' && isoPending ? '<em class="tabbadge">' + isoPending + '</em>' : '') + '</small></button>').join('');
+  const used = m => { let n = 0; for (let i = 1; i <= 5; i++) { const d = readSlot(m + '-' + i); if (d && d.data) n++; } return n; };
+  box.innerHTML = PLAY_MODES.map(m => { const u = used(m); return '<button type="button" class="rl-mode' + (m === 'expert' ? ' expert' : '') + '" data-pmode="' + m + '" aria-pressed="' + (m === playMode) + '"><b>' + DIFFS[m].label + '</b><span class="pm-count' + (u >= 5 ? ' full' : '') + '">' + u + ' / 5</span><small>' + DIFFS[m].note + '</small></button>'; }).join('');
   box.querySelectorAll('[data-pmode]').forEach(b => b.onclick = () => { playMode = b.dataset.pmode; if (playMode !== 'iso') startDiff = playMode; renderPlay(); });
   if (playMode === 'iso') {
     $('mm-play-h').textContent = 'ISO 1v1 — challenges';
@@ -8956,7 +9026,7 @@ function renderPlay() {
     if (!(on && on.ready && on.renderIso && on.renderIso($('mm-play-slots')))) $('mm-play-slots').innerHTML = '<p class="mini">ISO matches are played online. The online service is still connecting, or isn’t available right now.</p>';
     return;
   }
-  $('mm-play-h').textContent = DIFFS[playMode].label + ' — your five saves';
+  $('mm-play-h').innerHTML = DIFFS[playMode].label + ' saves <small>' + used(playMode) + ' of 5 slots used. Each mode keeps its own saves.</small>';
   renderSlotsFor($('mm-play-slots'), playMode, false);
   showStartBest();
 }
@@ -9503,6 +9573,14 @@ function bindInput() {
   $('btn-expert-board').addEventListener('click', () => { if (window.JunctionOnline && window.JunctionOnline.openExpert) window.JunctionOnline.openExpert(0); else toast('The Expert leaderboard needs the online service, which isn\u2019t available right now.', 'warn'); });
   $('btn-resume').addEventListener('click', () => { if (loadGame()) { if (resumeSlot) curSlot = resumeSlot; resumeSlot = ''; closeModal('m-start'); running = true; refreshHud(); layout(); } else toast('No saved city found', 'warn'); });
   $('btn-home').addEventListener('click', goHome);
+  // Settings → More: the same actions that used to be tiles on the menu
+  const inMenu = () => $('m-start') && !$('m-start').hidden;
+  const closeSettings = () => { $('menu').hidden = true; $('btn-menu').setAttribute('aria-expanded', 'false'); $('app').classList.remove('menu-over'); };
+  const openCustomise = () => { if (inMenu()) showMM('custom'); else $('btn-cust').click(); };
+  window.__junctionCustomise = openCustomise;
+  $('btn-cust2').addEventListener('click', () => { closeSettings(); openCustomise(); });
+  $('btn-tut2').addEventListener('click', () => { closeSettings(); if (inMenu()) $('btn-try-tutorial').click(); else $('btn-help').click(); });
+  $('btn-fb2').addEventListener('click', () => { closeSettings(); openFeedback(); });
   $('btn-try-tutorial').addEventListener('click', () => { closeModal('m-start'); startTutorial(); refreshHud(); layout(); });
   $('tut-exit').addEventListener('click', exitTutorial);
   $('ti-next').addEventListener('click', () => { if (tiCard < TI_CARDS.length - 1) { tiCard++; renderTutIntro(); } else closeTutIntro(); });
@@ -9825,7 +9903,7 @@ const PANEL_X = {
   prism: {label: 'Prism glass', base: 'glass', r: 20, ring: 'inset 0 1px 0 rgba(255,255,255,.3),inset 0 0 0 1px rgba(255,255,255,.14)', rings: 'inset 0 1px 0 rgba(255,255,255,.3),inset 0 0 0 1px rgba(255,255,255,.14)', drop: '0 0 0 1px rgba(var(--accent-rgb),.3),0 6px 24px rgba(var(--accent-rgb),.42)', sheen: 'linear-gradient(120deg,rgba(255,80,80,.14),rgba(255,210,58,.12) 25%,rgba(63,209,106,.12) 50%,rgba(47,155,255,.14) 75%,rgba(138,91,255,.14))', bgs: 'auto', btn: 'pill', frost: 1}
 };
 const UI_STYLES = ['clean', 'glass', 'sign'].concat(Object.keys(PANEL_X));
-let uiTheme = {preset: 'petrol', style: 'clean', frost: false, plate: '', btn: '', accent: ''};
+let uiTheme = {preset: 'graphite', style: 'clean', frost: false, plate: '', btn: '', accent: ''};
 const hexOk = h => typeof h === 'string' && /^#[0-9a-f]{6}$/i.test(h);
 function lum(hex) {                                   // WCAG relative luminance
   const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
@@ -9887,8 +9965,8 @@ const renderUiThemeUI = () => renderLook(), renderMapUI = () => renderLook(), re
    T key (or the half-moon button) swaps between the two. */
 const MODES_KEY = 'junction-modes-v1';
 const MODE_DEFAULTS = {
-  light: {ui: {preset: 'petrol', style: 'clean', frost: false, plate: '', btn: '', accent: ''}, map: {theme: 'meadow', decor: 'auto', land: '', patch: '', water: '', road: '', moto: ''}},
-  dark:  {ui: {preset: 'petrol', style: 'clean', frost: false, plate: '', btn: '', accent: ''}, map: {theme: 'night', decor: 'auto', land: '', patch: '', water: '', road: '', moto: ''}}
+  light: {ui: {preset: 'graphite', style: 'clean', frost: false, plate: '', btn: '', accent: ''}, map: {theme: 'meadow', decor: 'auto', land: '', patch: '', water: '', road: '', moto: ''}},
+  dark:  {ui: {preset: 'graphite', style: 'clean', frost: false, plate: '', btn: '', accent: ''}, map: {theme: 'night', decor: 'auto', land: '', patch: '', water: '', road: '', moto: ''}}
 };
 let modes = {cur: 'light', light: null, dark: null}, modeBusy = true;      // busy until boot has loaded everything
 const snapLook = () => ({ui: Object.assign({}, uiTheme), map: {theme: mapPrefs.theme, decor: mapPrefs.decor, land: mapPrefs.land, patch: mapPrefs.patch, water: mapPrefs.water, road: mapPrefs.road, moto: mapPrefs.moto}});
@@ -9978,7 +10056,7 @@ const TITLES = {
 const COSMETICS = {
   'ui:ocean': [50, 'Ocean theme'], 'ui:aurora': [0, 'Aurora theme', 'U'], 'ui:molten': [0, 'Molten theme', 'U'],
   'map:lunar': [0, 'Lunar map', 'U'], 'map:volcano': [0, 'Volcano map', 'U'], 'decor:crystal': [0, 'Crystals', 'U'],
-  'ui:midnight': [30, 'Midnight theme'], 'ui:graphite': [25, 'Graphite theme'], 'ui:forest': [30, 'Forest theme'], 'ui:plum': [35, 'Plum theme'],
+  'ui:midnight': [30, 'Midnight theme'], 'ui:forest': [30, 'Forest theme'], 'ui:plum': [35, 'Plum theme'],
   'ui:ember': [35, 'Ember theme'], 'ui:paper': [40, 'Paper theme'], 'ui:snow': [40, 'Snow theme'], 'ui:sand': [35, 'Sand theme'],
   'ui:neon': [75, 'Neon theme'], 'ui:royal': [65, 'Royal theme'], 'ui:rosegold': [85, 'Rose gold theme'],
   'style:glass': [35, 'Glass panels'], 'style:sign': [25, 'Road sign panels'], 'style:frost': [55, 'Frosted glass'],
@@ -10607,7 +10685,7 @@ function showCrate(kind, id) {
   const m = $('m-crate'), box = $('crate-box'), prize = $('crate-prize'), r = rarityOf(id), info = itemInfo(id);
   m.querySelector('.crate-card').className = 'card plate crate-card k-' + kind;
   box.hidden = false; prize.hidden = true; box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake');
-  $('crate-name').textContent = 'Opening a ' + CRATES[kind].name.toLowerCase() + '…'; $('crate-rar').textContent = '';
+  $('crate-name').textContent = 'Opening ' + (/^[aeiou]/i.test(CRATES[kind].name) ? 'an ' : 'a ') + CRATES[kind].name.toLowerCase() + '…'; $('crate-rar').textContent = '';
   for (const b of ['crate-use', 'crate-again']) $(b).hidden = true;
   openModal('m-crate'); sfx('click');
   setTimeout(() => {
@@ -11153,7 +11231,8 @@ function layout() {
   dpr = Math.min(window.devicePixelRatio || 1, gfx.res || 2);
   cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
   const mobile = W < 820, panelOn = !$('app').classList.contains('panel-off');
-  const topH = Math.round($('topbar').getBoundingClientRect().height) + 20;
+  const zh = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--zh')) || 1;
+  const topH = Math.round($('topbar').getBoundingClientRect().height / zh) + 20;     // the bars are zoomed, so their offset is measured in their own pixels
   document.documentElement.style.setProperty('--top', topH + 'px');
   // keep the city clear of whatever bars are actually on screen, whatever size they are
   const box = id => { const e = $(id); if (!e || e.hidden) return null; const b = e.getBoundingClientRect(); return b.width > 0 && b.height > 0 ? b : null; };
@@ -11426,7 +11505,7 @@ if (typeof window !== 'undefined' && (location.hostname === 'localhost' || locat
    localStorage under junction-guides-v1 and "Replay guides" in Settings clears them. The triggers wrap showMM,
    renderPlay and openCrate rather than editing them. ===== */
 const GUIDES_KEY = 'junction-guides-v1';
-const GUIDE_NAMES = {iso: 'ISO 1v1', weekly: 'Weeklys', store: 'The Store', crate: 'Mystery crates', chats: 'Chats', friends: 'Friends'};
+const GUIDE_NAMES = {iso: 'ISO 1v1', weekly: 'Weekly', store: 'The Store', crate: 'Mystery crates', chats: 'Chats', friends: 'Friends'};
 const GUIDES = {
   iso: [
     {t: 'Challenge a player', b: 'ISO 1v1 puts two players on the <b>same map</b>. Send a challenge to a friend or to any username, live or daily, and it waits on their Play menu until they answer.'},
@@ -13282,8 +13361,11 @@ function drawPumpkins() {
   const _rp = renderPlay;
   renderPlay = function () {
     const ev = activeEvent(), on = !!(ev && ev.id === 'halloween'), i = PLAY_MODES.indexOf('haunted');
-    if (on && i < 0) PLAY_MODES.splice(PLAY_MODES.indexOf('iso'), 0, 'haunted');
-    if (!on && i >= 0) { PLAY_MODES.splice(i, 1); if (playMode === 'haunted') playMode = 'standard'; }
+    // Haunted Night is not in the mode list: the Seasonal button opens it, and it shows only while it is the one picked
+    const want = on && playMode === 'haunted';
+    if (want && i < 0) PLAY_MODES.push('haunted');
+    if (!want && i >= 0) PLAY_MODES.splice(i, 1);
+    if (!on && playMode === 'haunted') playMode = 'standard';
     return _rp.apply(this, arguments);
   };
   window.JunctionAPI = window.JunctionAPI || {}; window.JunctionAPI.haunt = haunt;
@@ -13984,12 +14066,13 @@ function crateRoll(kind, id, done) {
   const old = $('crate-roll'); if (old) old.remove();
   card.className = 'card plate crate-card rolling k-' + kind;
   const roll = document.createElement('div'); roll.id = 'crate-roll'; roll.className = 'crate-roll';
-  roll.innerHTML = '<p class="roll-title">Opening a ' + (C.name || 'crate').toLowerCase() + '…</p><div class="roll-view"><div class="roll-strip"></div><i class="roll-mark"></i></div><p class="roll-hint" id="roll-hint">Rolling for rarity…</p>' +
+  roll.innerHTML = '<p class="roll-title">Opening ' + (/^[aeiou]/i.test(C.name || '') ? 'an ' : 'a ') + (C.name || 'crate').toLowerCase() + '…</p><div class="roll-view"><div class="roll-strip"></div><i class="roll-mark"></i></div><p class="roll-hint" id="roll-hint">Rolling for rarity…</p>' +
     '<div class="roll-btns"><button type="button" class="act small" id="roll-skip">Skip</button><button type="button" class="bigbtn" id="roll-open" hidden>Open it</button></div>';
   card.insertBefore(roll, card.firstChild);
   const odds = C.odds ? C.odds() : C.pumpkins ? [['hstd', 70], ['hrare', 25], ['hunique', 5]] : CRATE_ODDS;
   const pickR = () => { let x = Math.random() * 100; for (const [t, w] of odds) { if (x < w) return t; x -= w; } return odds[0][0]; };
-  const N = 60, W = 47, TW = 96, GAP = 8, P = TW + GAP, tiles = [];
+  const N = 60, W = 47, tiles = [];
+  let TW = 96, GAP = 8, P = TW + GAP;                 // measured from the real tiles once they are on screen, so the strip can resize
   for (let i = 0; i < N; i++) tiles.push(i === W ? r : pickR());
   const strip = roll.querySelector('.roll-strip'), view = roll.querySelector('.roll-view');
   strip.innerHTML = tiles.map((t, i) => '<div class="rt r-' + t + (i === W ? ' win' : '') + '" data-i="' + i + '"><small>' + (RARITY[t] || t) + '</small><i></i></div>').join('');
@@ -14006,6 +14089,7 @@ function crateRoll(kind, id, done) {
   winEl.addEventListener('click', open); winEl.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
   openBtn.addEventListener('click', open); skipBtn.addEventListener('click', finish);
   requestAnimationFrame(() => {
+    TW = winEl.offsetWidth || TW; GAP = parseFloat(getComputedStyle(strip).columnGap) || GAP; P = TW + GAP;
     center = view.clientWidth / 2; const jit = (Math.random() - 0.5) * 0.62 * TW;
     final = -(W * P + TW / 2 + jit - center);
     const dur = REDUCED_MOTION ? 0.3 : 5.6;
