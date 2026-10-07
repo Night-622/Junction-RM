@@ -282,6 +282,7 @@ const CHANGELOG = [
     'Halloween part two: a Season tab with 30 objectives and five exclusive rewards, plus a story for Haunted Night (The Hollow Hour, 13 chapters), the Witching Hour, golden pumpkins, a ghost van and six easter eggs.',
     'The Halloween drop: collect pumpkins in Haunted Night, then spend 20 on a drop (five an hour) for one of 50 Halloween-only items: 20 animated colours that work on anything, and 30 patterned designs for houses, stores, lights, roundabouts, bridges, motorways, roads and drones.',
     'The ISO screen shows how many players are waiting for a live match, updating as people join and leave.',
+    'New special crates cost ✦ (100, 150 and 200) and give rare, special and unique items, plus exotic Halloween items during the event. The Store now has 3 daily specials instead of one.',
     'Crate odds are now 55% standard, 35% rare, 8% special and 2% unique, and special items can come from crates.',
     'Crates open like a case roll: a strip of rarities slides and slows to a stop, then you tap the tile it lands on to open the crate.',
     'Tow trucks can pull into the opposite lane to get past a queue of stopped cars when it is clear, and oncoming cars hold back until they are through.',
@@ -10363,7 +10364,7 @@ function purchase(id, kind, fn) {
   if (info[2] === 'S') { hint(name + ' is a ranked season reward: finish a season in that division.'); return; }
   if (info[2] === 'H') { hint(name + ' is a Halloween season reward: finish its objective in Quests, Season.'); return; }
   if (info[2] === 'P') { hint(name + ' comes out of Halloween drops: collect pumpkins in Haunted Night and open one in the Store.'); return; }
-  if (!inStock(id)) { hint(name + ' isn’t in the Store right now. The Store restocks every hour (new stock in ' + fmtLeft(HOUR_MS - Date.now() % HOUR_MS) + ')' + (info[2] === 'R' ? ' and has one special item a day.' : '.') + ' Crates can have it too.'); buyPending = null; renderLook(); return; }
+  if (!inStock(id)) { hint(name + ' isn’t in the Store right now. The Store restocks every hour (new stock in ' + fmtLeft(HOUR_MS - Date.now() % HOUR_MS) + ')' + (info[2] === 'R' ? ' and has three special items a day.' : '.') + ' Crates can have it too.'); buyPending = null; renderLook(); return; }
   const price = kind === 'hire' ? HIRE_PRICE : info[0], rare = kind !== 'hire' && info[2] === 'R';
   const sym = rare ? RCUR : CUR, have = rare ? jb.rbucks : jb.bucks;
   if (have < price) {
@@ -10574,11 +10575,12 @@ function ensureRotation() {
 function inStock(id) { ensureRotation(); if (EVENT_ITEMS.has(id)) { const e = eventOf(id); return !!(e && activeEvent() === e); } return jb.rot.items.includes(id) || jb.rot.cols.includes(id) || jb.daily.id === id; }
 const crateMax = k => (CRATES[k] && CRATES[k].max) || CRATE_MAX;
 const crateLeft = kind => { ensureRotation(); if (kind === 'halloween') return Math.max(0, crateMax(kind) - hdUsed()); return Math.max(0, crateMax(kind) - (jb.rot.crates[kind] || 0)); };
-const crateNew = kind => allShopIds().filter(id => CRATES[kind].test(id) && ['standard', 'rare', 'special', 'unique'].includes(rarityOf(id)) && !owns(id) && (!EVENT_ITEMS.has(id) || activeEvent() === eventOf(id)));
+const crateNew = kind => CRATES[kind].rare ? scNew(kind) : allShopIds().filter(id => CRATES[kind].test(id) && ['standard', 'rare', 'special', 'unique'].includes(rarityOf(id)) && !owns(id) && (!EVENT_ITEMS.has(id) || activeEvent() === eventOf(id)));
 /* two taps (like buying), then the crate shakes open and shows what was inside */
 let crateKind = '', crateGot = '';
 function openCrate(kind, sure, free) {
   if (kind === 'halloween') return openHDrop(sure);
+  if (CRATES[kind] && CRATES[kind].rare) return openSCrate(kind, sure, free);
   const C = CRATES[kind]; if (!C) return;
   if (!free && !crateLeft(kind)) { hint('You’ve opened ' + CRATE_MAX + ' ' + C.name.toLowerCase() + 's this hour. More in ' + fmtLeft(HOUR_MS - Date.now() % HOUR_MS) + '.'); return false; }
   const left = crateNew(kind);
@@ -10622,8 +10624,8 @@ function showCrate(kind, id) {
     $('crate-name').textContent = info ? info[1] : id;
     const it = shopItemById(id);
     $('crate-use').hidden = !(it && it.apply);
-    const more = crateLeft(kind) && (kind === 'halloween' ? hdNew().length : crateNew(kind).length) && (CRATES[kind].pumpkins ? (jb.pumpkins || 0) : jb.bucks) >= CRATES[kind].price;
-    $('crate-again').hidden = !more; $('crate-again').textContent = 'Open another · ' + (CRATES[kind].pumpkins ? PCUR : '◎') + CRATES[kind].price + ' (' + crateLeft(kind) + ' left this hour)';
+    const more = crateLeft(kind) && (kind === 'halloween' ? hdNew().length : crateNew(kind).length) && (CRATES[kind].pumpkins ? (jb.pumpkins || 0) : CRATES[kind].rare ? jb.rbucks : jb.bucks) >= CRATES[kind].price;
+    $('crate-again').hidden = !more; $('crate-again').textContent = 'Open another · ' + (CRATES[kind].pumpkins ? PCUR : CRATES[kind].rare ? RCUR : '◎') + CRATES[kind].price + ' (' + crateLeft(kind) + ' left this hour)';
     sfx('upgrade');
   }, REDUCED_MOTION ? 200 : 1300);
 }
@@ -10696,10 +10698,11 @@ function renderStore(box, light) {
       return '<button type="button" class="crate-s k-' + k + (n && !none ? '' : ' spent') + '" data-act="crate" data-kind="' + k + '"><span class="crate-ico"><i></i></span><b>' + C.name + '</b><small>' + C.holds + '</small>' +
         '<span class="crate-foot"><span class="lock' + (conf ? ' confirm' : '') + '">' + (conf ? 'Tap to open' : (C.pumpkins ? PCUR : CUR) + C.price) + '</span><em>' + (none ? 'All owned' : n + ' of ' + crateMax(k) + ' left') + '</em></span></button>';
     }).join('') + '</div>');
+  parts.push(spCratesHTML());
   const ev = activeEvent();
   if (ev) parts.push('<h3 class="shop-h ev-h">' + ev.name + ' event <small>until ' + eventWhen(ev).split('–')[0].split(' ')[0] + ' ' + ev.end[1] + ' · these are only sold during the event</small></h3><div class="shopgrid st-items">' + ev.items.map(shopItemById).filter(Boolean).map(it => storeCard(it, canvases)).join('') + '</div>');
-  const sp = jb.daily.id && shopItemById(jb.daily.id);
-  if (sp) parts.push('<h3 class="shop-h">Daily special <small>costs ✦, from Frantic cities · a new one in ' + dLeft + '</small></h3><div class="shopgrid st-items st-special">' + storeCard(sp, canvases) + '</div>');
+  const sps = dailyIds().map(shopItemById).filter(Boolean);
+  if (sps.length) parts.push('<h3 class="shop-h">Daily specials <small>3 a day, cost ✦, from Frantic cities · new ones in ' + dLeft + '</small></h3><div class="shopgrid st-items st-special">' + sps.map(it => storeCard(it, canvases)).join('') + '</div>');
   parts.push('<h3 class="shop-h">This hour’s items</h3><div class="shopgrid st-items">' + jb.rot.items.map(shopItemById).filter(Boolean).map(it => storeCard(it, canvases)).join('') + '</div>');
   parts.push('<h3 class="shop-h">This hour’s colours <small>buy to keep, or hire for 3 hours for ◎' + HIRE_PRICE + '</small></h3><div class="shopgrid colours">' + jb.rot.cols.map(id => {
     const h = id.slice(7), r = rarityOf(id), left = hiredLeft(id), own = !!jb.owned[id], name = colourName(h);
@@ -13977,14 +13980,14 @@ function towPassStep(t, dt) {
 
 /* ===== p85: the crate roller. A strip of rarity tiles slides and slows to a stop under a marker; tap the tile that stopped to open the crate. ===== */
 function crateRoll(kind, id, done) {
-  const m = $('m-crate'), card = m.querySelector('.crate-card'), r = rarityOf(id), C = CRATES[kind] || {};
+  const m = $('m-crate'), card = m.querySelector('.crate-card'), C = CRATES[kind] || {}, r = C.rare && HD_IDS.has(id) ? 'exotic' : rarityOf(id);
   const old = $('crate-roll'); if (old) old.remove();
   card.className = 'card plate crate-card rolling k-' + kind;
   const roll = document.createElement('div'); roll.id = 'crate-roll'; roll.className = 'crate-roll';
   roll.innerHTML = '<p class="roll-title">Opening a ' + (C.name || 'crate').toLowerCase() + '…</p><div class="roll-view"><div class="roll-strip"></div><i class="roll-mark"></i></div><p class="roll-hint" id="roll-hint">Rolling for rarity…</p>' +
     '<div class="roll-btns"><button type="button" class="act small" id="roll-skip">Skip</button><button type="button" class="bigbtn" id="roll-open" hidden>Open it</button></div>';
   card.insertBefore(roll, card.firstChild);
-  const odds = C.pumpkins ? [['hstd', 70], ['hrare', 25], ['hunique', 5]] : CRATE_ODDS;
+  const odds = C.odds ? C.odds() : C.pumpkins ? [['hstd', 70], ['hrare', 25], ['hunique', 5]] : CRATE_ODDS;
   const pickR = () => { let x = Math.random() * 100; for (const [t, w] of odds) { if (x < w) return t; x -= w; } return odds[0][0]; };
   const N = 60, W = 47, TW = 96, GAP = 8, P = TW + GAP, tiles = [];
   for (let i = 0; i < N; i++) tiles.push(i === W ? r : pickR());
@@ -14022,4 +14025,57 @@ function crateRoll(kind, id, done) {
   const _show = showCrate;
   showCrate = function (kind, id) { crateRoll(kind, id, () => _show(kind, id)); };
   window.JunctionAPI.crateRoll = crateRoll;
+}
+
+
+/* ===== p87: special crates (✦). 75% rare, 22.5% special, 2.5% unique; in a seasonal event 70 / 20 / 7.5 exotic / 2.5. ===== */
+RARITY.exotic = 'Exotic';
+const SC_BASE = {scolour: ['colour', 'Special colour crate', 100, 'a rare, special or unique colour'], sitem: ['item', 'Special item crate', 150, 'a rare, special or unique theme, map, panel style, decoration, banner, frame or title'], sobject: ['object', 'Special object crate', 200, 'a rare, special or unique design for cars, houses, roads, stores, lights, roundabouts, bridges, motorways or drones']};
+for (const k in SC_BASE) { const [b, name, price, holds] = SC_BASE[k]; CRATES[k] = {name, price, holds, rare: true, base: b, test: CRATES[b].test, odds: scOdds}; }
+function scOdds() { return seasonOn() ? [['rare', 70], ['special', 20], ['exotic', 7.5], ['unique', 2.5]] : [['rare', 75], ['special', 22.5], ['unique', 2.5]]; }
+function seasonOn() { const e = activeEvent(); return !!(e && e.id === 'halloween'); }
+function scPool(kind, tier) {
+  const T = CRATES[kind].test;
+  if (tier === 'exotic') return seasonOn() ? [...HD_IDS].filter(id => (T(id) || (CRATES[kind].base === 'colour' && id.startsWith('hcol:'))) && !owns(id)) : [];
+  return allShopIds().filter(id => T(id) && rarityOf(id) === tier && !owns(id) && (!EVENT_ITEMS.has(id) || activeEvent() === eventOf(id)));
+}
+function scNew(kind) { return ['rare', 'special', 'unique', 'exotic'].flatMap(t => scPool(kind, t)); }
+function openSCrate(kind, sure, free) {
+  const C = CRATES[kind];
+  if (!free && !crateLeft(kind)) { hint('You’ve opened ' + CRATE_MAX + ' ' + C.name.toLowerCase() + 's this hour. More in ' + fmtLeft(HOUR_MS - Date.now() % HOUR_MS) + '.'); return false; }
+  if (!scNew(kind).length) { hint('You already own everything a ' + C.name.toLowerCase() + ' can hold.'); return false; }
+  if (!free && jb.rbucks < C.price) { hint(C.name + 's cost ' + RCUR + C.price + ' — you have ' + RCUR + jb.rbucks + '. ✦ only come from Frantic cities: one for every parcel.'); return false; }
+  const nowMs = performance.now(), pid = 'crate:' + kind;
+  if (!sure && (!buyPending || buyPending.id !== pid || nowMs - buyPending.t > 4000)) {
+    buyPending = {id: pid, kind: 'buy', t: nowMs}; hint('Open a ' + C.name.toLowerCase() + ' for ' + RCUR + C.price + '? Tap again to confirm.'); renderLook();
+    setTimeout(() => { if (buyPending && buyPending.id === pid && performance.now() - buyPending.t >= 4000) { buyPending = null; renderLook(); } }, 4100);
+    return false;
+  }
+  buyPending = null;
+  const odds = C.odds(); let roll = Math.random() * 100, tier = odds[0][0];
+  for (const [t, w] of odds) { if (roll < w) { tier = t; break; } roll -= w; }
+  let got = '';
+  for (const t of [tier, 'rare', 'special', 'unique', 'exotic']) { const l = scPool(kind, t); if (l.length) { got = l[Math.floor(Math.random() * l.length)]; break; } }
+  if (!free) { jb.rbucks -= C.price; jb.rot.crates[kind] = (jb.rot.crates[kind] || 0) + 1; }
+  jb.owned[got] = 1; delete jb.hired[got];
+  saveShop(); renderBucks(); renderLook(); showCrate(kind, got); questEvent('crate', 1);
+  return true;
+}
+/* three ✦ items on sale a day (the same three all day, whoever you are) */
+function dailyIds() {
+  const d = Math.floor(Date.now() / DAY_MS), q = shuffleSeeded(allShopIds().filter(id => rarityOf(id) === 'special'), d * 104729 + 3);
+  return q.slice(0, 3);
+}
+function spCratesHTML() {
+  return '<h3 class="shop-h">Special crates <small>cost ✦ · ' + CRATE_MAX + ' of each per hour · ' + (seasonOn() ? '70% rare · 20% special · 7.5% exotic · 2.5% unique' : '75% rare · 22.5% special · 2.5% unique') + ' · never something you own</small></h3><div class="crates">' +
+    Object.keys(SC_BASE).map(k => {
+      const C = CRATES[k], n = crateLeft(k), none = !scNew(k).length, conf = buyPending && buyPending.id === 'crate:' + k;
+      return '<button type="button" class="crate-s sp k-' + C.base + (n && !none ? '' : ' spent') + '" data-act="crate" data-kind="' + k + '"><span class="crate-ico"><i></i></span><b>' + C.name + '</b><small>' + C.holds + '</small>' +
+        '<span class="crate-foot"><span class="lock' + (conf ? ' confirm' : '') + '">' + (conf ? 'Tap to open' : RCUR + C.price) + '</span><em>' + (none ? 'All owned' : n + ' of ' + crateMax(k) + ' left') + '</em></span></button>';
+    }).join('') + '</div>';
+}
+{
+  const _sh = crateShown; crateShown = function (k) { return !CRATES[k].rare && _sh(k); };
+  const _ii = inStock; inStock = function (id) { return _ii.apply(this, arguments) || dailyIds().includes(id); };
+  TIPS.special = 'Tip: special crates cost ✦ rare bucks, which come from Frantic cities.';
 }

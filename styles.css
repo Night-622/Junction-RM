@@ -2390,3 +2390,11 @@ ol.board li.sel{box-shadow:inset 0 0 0 1px var(--accent)}
 .roll-hint{margin:0;font-size:14px;font-weight:700;min-height:20px}
 .roll-btns{display:flex;gap:8px;align-items:center}
 @media (prefers-reduced-motion:reduce){.rt.pick{animation:none}}
+
+
+/* ===== 32. Special crates (p87) ===== */
+.k-scolour{--c:255,111,181}.k-sitem{--c:47,180,225}.k-sobject{--c:245,166,35}
+.crate-s.sp .lock{background:linear-gradient(90deg,#9a6bff,#d58cff);color:#fff}
+.crate-s.sp{box-shadow:inset 0 0 0 1.5px rgba(197,139,255,.55)}
+.rt.r-exotic{--rc:0,214,200}.rt.r-exotic i{background:linear-gradient(135deg,#00d6c8,#ff8a1f,#a066ff)}
+.rar.r-exotic{background:linear-gradient(90deg,#00d6c8,#a066ff);color:#fff}
