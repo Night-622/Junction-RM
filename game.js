@@ -281,6 +281,7 @@ const CHANGELOG = [
     'Coins are now 1 ◎ for every 2 parcels delivered.',
     'Halloween part two: a Season tab with 30 objectives and five exclusive rewards, plus a story for Haunted Night (The Hollow Hour, 13 chapters), the Witching Hour, golden pumpkins, a ghost van and six easter eggs.',
     'The Halloween drop: collect pumpkins in Haunted Night, then spend 20 on a drop (five an hour) for one of 50 Halloween-only items: 20 animated colours that work on anything, and 30 patterned designs for houses, stores, lights, roundabouts, bridges, motorways, roads and drones.',
+    'Haunted Night has its own scary soundtrack and random scary noises: creaks, whispers, howls, tolling bells and worse. Music and Sound effects in Settings control them.',
     'Haunted Night, a Halloween mode: a dark city, rolling fog and pumpkins on the roads for bonus cash. It has its own saves and leaderboard.']},
   {v: '2.3', date: 'October 6, 2026', items: [
     'Campaign: 30 handcrafted levels in three chapters, each with a goal and 1–3 stars. Stars open the next chapter and unlock the Mayor house, Medal roundabout and Trophy car.',
@@ -13778,4 +13779,115 @@ function setAnim(slot, id, toggle) {
       html: '<span class="csw hcsw" data-hc="' + id + '"></span>'}));
   };
   SHOP_CATS.push(['hcol', 'Halloween colours']);
+}
+
+
+/* ===== p82: Haunted Night sound. A generated dark score (drone, wind, cold chords, a broken music box) that replaces the ambient music, plus scary noises at random. ===== */
+const HMUS_CHORDS = [[40, 53, 58, 63], [38, 50, 56, 62], [41, 48, 54, 61], [36, 49, 55, 60]];      // minor ninths and tritones over E, D, F and C
+const HMUS_SCALE = [76, 77, 79, 81, 83, 84, 86];                                                     // E phrygian, high up: the music box
+function hauntNoise() {
+  if (mus.nbuf) return mus.nbuf;
+  const a = mus.a, b = a.createBuffer(1, Math.floor(a.sampleRate * 1.6), a.sampleRate), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  return (mus.nbuf = b);
+}
+function hauntAudioStart() {
+  const a = mus.a, bus = a.createGain(); bus.gain.value = 0;
+  const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1100; lp.Q.value = 1.2; bus.connect(lp); lp.connect(mus.master); lp.connect(mus.verb);
+  const dg = a.createGain(), dl = a.createBiquadFilter(); dg.gain.value = 0.05; dl.type = 'lowpass'; dl.frequency.value = 260;
+  const o1 = a.createOscillator(), o2 = a.createOscillator(), o3 = a.createOscillator(), lfo = a.createOscillator(), lg = a.createGain();
+  o1.type = 'sawtooth'; o1.frequency.value = 41.2; o2.type = 'sawtooth'; o2.frequency.value = 41.9; o3.type = 'sine'; o3.frequency.value = 82.4;
+  lfo.frequency.value = 0.07; lg.gain.value = 0.02; lfo.connect(lg); lg.connect(dg.gain);
+  o1.connect(dl); o2.connect(dl); o3.connect(dl); dl.connect(dg); dg.connect(bus);
+  const ws = a.createBufferSource(); ws.buffer = hauntNoise(); ws.loop = true;
+  const wb = a.createBiquadFilter(); wb.type = 'bandpass'; wb.frequency.value = 500; wb.Q.value = 2.5; const wg = a.createGain(); wg.gain.value = 0.03;
+  const wl = a.createOscillator(), wlg = a.createGain(); wl.frequency.value = 0.11; wlg.gain.value = 260; wl.connect(wlg); wlg.connect(wb.frequency);
+  ws.connect(wb); wb.connect(wg); wg.connect(bus);
+  [o1, o2, o3, lfo, ws, wl].forEach(n => n.start());
+  mus.h = {bus, lp, nodes: [o1, o2, o3, lfo, ws, wl], chord: 0, nextPad: a.currentTime + 0.5, nextBox: a.currentTime + 7, nextBeat: 0, scareAt: performance.now() + 14000 + Math.random() * 14000};
+  setTimeout(() => { if (mus && mus.h && audioPrefs.sfx && !muted) hauntScare('creak'); }, 1400);     // the door opens
+}
+function hauntAudioStop() {
+  const h = mus && mus.h; if (!h) return; mus.h = null;
+  h.bus.gain.setTargetAtTime(0, mus.a.currentTime, 0.5);
+  setTimeout(() => { for (const n of h.nodes) { try { n.stop(); } catch (e) {} } try { h.bus.disconnect(); } catch (e) {} }, 3000);
+}
+function hVoice(f, t0, dur, vol, type, detune) {
+  const a = mus.a, o = a.createOscillator(), g = a.createGain(); o.type = type; o.frequency.value = f; o.detune.value = detune || 0;
+  g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + Math.min(3, dur * 0.3)); g.gain.setValueAtTime(vol, t0 + dur * 0.55); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(g); g.connect(mus.h.bus); o.start(t0); o.stop(t0 + dur + 0.05);
+}
+function boxNote(m, t0, vol, cents) {
+  const a = mus.a, f = midiHz(m), o = a.createOscillator(), o2 = a.createOscillator(), g = a.createGain(), g2 = a.createGain();
+  o.type = 'sine'; o.frequency.value = f; o.detune.value = cents || -22; o2.type = 'triangle'; o2.frequency.value = f * 3.01; o2.detune.value = cents || -22; g2.gain.value = 0.18;
+  g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 2.2);
+  o.connect(g); o2.connect(g2); g2.connect(g); g.connect(mus.h.bus); o.start(t0); o2.start(t0); o.stop(t0 + 2.3); o2.stop(t0 + 2.3);
+}
+function hauntAudioTick(musicOn) {
+  if (!mus.h) hauntAudioStart();
+  const h = mus.h, a = mus.a, now = a.currentTime, wit = haunt.witchT > 0;
+  h.bus.gain.setTargetAtTime(musicOn && !muted ? audioPrefs.musicVol * (wit ? 1.15 : 0.9) : 0, now, 0.7);
+  h.lp.frequency.setTargetAtTime(wit ? 1900 : 1100, now, 1.5);
+  if (musicOn && !muted) {
+    if (now > h.nextPad - 0.25) { const ch = HMUS_CHORDS[h.chord++ % HMUS_CHORDS.length], t0 = Math.max(now, h.nextPad), dur = 12; for (const m of ch) { hVoice(midiHz(m), t0, dur, 0.018, 'triangle', -8); hVoice(midiHz(m), t0 + 0.1, dur, 0.012, 'sine', 9); } h.nextPad = t0 + (wit ? 5 : 9); }
+    if (now > h.nextBox) {                                                    // a broken lullaby: a few notes drifting down, the last one wrong
+      const n = 3 + Math.floor(Math.random() * 4); let i = 3 + Math.floor(Math.random() * 4), t0 = now + 0.05;
+      for (let k = 0; k < n; k++) { const wrong = k === n - 1 && Math.random() < 0.6; boxNote(HMUS_SCALE[Math.max(0, i)] + (wrong ? 1 : 0), t0, 0.022, wrong ? -45 : -22); i -= Math.random() < 0.7 ? 1 : 2; t0 += 0.4 + Math.random() * 0.35; }
+      h.nextBox = t0 + (wit ? 1 : 3) + Math.random() * (wit ? 3 : 8);
+    }
+    if (wit && now > h.nextBeat) {                                            // a heartbeat in the Witching Hour
+      for (const d of [0, 0.19]) { const o = a.createOscillator(), g = a.createGain(), t0 = now + 0.02 + d; o.type = 'sine'; o.frequency.setValueAtTime(58, t0); o.frequency.exponentialRampToValueAtTime(36, t0 + 0.14); g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.16, t0 + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.2); o.connect(g); g.connect(h.bus); o.start(t0); o.stop(t0 + 0.25); }
+      h.nextBeat = now + 0.95;
+    }
+  }
+  if (!muted && audioPrefs.sfx && audioPrefs.sfxVol && running && performance.now() > h.scareAt) {
+    h.scareAt = performance.now() + (wit ? 8000 : 18000) + Math.random() * (wit ? 12000 : 42000); hauntScare();
+  }
+}
+const SCARES = ['creak', 'whisper', 'howl', 'bell', 'shriek', 'scratch', 'heartbeat', 'cackle', 'wrongnotes', 'whoosh'];
+function hauntScare(kind) {
+  if (!mus || muted || !audioPrefs.sfx || !audioPrefs.sfxVol) return '';
+  try {
+    const a = mus.a; if (a.state === 'suspended') a.resume();
+    const T = a.currentTime + 0.03, out = a.createGain(); out.gain.value = 0.7 * audioPrefs.sfxVol;
+    const pan = a.createStereoPanner ? a.createStereoPanner() : null;
+    if (pan) { pan.pan.value = Math.random() * 1.6 - 0.8; out.connect(pan); pan.connect(mus.master); pan.connect(mus.verb); } else { out.connect(mus.master); out.connect(mus.verb); }
+    const osc = (type, f0, f1, t0, dur, v, vib) => {
+      const o = a.createOscillator(), g = a.createGain(); o.type = type; o.frequency.setValueAtTime(f0, t0); if (f1) o.frequency.exponentialRampToValueAtTime(f1, t0 + dur);
+      if (vib) { const l = a.createOscillator(), lg = a.createGain(); l.frequency.value = vib[0]; lg.gain.value = vib[1]; l.connect(lg); lg.connect(o.frequency); l.start(t0); l.stop(t0 + dur + 0.05); }
+      g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(v, t0 + Math.min(0.08, dur * 0.3)); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      o.connect(g); g.connect(out); o.start(t0); o.stop(t0 + dur + 0.05); return g;
+    };
+    const noise = (t0, dur, v, f0, f1, q, type) => {
+      const s = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain(); s.buffer = hauntNoise(); f.type = type || 'bandpass'; f.Q.value = q || 1; f.frequency.setValueAtTime(f0, t0); if (f1) f.frequency.exponentialRampToValueAtTime(f1, t0 + dur);
+      g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(v, t0 + Math.min(0.06, dur * 0.3)); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      s.connect(f); f.connect(g); g.connect(out); s.start(t0, Math.random() * 0.8); s.stop(t0 + dur + 0.05);
+    };
+    const K = {
+      creak() { osc('sawtooth', 70, 135, T, 0.75, 0.04, [26, 14]); noise(T, 0.75, 0.025, 900, 420, 3); osc('sawtooth', 120, 72, T + 0.95, 0.55, 0.035, [30, 12]); noise(T + 0.95, 0.5, 0.02, 700, 380, 3); },
+      whisper() { for (let i = 0; i < 4; i++) noise(T + i * 0.34 + (i > 1 ? 0.2 : 0), 0.3, 0.06, 3400 - i * 200, 2300, 4); noise(T + 1.7, 0.7, 0.05, 4200, 1800, 3); },
+      howl() { osc('sine', 330, 540, T, 1.3, 0.05, [5, 9]); osc('sine', 540, 290, T + 1.3, 1.9, 0.05, [5.5, 10]); osc('triangle', 663, 1085, T, 1.3, 0.012, [5, 14]); },
+      bell() { for (let k = 0; k < 3; k++) { const t0 = T + k * 1.7; [[1, 0.07], [2.76, 0.035], [5.4, 0.018], [8.93, 0.01]].forEach(([r, v]) => osc('sine', 98 * r, 0, t0, 5, v)); } },
+      shriek() { osc('sawtooth', 700, 1900, T, 0.38, 0.03, [18, 70]); osc('sawtooth', 1900, 420, T + 0.38, 0.5, 0.028, [20, 60]); noise(T, 0.88, 0.02, 2800, 1500, 2); },
+      scratch() { for (let i = 0; i < 6; i++) noise(T + i * (0.13 + Math.random() * 0.06), 0.07 + Math.random() * 0.06, 0.03, 4200, 3200, 1.2, 'highpass'); },
+      heartbeat() { for (let k = 0; k < 4; k++) for (const d of [0, 0.2]) { const t0 = T + k * 0.95 + d; osc('sine', 60, 34, t0, 0.2, 0.2); } },
+      cackle() { for (let i = 0; i < 7; i++) { const t0 = T + i * 0.16, f = 560 - i * 28; osc('square', f, f * 0.7, t0, 0.12, 0.022 * (1 - i * 0.08), [30, 20]); noise(t0, 0.1, 0.01, 1100, 800, 3); } },
+      wrongnotes() { [76, 77, 82].forEach((m, i) => { const f = midiHz(m); osc('sine', f, 0, T + i * 0.03, 3, 0.05); osc('triangle', f * 3.01, 0, T + i * 0.03, 1.5, 0.01); }); },
+      whoosh() { noise(T, 1.7, 0.09, 220, 2600, 3); if (pan) { pan.pan.setValueAtTime(-0.9, T); pan.pan.linearRampToValueAtTime(0.9, T + 1.7); } osc('sine', 180, 90, T, 1.7, 0.03, [6, 8]); }
+    };
+    const k = kind && K[kind] ? kind : SCARES[Math.floor(Math.random() * SCARES.length)];
+    K[k](); hauntScare.last = k; return k;
+  } catch (e) { return ''; }
+}
+{
+  const _mt = musicTick;
+  musicTick = function () {
+    if (!mus) return _mt.apply(this, arguments);
+    if (hauntedOn()) { const keep = audioPrefs.music; audioPrefs.music = false; try { _mt.apply(this, arguments); } finally { audioPrefs.music = keep; } hauntAudioTick(keep); }
+    else { _mt.apply(this, arguments); if (mus.h) hauntAudioStop(); }
+  };
+  const _ws = hauntWitchStart; hauntWitchStart = function () { _ws.apply(this, arguments); hauntScare('bell'); };
+  const _hb = hauntBoo; hauntBoo = function () { hauntScare('shriek'); return _hb.apply(this, arguments); };
+  const _hbt = hauntBats; hauntBats = function () { hauntScare('whoosh'); return _hbt.apply(this, arguments); };
+  const _gt = hauntGhostTap; hauntGhostTap = function () { hauntScare('whisper'); return _gt.apply(this, arguments); };
+  window.JunctionAPI.hauntSound = {scare: hauntScare, kinds: SCARES, get playing() { return !!(mus && mus.h); }};
 }
