@@ -2474,7 +2474,7 @@ const TI_CARDS = [
   {t: 'Keep traffic moving', b: 'Where roads cross, cars take turns. Traffic lights, roundabouts, turn signs, one-way streets and motorways each fix a different kind of jam. You\u2019ll try every one of them in this tutorial.'},
   {t: 'Weeks and rewards', b: 'Each week the map grows and new stores and houses appear. When a week ends you pick one reward: extra roads plus a perk, a bridge, a light, a roundabout or another tool. Plan for the traffic that\u2019s coming, not just what\u2019s there.'},
   {t: 'Cash, \u25ce coins and \u2726 stars', b: '<b>Cash</b> is earned in each city and spent there on cars, upgrades and the Shop. <b>\u25ce coins</b> (1 for every 2 parcels) stay with you between cities and buy looks in the Store. <b>\u2726 stars</b> come only from Frantic cities and buy the daily special.'},
-  {t: 'Getting around', b: 'Scroll or pinch to zoom; right-drag, or hold Shift and drag, to move the map. Keys 1\u20139 pick tools, P pauses, and the speed buttons go from half to 3\u00d7. Tap anything with Inspect (key 1) to see what it\u2019s doing.'}
+  {t: 'Getting around', b: 'Scroll or pinch to zoom; right-drag, or hold Shift and drag, to move the map. Keys 1\u20139 pick tools, P pauses, and the speed buttons switch between 1\u00d7 and 2\u00d7. Tap anything with Inspect (key 1) to see what it\u2019s doing.'}
 ];
 let tiCard = 0, tiRaf = 0, tiT0 = 0;
 function openTutIntro() {
@@ -8978,7 +8978,7 @@ function renderIsoHud() {
   if (over) ctl = '';
   else if (iso.kind === 'live') {
     ctl = '<button class="act small" type="button" data-isoask="' + (running ? 'pause' : 'resume') + '">' + (running ? 'Ask to pause' : 'Ask to carry on') + '</button>' +
-      [1, 2, 3].filter(v => v !== speed).map(v => '<button class="act small" type="button" data-isoask="speed:' + v + '">Ask ' + v + '\u00d7</button>').join('');
+      [1, 2].filter(v => v !== speed).map(v => '<button class="act small" type="button" data-isoask="speed:' + v + '">Ask ' + v + '\u00d7</button>').join('');
   } else {
     const left = iso.endsAt ? iso.endsAt - Date.now() : 0;
     ctl = '<button class="act small" type="button" data-isofin="1">Finish and submit</button>' + (left > 0 ? '<small>' + fmtLeft(left) + ' left to play</small>' : '');
@@ -9492,7 +9492,7 @@ function bindInput() {
 }
 function togglePlay() { if (!$('m-pause').hidden) { closePause(true); return; } if (over || modalOpen || spectating) return; if (isoLive()) { isoAsk(running ? 'pause' : 'resume'); return; } running = !running; refreshUI(); }
 function cycleSpeed(d) { if (spectating) return; const s = CFG_SPEEDS; let i = s.indexOf(speed); i = (i + d + s.length) % s.length; if (isoLive()) { isoAsk('speed:' + s[i]); return; } speed = s[i]; refreshUI(); }
-const CFG_SPEEDS = [0.5, 1, 2, 3];
+const CFG_SPEEDS = [1, 2];
 function toggleMute() { muted = !muted; audioWake(); savePrefs(); refreshUI(); musicTick(); }
 /* M hides the motorways (and anything driving on them) so the streets underneath are easy to see */
 function toggleMoto() {

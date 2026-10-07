@@ -1707,7 +1707,7 @@ API.events.on('isoReply', e => {
   const what = d.prop.what, c = Object.assign({paused: false, speed: 1, v: 0}, d.ctl || {});
   if (!e.ok) { updateDoc(chalRef(d.id), {prop: null}).catch(() => {}); return; }
   if (what === 'pause') c.paused = true; else if (what === 'resume') c.paused = false;
-  else if (/^speed:/.test(what)) { c.speed = +what.slice(6) || 1; c.paused = false; }
+  else if (/^speed:/.test(what)) { c.speed = +what.slice(6) === 2 ? 2 : 1; c.paused = false; }
   c.v = (c.v || 0) + 1;
   updateDoc(chalRef(d.id), {prop: null, ctl: c}).catch(err => API.toast('Couldn\u2019t answer: ' + err.message, 'warn'));
 });
