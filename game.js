@@ -13515,3 +13515,84 @@ function draftsMerge(json) {
   return changed;
 }
 Object.assign(window.JunctionAPI, {settingsSnapshot, settingsApply, draftsRaw, draftsMerge, inCity: () => !!(started && !demoMode && !over)});
+
+
+/* ===== p78: Links view. Green ring: connected. Red ring: no connected house or store of its colour, or (for a store) no car of its colour.
+   A store reaches a house when a driveable chain of lanes leads from the store's road to the house's road. Tap a building in Inspect to see why. ===== */
+const links = {on: false, cache: null, sig: '', at: 0, sel: null, info: null, targets: [], told: false};
+const lkX = b => b.type === 'store' ? bX(b) : tx(b.k), lkY = b => b.type === 'store' ? bY(b) : ty(b.k);
+function linksCompute() {
+  const stores = buildings.filter(b => b.type === 'store'), houses = buildings.filter(b => b.type === 'house'), reach = new Map();
+  for (const s of stores) {
+    const seen = new Set();
+    if (s.acc >= 0 && nodes[s.acc]) {
+      const q = [s.acc]; seen.add(s.acc);
+      for (let i = 0; i < q.length; i++) { const nd = nodes[q[i]]; if (!nd) continue; for (const e of nd.outs) { if (e.dead || seen.has(e.b)) continue; seen.add(e.b); q.push(e.b); } }
+    }
+    reach.set(s, seen);
+  }
+  const cols = new Set(); for (const c of cars) if (!c.isBus) cols.add(c.color);
+  const info = new Map();
+  for (const s of stores) { const partners = houses.filter(h => h.color === s.color && h.acc >= 0 && reach.get(s).has(h.acc)); info.set(s, {ok: partners.length > 0 && cols.has(s.color), partners, noCars: partners.length > 0 && !cols.has(s.color)}); }
+  for (const h of houses) { const partners = h.acc >= 0 ? stores.filter(s => s.color === h.color && reach.get(s).has(h.acc)) : []; info.set(h, {ok: partners.length > 0, partners, noCars: false}); }
+  return info;
+}
+function linksInfo() {
+  const sig = edges.length + ':' + buildings.length + ':' + cars.length, now = performance.now();
+  if (!links.cache || sig !== links.sig || now - links.at > 1500) { links.cache = linksCompute(); links.sig = sig; links.at = now; }
+  return links.cache;
+}
+function linksSelect(b) {
+  links.sel = null; links.targets = [];
+  if (!b) return;
+  const info = linksInfo().get(b); if (!info) return;
+  const colName = COLORS[b.color] ? COLORS[b.color].name : '', store = b.type === 'store', other = store ? 'house' : 'store';
+  links.sel = b; links.info = info;
+  if (info.ok) { links.targets = info.partners; toast('Connected: ' + info.partners.length + ' ' + colName + ' ' + other + (info.partners.length === 1 ? '' : 's') + ' linked up.', 'good'); return; }
+  const R = 14 * CELL, ax = lkX(b), ay = lkY(b), art = /^[aeiou]/i.test(colName) ? 'an' : 'a', dist = t => Math.hypot(lkX(t) - ax, lkY(t) - ay);
+  const cand = buildings.filter(t => t !== b && t.type !== b.type && t.color === b.color).sort((p, q) => dist(p) - dist(q));
+  let near = cand.filter(t => dist(t) <= R).slice(0, 8), far = false; if (!near.length && cand.length) { near = cand.slice(0, 2); far = true; }
+  links.targets = near;
+  if (info.noCars) toast('This ' + colName + ' store is joined to a house but there are no ' + colName + ' cars. Buy one at ' + art + ' ' + colName + ' house.', 'warn');
+  else toast('This ' + colName + ' ' + (store ? 'store' : 'house') + ' isn\u2019t connected to ' + art + ' ' + colName + ' ' + other + '. ' + (near.length ? (far ? 'The nearest ' + colName + ' ' + other + (near.length > 1 ? 's are' : ' is') + ' a long way off and highlighted.' : 'Nearby ' + colName + ' ' + other + 's are highlighted.') : 'There is no ' + colName + ' ' + other + ' yet.'), 'warn');
+}
+function drawLinks() {
+  const info = linksInfo(), vr = viewRect(), m = 70, pulse = REDUCED_MOTION ? 0 : Math.sin(animT * 4) * 1.5;
+  ctx.save(); ctx.lineCap = 'round';
+  for (const [b, i] of info) {
+    const x = lkX(b), y = lkY(b); if (x < vr.x0 - m || x > vr.x1 + m || y < vr.y0 - m || y > vr.y1 + m) continue;
+    const r = b.type === 'store' ? 30 : 17;
+    ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.3); ctx.stroke();
+    ctx.lineWidth = 3.2; ctx.strokeStyle = i.ok ? '#2fd36b' : '#ff4d3d'; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.3); ctx.stroke();
+  }
+  const s = links.sel;
+  if (s && info.get(s)) {
+    const green = info.get(s).ok, sx = lkX(s), sy = lkY(s), col = green ? '#2fd36b' : '#ffb02e';
+    ctx.lineWidth = 3.5; ctx.strokeStyle = '#ffffff'; ctx.beginPath(); ctx.arc(sx, sy, (s.type === 'store' ? 36 : 23) + pulse, 0, 6.3); ctx.stroke();
+    for (const t of links.targets) {
+      const x = lkX(t), y = lkY(t);
+      ctx.lineWidth = 2; ctx.strokeStyle = col; ctx.globalAlpha = 0.7; ctx.setLineDash(green ? [] : [7, 6]); ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(x, y); ctx.stroke(); ctx.globalAlpha = 1;
+      ctx.lineWidth = 4; ctx.strokeStyle = col; ctx.beginPath(); ctx.arc(x, y, (t.type === 'store' ? 36 : 23) + pulse, 0, 6.3); ctx.stroke(); ctx.setLineDash([]);
+    }
+  }
+  ctx.restore();
+}
+{
+  const _dfx2 = drawFX; drawFX = function () { _dfx2(); if (links.on && started && !demoMode) drawLinks(); };
+  const _rg2 = resetGame; resetGame = function () { links.sel = null; links.targets = []; links.cache = null; return _rg2.apply(this, arguments); };
+  const btn = $('btn-links');
+  const set = on => { links.on = on; if (!on) { links.sel = null; links.targets = []; } if (btn) btn.setAttribute('aria-pressed', on ? 'true' : 'false'); if (on) { links.cache = null; if (!links.told) { links.told = true; toast('Links: green means connected, red means not. Tap a building to see why.', 'tip'); } } };
+  if (btn) btn.addEventListener('click', () => set(!links.on));
+  let down = null;
+  cv.addEventListener('pointerdown', e => { down = {x: e.clientX, y: e.clientY, t: performance.now()}; });
+  cv.addEventListener('pointerup', e => {
+    const d = down; down = null;
+    if (!links.on || !d || tool !== 'select' || modalOpen || over || demoMode) return;
+    if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 8 || performance.now() - d.t > 700) return;
+    const r = cv.getBoundingClientRect(), w = toWorld(e.clientX - r.left, e.clientY - r.top);
+    let hit = null, bd = 1e9;
+    for (const b of buildings) { const dd = Math.hypot(w.x - lkX(b), w.y - lkY(b)), rad = b.type === 'store' ? 36 : 22; if (dd < rad && dd < bd) { bd = dd; hit = b; } }
+    linksSelect(hit);
+  });
+  window.JunctionAPI.links = {get on() { return links.on; }, set, info: () => linksInfo(), select: linksSelect, get selected() { return links.sel; }, get targets() { return links.targets; }};
+}
