@@ -1739,7 +1739,7 @@ function rankedHTML(rk) {
   return '<div class="rk-card d-' + (r.division || 'bronze') + '"><div class="rk-l"><small>Ranked ISO \u00b7 season ' + seasonLabel() + '</small><b>' + DIV_LABEL[r.division || 'bronze'] + ' <span class="num">' + Math.round(r.rating) + '</span></b>' +
     '<span>' + (r.games ? r.wins + 'W \u00b7 ' + r.losses + 'L \u00b7 ' + r.draws + 'D this season' : 'No ranked games yet') + (next ? ' \u00b7 ' + toNext + ' to ' + DIV_LABEL[next] : ' \u00b7 top division') + '</span></div>' +
     '<div class="rk-r">' + (q ? '<button class="bigbtn" type="button" id="rk-cancel">In queue (' + (q.kind === 'live' ? 'live' : 'daily') + ')\u2026 cancel</button>' : '<button class="bigbtn" type="button" id="rk-live">Quick match \u00b7 live</button><button class="act" type="button" id="rk-daily">Quick match \u00b7 daily</button>') +
-    '<button class="act small" type="button" id="rk-board">Ranked board</button><button class="act small" type="button" id="rk-tour">Tournaments</button></div></div>';
+    '<button class="act small" type="button" id="rk-board">Ranked board</button><button class="act small" type="button" id="rk-tour">Tournaments</button><span class="rk-q" id="rk-q">' + queueLine() + '</span></div></div>';
 }
 const seasonLabel = () => new Date().toLocaleDateString('en-US', {month: 'long', year: 'numeric'});
 function bindRanked(box) {
@@ -2647,3 +2647,22 @@ async function loadSettingsCloud() {
   loadShopCloud = async function () { await _lsc2.apply(this, arguments); await loadSettingsCloud(); };
 }
 window.addEventListener('pagehide', () => { if (setLoaded) { if (setTimer) pushSettings(); if (drTimer) pushDrafts(); } });
+
+
+/* ===== p84: how many players are waiting for a live ISO match (the Ranked card shows it, and it updates as people join and leave) ===== */
+O.qstats = null; let qsUnsub = null;
+function queueLine() {
+  const s = O.qstats; if (!s) return '';
+  const n = Math.max(0, +s.live || 0), d = Math.max(0, +s.daily || 0), me = O.queued && O.queued.kind === 'live', extra = d ? ' · ' + d + ' waiting for a daily match' : '';
+  if (me) return (n <= 1 ? 'You’re the only one waiting for a live match so far' : n + ' players are waiting for a live match, including you') + extra;
+  return (n ? n + (n === 1 ? ' player is' : ' players are') + ' waiting for a live match' : 'Nobody is waiting for a live match right now') + extra;
+}
+function refreshQueueLine() { const el = document.getElementById('rk-q'); if (el) el.textContent = queueLine(); }
+function watchQueueStats() {
+  if (qsUnsub) { qsUnsub(); qsUnsub = null; } O.qstats = null; if (!O.user) return;
+  qsUnsub = onSnapshot(doc(db, 'rankedStats', 'queue'), s => { O.qstats = s.exists() ? s.data() : null; refreshQueueLine(); }, () => { O.qstats = null; });
+}
+{
+  const _l4 = loadShopCloud;
+  loadShopCloud = async function () { await _l4.apply(this, arguments); watchQueueStats(); };
+}

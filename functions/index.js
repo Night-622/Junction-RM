@@ -220,3 +220,11 @@ exports.onLog = onDocumentCreated('logs/{id}', async ev => {
     if (n > 20) tx.delete(ev.data.ref);
   });
 });
+
+
+/* how many players are waiting in the ranked queue: a small public counter for the ISO screen (who is waiting stays private) */
+exports.queueStats = onDocumentWritten('rankedQueue/{uid}', async () => {
+  const cutoff = TS.fromMillis(Date.now() - 10 * 60e3), count = kind => db.collection('rankedQueue').where('kind', '==', kind).where('at', '>', cutoff).count().get().then(s => s.data().count);
+  const [live, daily] = await Promise.all([count('live'), count('daily')]);
+  await db.doc('rankedStats/queue').set({live, daily, at: FV.serverTimestamp()});
+});

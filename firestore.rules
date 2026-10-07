@@ -236,6 +236,11 @@ service cloud.firestore {
 
     // Ranked ISO. Ratings are written only by the Cloud Functions; players may only queue (one doc, their own)
     // and sign up to tournaments. Challenge docs with ranked: true are created by the functions.
+    // the live count of players waiting in the ranked queue, kept by a Cloud Function; the queue itself stays private
+    match /rankedStats/{id} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
     match /rankedPlayers/{uid} {
       allow read: if signedIn();
       allow write: if false;

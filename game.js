@@ -281,6 +281,8 @@ const CHANGELOG = [
     'Coins are now 1 ◎ for every 2 parcels delivered.',
     'Halloween part two: a Season tab with 30 objectives and five exclusive rewards, plus a story for Haunted Night (The Hollow Hour, 13 chapters), the Witching Hour, golden pumpkins, a ghost van and six easter eggs.',
     'The Halloween drop: collect pumpkins in Haunted Night, then spend 20 on a drop (five an hour) for one of 50 Halloween-only items: 20 animated colours that work on anything, and 30 patterned designs for houses, stores, lights, roundabouts, bridges, motorways, roads and drones.',
+    'The ISO screen shows how many players are waiting for a live match, updating as people join and leave.',
+    'Tow trucks can pull into the opposite lane to get past a queue of stopped cars when it is clear, and oncoming cars hold back until they are through.',
     'Haunted Night has its own scary soundtrack and random scary noises: creaks, whispers, howls, tolling bells and worse. Music and Sound effects in Settings control them.',
     'Haunted Night, a Halloween mode: a dark city, rolling fog and pumpkins on the roads for bonus cash. It has its own saves and leaderboard.']},
   {v: '2.3', date: 'October 6, 2026', items: [
@@ -13890,4 +13892,82 @@ function hauntScare(kind) {
   const _hbt = hauntBats; hauntBats = function () { hauntScare('whoosh'); return _hbt.apply(this, arguments); };
   const _gt = hauntGhostTap; hauntGhostTap = function () { hauntScare('whisper'); return _gt.apply(this, arguments); };
   window.JunctionAPI.hauntSound = {scare: hauntScare, kinds: SCARES, get playing() { return !!(mus && mus.h); }};
+}
+
+
+/* ===== p83: tow trucks overtake in the opposite lane. A truck stuck behind a queue of stopped cars pulls onto the other side of the road, drives past the
+   queue along the straight road, and slots back in ahead of it. Oncoming cars are held back (passUntil) at the far end while it is out. ===== */
+const towStopped = c => c.v < 2.5 || c.broken > 0 || !!c.hook;
+function towPath(t) {
+  const e0 = t.edge, r = t.route, ri = t.ri; if (!r || r[ri] !== e0) return null;
+  const path = [e0], cum = [0]; let tot = e0.L;
+  while (path.length < 8) {
+    const cur = path[path.length - 1], nx = r[ri + path.length]; if (!nx || nx.dead) break;
+    const nd = nodes[cur.b]; if (!nd || nd.type !== 'free') break;
+    if (cur.ux * nx.ux + cur.uy * nx.uy < 0.999) break;                      // only straight on
+    path.push(nx); cum.push(tot); tot += nx.L;
+  }
+  return {path, cum, tot};
+}
+function towPassTry(t) {
+  const e0 = t.edge; if (!e0 || t.pass || t.hook || t.isAmb || t.cr || t.state !== 'driving' || t.stopT < 1.4 || t.v > 1.6) return;
+  const P = towPath(t); if (!P) return;
+  const {path, cum, tot} = P, ahead = [];
+  path.forEach((e, k) => { for (const c of e.cars) if (c !== t && cum[k] + c.s > t.s) ahead.push({c, u: cum[k] + c.s}); });
+  ahead.sort((a, b) => a.u - b.u);
+  if (!ahead.length || ahead[0].u - t.s > 56 || !towStopped(ahead[0].c)) return;      // not stuck behind anything (it waits at its tile's stop line while the next tile is full)
+  let last = ahead[0], n = 1;
+  while (n < ahead.length && towStopped(ahead[n].c) && ahead[n].u - last.u <= (last.c.len + ahead[n].c.len) / 2 + 26) { last = ahead[n]; n++; }
+  for (let i = 0; i < n; i++) if (ahead[i].c === t.tgt || ahead[i].c.claim === t) return;                       // that car is the job: the normal hook handles it
+  let to = last.u + (last.c.len + t.len) / 2 + 8, kt = 0;
+  while (kt + 1 < path.length && cum[kt + 1] <= to) kt++;
+  if (to - cum[kt] > path[kt].stop - 4) { if (kt + 1 >= path.length) return; kt++; to = cum[kt] + path[kt].r0 + 2; }      // slot back in where a tile's lane begins, not in the gap between tiles
+  else if (to - cum[kt] < path[kt].r0 + 1) to = cum[kt] + path[kt].r0 + 1;
+  if (to > tot - 10) return;
+  if (n < ahead.length && ahead[n].u - to < (ahead[n].c.len + t.len) / 2 + 6) return;                             // a moving car is right there
+  const twins = path.map(twinOf); if (twins.some(w => !w || w.dead)) return;
+  for (let k = 0; k < twins.length; k++) {
+    if (twins[k].inb && twins[k].inb.length) return;
+    for (const c of twins[k].cars) { const u = cum[k] + (path[k].L - c.s); if (u > t.s - 26 && u < to + 150) return; }   // oncoming traffic: wait
+  }
+  path[0].cars.splice(path[0].cars.indexOf(t), 1);
+  t.pass = {path, cum, twins, to, u: t.s, t0: clock};
+  for (const w of twins) w.passUntil = clock + (to - t.s) / 18 + 2;
+  t.stopT = 0; t.v = 2; t.brake = false; tipOnce('towpass');
+}
+function towPassPose(t) {
+  const p = t.pass; let k = 0; while (k + 1 < p.path.length && p.cum[k + 1] <= p.u) k++;
+  const e = p.path[k], s = Math.min(e.L, p.u - p.cum[k]), o = CFG.laneOffset * laneSign;
+  t.edge = e; t.s = s; t.x = e.ax + e.ux * s - e.nx * o; t.y = e.ay + e.uy * s - e.ny * o;         // the other side of the road
+  const ta = Math.atan2(e.uy, e.ux); t.ang = Math.abs(angDiff(t.ang, ta)) < 0.02 ? ta : t.ang + angDiff(t.ang, ta) * 0.35;
+  return k;
+}
+function towPassEnd(t) {
+  const p = t.pass, k = towPassPose(t), e = p.path[k]; t.pass = null;
+  let i = 0; while (i < e.cars.length && e.cars[i].s > t.s) i++;
+  const lead = e.cars[i - 1]; if (lead && lead.s - t.s < (lead.len + t.len) / 2) t.s = Math.max(0, lead.s - (lead.len + t.len) / 2 - 1);
+  e.cars.splice(i, 0, t); t.ri += k; t.v = Math.min(t.v, 6); t.stopT = 0;
+  const o = CFG.laneOffset * laneSign; t.x = e.ax + e.ux * t.s + e.nx * o; t.y = e.ay + e.uy * t.s + e.ny * o;
+}
+function towPassStep(t, dt) {
+  const p = t.pass;
+  if (p.path.some(e => e.dead)) { p.u = Math.min(p.u, p.cum[p.cum.length - 1]); towPassEnd(t); return; }
+  t.v = Math.min(Math.max(12, carVmax(t, p.path[0]) * 1.05), t.v + CFG.accel * 1.5 * dt); t.brake = false; p.u += t.v * dt;
+  towPassPose(t);
+  for (const w of p.twins) w.passUntil = clock + 1.2;
+  if (p.u >= p.to || clock - p.t0 > 14) { p.u = Math.min(p.u, p.to); towPassEnd(t); }
+}
+{
+  const _ts = truckStep;
+  truckStep = function (t, dt) {
+    if (t.pass) {
+      towPassStep(t, dt);
+      if (t.hauling) { const h = t.hauling, back = t.len / 2 + h.len / 2 + 1.5; h.x = t.x - Math.cos(t.ang) * back; h.y = t.y - Math.sin(t.ang) * back; h.ang = t.ang; h.v = 0; }
+      return;
+    }
+    _ts.apply(this, arguments);
+    if (t.state === 'driving' && !t.isAmb && t.stopT > 1.4) towPassTry(t);
+  };
+  const _cg = canGo; canGo = function () { const f = _cg.apply(this, arguments); return f && f.passUntil > clock ? null : f; };
+  TIPS.towpass = 'Tip: a tow truck stuck behind stopped cars pulls into the opposite lane to get past, when it is clear.';
 }

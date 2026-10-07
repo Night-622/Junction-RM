@@ -2346,3 +2346,22 @@ ol.board li.sel{box-shadow:inset 0 0 0 1px var(--accent)}
 .csw.hcsw{width:44px;height:44px}
 .libsw.hcsw{width:34px;height:34px;border:0;cursor:pointer}.libsw.hcsw[aria-pressed="true"]{box-shadow:0 0 0 3px #ffb02e,0 2px 6px rgba(0,0,0,.3)}
 .slot i[data-hc]{box-shadow:0 0 0 2px #ffb02e}
+/* ===== 23. Ranked ISO, tournaments ===== */
+.rk-card{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 14px;border-radius:14px;margin-bottom:12px;background:linear-gradient(120deg,rgba(var(--ov),.08),rgba(var(--ov),.03));border:1px solid var(--line)}
+.rk-card.d-bronze{border-color:#c27a43}.rk-card.d-silver{border-color:#c9d3dc}.rk-card.d-gold{border-color:#ffd23a}.rk-card.d-platinum{border-color:#bff3ff}.rk-card.d-diamond{border-color:#7fe3ff;box-shadow:0 0 0 1px #7fe3ff inset}
+.rk-l{display:grid;gap:2px}.rk-l small{font-size:11px;letter-spacing:.08em;text-transform:uppercase;opacity:.7}.rk-l b{font-size:20px}.rk-l b .num{font-weight:600;opacity:.8;margin-left:6px}.rk-l span{font-size:12px;opacity:.8}
+.rk-r{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.div-badge{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:99px;color:#10262f;vertical-align:middle}
+.div-badge.d-bronze{background:#c27a43;color:#fff}.div-badge.d-silver{background:#c9d3dc}.div-badge.d-gold{background:#ffd23a}.div-badge.d-platinum{background:#bff3ff}.div-badge.d-diamond{background:linear-gradient(90deg,#7fe3ff,#c59bff)}
+.iso-kind.k-ranked{background:#8a5bd6;color:#fff;margin-left:4px}
+.tourcard{max-width:760px}
+.tour{padding:12px 14px;border-radius:14px;border:1px solid var(--line);background:rgba(var(--ov),.04);margin:10px 0}.tour h3{margin:0 0 6px;font-size:16px}.tour.new{border-style:dashed}
+.tour .fradd{flex-wrap:wrap}.tour select,.tour input[type=datetime-local]{padding:8px 10px;border-radius:9px;border:1px solid var(--line);background:rgba(var(--ov),.07);color:inherit;font:inherit;font-size:13px}
+.bracket{display:flex;gap:14px;overflow-x:auto;padding:4px 0}
+.br-round{display:grid;gap:8px;align-content:space-around;min-width:150px}.br-round small{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;opacity:.7}
+.br-m{display:grid;gap:2px;padding:6px 8px;border-radius:10px;background:rgba(var(--ov),.07);font-size:12.5px}.br-m span{padding:2px 6px;border-radius:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.br-m span.w{background:rgba(var(--accent-rgb),.25);font-weight:800}
+
+
+/* ===== 30. ISO queue count (p84) ===== */
+.rk-q{flex-basis:100%;margin-top:2px;font-size:12px;opacity:.85}
+.rk-q:empty{display:none}
