@@ -282,6 +282,7 @@ const CHANGELOG = [
     'Halloween part two: a Season tab with 30 objectives and five exclusive rewards, plus a story for Haunted Night (The Hollow Hour, 13 chapters), the Witching Hour, golden pumpkins, a ghost van and six easter eggs.',
     'The Halloween drop: collect pumpkins in Haunted Night, then spend 20 on a drop (five an hour) for one of 50 Halloween-only items: 20 animated colours that work on anything, and 30 patterned designs for houses, stores, lights, roundabouts, bridges, motorways, roads and drones.',
     'The ISO screen shows how many players are waiting for a live match, updating as people join and leave.',
+    'Crates open like a case roll: a strip of rarities slides and slows to a stop, then you tap the tile it lands on to open the crate.',
     'Tow trucks can pull into the opposite lane to get past a queue of stopped cars when it is clear, and oncoming cars hold back until they are through.',
     'Haunted Night has its own scary soundtrack and random scary noises: creaks, whispers, howls, tolling bells and worse. Music and Sound effects in Settings control them.',
     'Haunted Night, a Halloween mode: a dark city, rolling fog and pumpkins on the roads for bonus cash. It has its own saves and leaderboard.']},
@@ -13970,4 +13971,54 @@ function towPassStep(t, dt) {
   };
   const _cg = canGo; canGo = function () { const f = _cg.apply(this, arguments); return f && f.passUntil > clock ? null : f; };
   TIPS.towpass = 'Tip: a tow truck stuck behind stopped cars pulls into the opposite lane to get past, when it is clear.';
+}
+
+
+/* ===== p85: the crate roller. A strip of rarity tiles slides and slows to a stop under a marker; tap the tile that stopped to open the crate. ===== */
+function crateRoll(kind, id, done) {
+  const m = $('m-crate'), card = m.querySelector('.crate-card'), r = rarityOf(id), C = CRATES[kind] || {};
+  const old = $('crate-roll'); if (old) old.remove();
+  card.className = 'card plate crate-card rolling k-' + kind;
+  const roll = document.createElement('div'); roll.id = 'crate-roll'; roll.className = 'crate-roll';
+  roll.innerHTML = '<p class="roll-title">Opening a ' + (C.name || 'crate').toLowerCase() + '…</p><div class="roll-view"><div class="roll-strip"></div><i class="roll-mark"></i></div><p class="roll-hint" id="roll-hint">Rolling for rarity…</p>' +
+    '<div class="roll-btns"><button type="button" class="act small" id="roll-skip">Skip</button><button type="button" class="bigbtn" id="roll-open" hidden>Open it</button></div>';
+  card.insertBefore(roll, card.firstChild);
+  const odds = C.pumpkins ? [['hstd', 70], ['hrare', 25], ['hunique', 5]] : [['standard', 70], ['rare', 25], ['unique', 5]];
+  const pickR = () => { let x = Math.random() * 100; for (const [t, w] of odds) { if (x < w) return t; x -= w; } return odds[0][0]; };
+  const N = 60, W = 47, TW = 96, GAP = 8, P = TW + GAP, tiles = [];
+  for (let i = 0; i < N; i++) tiles.push(i === W ? r : pickR());
+  const strip = roll.querySelector('.roll-strip'), view = roll.querySelector('.roll-view');
+  strip.innerHTML = tiles.map((t, i) => '<div class="rt r-' + t + (i === W ? ' win' : '') + '" data-i="' + i + '"><small>' + (RARITY[t] || t) + '</small><i></i></div>').join('');
+  openModal('m-crate'); haptic('crate');
+  const winEl = strip.children[W], hint = $('roll-hint'), openBtn = $('roll-open'), skipBtn = $('roll-skip');
+  let ended = false, raf = 0, lastIdx = -1, center = 0, final = 0;
+  const finish = () => {
+    if (ended) return; ended = true; cancelAnimationFrame(raf);
+    strip.style.transition = 'none'; strip.style.transform = 'translateX(' + final + 'px)';
+    skipBtn.hidden = true; openBtn.hidden = false; winEl.classList.add('pick'); winEl.tabIndex = 0;
+    hint.textContent = (RARITY[r] || r) + '! Tap it to open.'; sfx('crate'); haptic('claim'); openBtn.focus && openBtn.focus();
+  };
+  const open = () => { if (!ended) return; roll.remove(); done(); };
+  winEl.addEventListener('click', open); winEl.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+  openBtn.addEventListener('click', open); skipBtn.addEventListener('click', finish);
+  requestAnimationFrame(() => {
+    center = view.clientWidth / 2; const jit = (Math.random() - 0.5) * 0.62 * TW;
+    final = -(W * P + TW / 2 + jit - center);
+    const dur = REDUCED_MOTION ? 0.3 : 5.6;
+    strip.style.transition = 'transform ' + dur + 's cubic-bezier(.07,.55,.1,1)';
+    requestAnimationFrame(() => { strip.style.transform = 'translateX(' + final + 'px)'; });
+    const tick = () => {
+      if (ended || m.hidden) return;
+      const x = new DOMMatrixReadOnly(getComputedStyle(strip).transform).m41, idx = Math.floor((-x + center) / P);
+      if (idx !== lastIdx) { lastIdx = idx; sfx('click'); haptic('ui'); }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    strip.addEventListener('transitionend', finish, {once: true}); setTimeout(finish, dur * 1000 + 400);
+  });
+}
+{
+  const _show = showCrate;
+  showCrate = function (kind, id) { crateRoll(kind, id, () => _show(kind, id)); };
+  window.JunctionAPI.crateRoll = crateRoll;
 }
