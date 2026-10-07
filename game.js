@@ -282,6 +282,7 @@ const CHANGELOG = [
     'Halloween part two: a Season tab with 30 objectives and five exclusive rewards, plus a story for Haunted Night (The Hollow Hour, 13 chapters), the Witching Hour, golden pumpkins, a ghost van and six easter eggs.',
     'The Halloween drop: collect pumpkins in Haunted Night, then spend 20 on a drop (five an hour) for one of 50 Halloween-only items: 20 animated colours that work on anything, and 30 patterned designs for houses, stores, lights, roundabouts, bridges, motorways, roads and drones.',
     'The ISO screen shows how many players are waiting for a live match, updating as people join and leave.',
+    'Crate odds are now 55% standard, 35% rare, 8% special and 2% unique, and special items can come from crates.',
     'Crates open like a case roll: a strip of rarities slides and slows to a stop, then you tap the tile it lands on to open the crate.',
     'Tow trucks can pull into the opposite lane to get past a queue of stopped cars when it is clear, and oncoming cars hold back until they are through.',
     'Haunted Night has its own scary soundtrack and random scary noises: creaks, whispers, howls, tolling bells and worse. Music and Sound effects in Settings control them.',
@@ -10551,7 +10552,7 @@ const CRATES = {
   item:   {name: 'Item crate', price: 200, holds: 'a theme, map, panel style, decoration, banner, frame or title', test: id => /^(ui|style|map|decor|banner|frame|title):/.test(id)},
   object: {name: 'Object crate', price: 250, holds: 'a design for cars, houses, roads, stores, lights, roundabouts, bridges, motorways or drones', test: id => id.startsWith('design:')}
 };
-const CRATE_MAX = 3, CRATE_ODDS = [['standard', 70], ['rare', 25], ['unique', 5]];
+const CRATE_MAX = 3, CRATE_ODDS = [['standard', 55], ['rare', 35], ['special', 8], ['unique', 2]], HD_ODDS = [['standard', 70], ['rare', 25], ['unique', 5]];
 const allShopIds = () => Object.keys(COSMETICS).concat(Object.keys(COLOUR_PRICE).map(h => 'colour:' + h));
 function shuffleSeeded(arr, seed) { const r = seededRand(seed), a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 function ensureRotation() {
@@ -10573,7 +10574,7 @@ function ensureRotation() {
 function inStock(id) { ensureRotation(); if (EVENT_ITEMS.has(id)) { const e = eventOf(id); return !!(e && activeEvent() === e); } return jb.rot.items.includes(id) || jb.rot.cols.includes(id) || jb.daily.id === id; }
 const crateMax = k => (CRATES[k] && CRATES[k].max) || CRATE_MAX;
 const crateLeft = kind => { ensureRotation(); if (kind === 'halloween') return Math.max(0, crateMax(kind) - hdUsed()); return Math.max(0, crateMax(kind) - (jb.rot.crates[kind] || 0)); };
-const crateNew = kind => allShopIds().filter(id => CRATES[kind].test(id) && ['standard', 'rare', 'unique'].includes(rarityOf(id)) && !owns(id) && (!EVENT_ITEMS.has(id) || activeEvent() === eventOf(id)));
+const crateNew = kind => allShopIds().filter(id => CRATES[kind].test(id) && ['standard', 'rare', 'special', 'unique'].includes(rarityOf(id)) && !owns(id) && (!EVENT_ITEMS.has(id) || activeEvent() === eventOf(id)));
 /* two taps (like buying), then the crate shakes open and shows what was inside */
 let crateKind = '', crateGot = '';
 function openCrate(kind, sure, free) {
@@ -10593,7 +10594,7 @@ function openCrate(kind, sure, free) {
   let roll = Math.random() * 100, tier = 'standard';
   for (const [t, w] of CRATE_ODDS) { if (roll < w) { tier = t; break; } roll -= w; }
   let got = '';
-  for (const t of [tier, 'rare', 'standard', 'unique']) { const l = left.filter(id => rarityOf(id) === t); if (l.length) { got = l[Math.floor(Math.random() * l.length)]; break; } }
+  for (const t of [tier, 'rare', 'standard', 'special', 'unique']) { const l = left.filter(id => rarityOf(id) === t); if (l.length) { got = l[Math.floor(Math.random() * l.length)]; break; } }
   if (!free) { jb.bucks -= C.price; jb.rot.crates[kind] = (jb.rot.crates[kind] || 0) + 1; }
   jb.owned[got] = 1; delete jb.hired[got];
   saveShop(); renderBucks(); renderLook(); showCrate(kind, got); questEvent('crate', 1);
@@ -10689,7 +10690,7 @@ function renderStore(box, light) {
   const tLeft = fmtLeft(HOUR_MS - now % HOUR_MS), dLeft = fmtLeft(DAY_MS - now % DAY_MS);
   const parts = ['<div class="st-head"><div><b>New stock in ' + tLeft + '</b><small>Every hour: 6 items, 6 colours and 3 of each crate. ' + BUCKS_EACH + ' ◎ for every ' + PARCELS_PER_BUCK + ' parcels.</small></div><span class="st-bal num">' + CUR + jb.bucks.toLocaleString('en-US') + ' <i>·</i> <span class="rtag">✦' + jb.rbucks + '</span></span></div>'];
   if (jb.resetNote) { parts.push('<p class="mnote st-note">New credits! Everyone\u2019s balance started again from zero with new symbols: ◎ coins (1 for every 2 parcels) and ✦ stars (1 for every parcel in Frantic cities). Everything you own is still yours.</p>'); delete jb.resetNote; saveShop(); }
-  parts.push('<h3 class="shop-h">Mystery crates <small>' + CRATE_MAX + ' of each per hour · 70% standard · 25% rare · 5% unique · never something you own</small></h3><div class="crates">' +
+  parts.push('<h3 class="shop-h">Mystery crates <small>' + CRATE_MAX + ' of each per hour · 55% standard · 35% rare · 8% special · 2% unique · never something you own</small></h3><div class="crates">' +
     Object.keys(CRATES).filter(crateShown).map(k => {
       const C = CRATES[k], n = crateLeft(k), none = !(k === 'halloween' ? hdNew().length : crateNew(k).length), conf = buyPending && buyPending.id === 'crate:' + k;
       return '<button type="button" class="crate-s k-' + k + (n && !none ? '' : ' spent') + '" data-act="crate" data-kind="' + k + '"><span class="crate-ico"><i></i></span><b>' + C.name + '</b><small>' + C.holds + '</small>' +
@@ -11440,7 +11441,7 @@ const GUIDES = {
   ],
   crate: [
     {t: 'Three kinds of crate', b: 'A <b>colour crate</b> (\u25ce150) holds a colour; an <b>item crate</b> (\u25ce200) a theme, map, panel style or decoration; an <b>object crate</b> (\u25ce250) a design for cars, houses, roads, stores and the rest. You can open 3 of each per hour.'},
-    {t: 'What\u2019s inside', b: '70% standard, 25% rare, 5% unique, and uniques only ever come from crates. A crate never gives you something you already own.'}
+    {t: 'What\u2019s inside', b: '55% standard, 35% rare, 8% special, 2% unique, and uniques only ever come from crates. A crate never gives you something you already own.'}
   ],
   chats: [
     {t: 'Your chats', b: 'Conversations are listed on the left and the open chat sits on the right, like a messaging app. New messages show a badge on the Chats icon in the menu.'},
@@ -11575,10 +11576,10 @@ function drawGuide(t) {
       pill('\u2726 come from Frantic cities', W2 / 2, 214, '#ff6f61', '#fff', 12);
     } else if (k === 'store' || i === 0) crates();
     else {                                                 // the odds, and never a duplicate
-      const w = 420, x0 = W2 / 2 - w / 2, y = 86, segs = [[70, '#8fb6c9', 'Standard 70%'], [25, '#8a5bff', 'Rare 25%'], [5, gold, 'Unique 5%']];
+      const w = 420, x0 = W2 / 2 - w / 2, y = 86, segs = [[55, '#8fb6c9', 'Standard 55%'], [35, '#8a5bff', 'Rare 35%'], [8, '#ff6f9c', 'Special 8%'], [2, gold, 'Unique 2%']];
       let x = x0; g.save(); rr_(g, x0, y, w, 34, 12); g.clip();
       segs.forEach(([p_, c, l]) => { const sw = w * p_ / 100; g.fillStyle = c; g.fillRect(x, y, sw, 34); if (p_ > 10) txt(l, x + sw / 2, y + 18, 13, '#fff'); x += sw; });
-      g.restore(); txt('Unique 5%', x0 + w - 8, y + 54, 13, '#b08a00', 800, 'right');
+      g.restore(); txt('Special 8% · Unique 2%', x0 + w - 8, y + 54, 13, '#b08a00', 800, 'right');
       const mu = (t * 0.22) % 1, mx = x0 + w * mu; g.strokeStyle = ink; g.lineWidth = 3; g.lineCap = 'round'; g.beginPath(); g.moveTo(mx, y - 10); g.lineTo(mx, y + 44); g.stroke(); dot(mx, y - 14, 6, ink);
       const seen = [pink, blue, green, purple], got = Math.floor(t * 0.7) % 5;
       txt('Already yours', W2 * 0.3, 164, 12, soft, 700); for (let j = 0; j < 4; j++) { box(W2 * 0.3 + (j - 1.5) * 38 - 15, 182, 30, 30, 9, plate, line); dot(W2 * 0.3 + (j - 1.5) * 38, 197, 8, seen[j]); }
@@ -13704,7 +13705,7 @@ function openHDrop(sure) {
   }
   buyPending = null;
   let roll = Math.random() * 100, tier = 'standard';
-  for (const [t, w] of CRATE_ODDS) { if (roll < w) { tier = t; break; } roll -= w; }
+  for (const [t, w] of HD_ODDS) { if (roll < w) { tier = t; break; } roll -= w; }
   const want = {standard: 'hstd', rare: 'hrare', unique: 'hunique'}[tier]; let got = '';
   for (const t of [want, 'hrare', 'hstd', 'hunique']) { const l = left.filter(id => HD_RARITY[id] === t); if (l.length) { got = l[Math.floor(Math.random() * l.length)]; break; } }
   const h = Math.floor(Date.now() / HOUR_MS);
@@ -13983,7 +13984,7 @@ function crateRoll(kind, id, done) {
   roll.innerHTML = '<p class="roll-title">Opening a ' + (C.name || 'crate').toLowerCase() + '…</p><div class="roll-view"><div class="roll-strip"></div><i class="roll-mark"></i></div><p class="roll-hint" id="roll-hint">Rolling for rarity…</p>' +
     '<div class="roll-btns"><button type="button" class="act small" id="roll-skip">Skip</button><button type="button" class="bigbtn" id="roll-open" hidden>Open it</button></div>';
   card.insertBefore(roll, card.firstChild);
-  const odds = C.pumpkins ? [['hstd', 70], ['hrare', 25], ['hunique', 5]] : [['standard', 70], ['rare', 25], ['unique', 5]];
+  const odds = C.pumpkins ? [['hstd', 70], ['hrare', 25], ['hunique', 5]] : CRATE_ODDS;
   const pickR = () => { let x = Math.random() * 100; for (const [t, w] of odds) { if (x < w) return t; x -= w; } return odds[0][0]; };
   const N = 60, W = 47, TW = 96, GAP = 8, P = TW + GAP, tiles = [];
   for (let i = 0; i < N; i++) tiles.push(i === W ? r : pickR());
