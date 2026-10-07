@@ -283,6 +283,7 @@ const CHANGELOG = [
     'Map editor: paint water, place stores and houses, set rules and a goal, then publish with a code. Browse, like and play community maps, each with its own leaderboard.',
     'Living cities: houses grow into blocks and towers, stores into malls, named districts, pedestrians, weather that affects traffic, and streetlights at night.',
     'Coins are now 1 ◎ for every 2 parcels delivered.',
+    'Halloween part two: a Season tab with 30 objectives and five exclusive rewards, plus a story for Haunted Night (The Hollow Hour, 13 chapters), the Witching Hour, golden pumpkins, a ghost van and six easter eggs.',
     'Haunted Night, a Halloween mode: a dark city, rolling fog and pumpkins on the roads for bonus cash. It has its own saves and leaderboard.',
     'Behind the scenes: automated browser tests on every push, server checks on leaderboard scores and match results, error reporting, and rules deployed from GitHub.']},
   {v: '2.2.1', date: 'October 5, 2026', items: [
@@ -9919,16 +9920,19 @@ const BANNERS = {
   candy: ['Candy', 35, 'linear-gradient(120deg,#ff6fb5,#ffd1e3)'], royal: ['Royal', 40, 'linear-gradient(120deg,#221a4c,#8a5bd6)'], ember: ['Ember', 40, 'linear-gradient(120deg,#3a1f18,#ff6a2b)'],
   dusk: ['Dusk', 35, 'linear-gradient(120deg,#2b1b3d,#e3527a 60%,#ffcf5c)'], mint: ['Mint', 30, 'linear-gradient(120deg,#16a2b8,#bff0dc)'], slate: ['Slate', 25, 'linear-gradient(120deg,#3a4652,#9fb3c2)'],
   neon: ['Neon', 55, 'linear-gradient(120deg,#0b0f1f,#22e6ff 55%,#ff3df2)'], lava: ['Lava', 60, 'linear-gradient(120deg,#2a1714,#ff5a1a 55%,#ffc23a)'], rainbow: ['Rainbow', 70, 'linear-gradient(120deg,#ff4d4d,#ff9f1a,#ffd23a,#3fd16a,#2f9bff,#8a5bff)'],
-  aurora: ['Aurora', 0, 'linear-gradient(120deg,#0e1b2e,#3dffb0 40%,#7a5bff 80%)', 'U'], galaxy: ['Galaxy', 0, 'radial-gradient(circle at 30% 30%,#c59bff,#1a0f3d 60%)', 'U'], gold: ['Gold leaf', 0, 'linear-gradient(120deg,#8f6d10,#fff1a8 50%,#d4af37)', 'U']
+  aurora: ['Aurora', 0, 'linear-gradient(120deg,#0e1b2e,#3dffb0 40%,#7a5bff 80%)', 'U'], galaxy: ['Galaxy', 0, 'radial-gradient(circle at 30% 30%,#c59bff,#1a0f3d 60%)', 'U'], gold: ['Gold leaf', 0, 'linear-gradient(120deg,#8f6d10,#fff1a8 50%,#d4af37)', 'U'],
+  hollow: ['Hollow Night', 0, 'linear-gradient(120deg,#120b1f,#5b2a86 55%,#ff8a1f)', 'H']
 };
 const FRAMES = {
   ring: ['Ring', 25, '#ffffff'], gold: ['Gold', 45, '#d4af37'], teal: ['Teal', 25, '#16a2b8'], rose: ['Rose', 25, '#e3799d'], mint: ['Mint', 25, '#4fd1a5'], violet: ['Violet', 30, '#8a5bd6'],
-  neon: ['Neon', 55, '#22e6ff'], ember: ['Ember', 45, '#ff6a2b'], laurel: ['Laurel', 60, '#7cb342'], crown: ['Crown', 0, '#ffd23a', 'U'], halo: ['Halo', 0, '#fff1a8', 'U'], prism: ['Prism', 0, 'conic', 'U']
+  neon: ['Neon', 55, '#22e6ff'], ember: ['Ember', 45, '#ff6a2b'], laurel: ['Laurel', 60, '#7cb342'], crown: ['Crown', 0, '#ffd23a', 'U'], halo: ['Halo', 0, '#fff1a8', 'U'], prism: ['Prism', 0, 'conic', 'U'],
+  jack: ['Jack-o-lantern', 0, '#ff8a1f', 'H']
 };
 const TITLES = {
   pusher: ['Parcel Pusher', 25], planner: ['City Planner', 30], royalty: ['Roundabout Royalty', 40], whisperer: ['Traffic Whisperer', 40], mogul: ['Motorway Mogul', 40], builder: ['Bridge Builder', 30],
   owl: ['Night Owl', 30], speed: ['Speed Demon', 35], zen: ['Zen Master', 35], tycoon: ['Tycoon', 45], gridlock: ['Gridlock Breaker', 55], mayor: ['Mayor', 60],
-  legend: ['Junction Legend', 0, 'U'], ghost: ['Phantom Driver', 0, 'U'], champion: ['Champion', 0, 'A', 'p1000']
+  legend: ['Junction Legend', 0, 'U'], ghost: ['Phantom Driver', 0, 'U'], champion: ['Champion', 0, 'A', 'p1000'],
+  postmaster: ['Postmaster of Hollowmere', 0, 'H'], pumpkinking: ['Pumpkin King', 0, 'H'], bellringer: ['Bellringer', 0, 'H']
 };
 const COSMETICS = {
   'ui:ocean': [50, 'Ocean theme'], 'ui:aurora': [0, 'Aurora theme', 'U'], 'ui:molten': [0, 'Molten theme', 'U'],
@@ -10121,9 +10125,22 @@ for (const k in TITLES) COSMETICS['title:' + k] = TITLES[k][2] ? [TITLES[k][1], 
 for (const id in COSMETICS) { const c = COSMETICS[id]; if (!c[2] || c[2] === '#') c[0] = newPrice(c[0]); }
 /* ---- seasonal events: a themed fortnight with its own designs, quests and news. Dates are month/day, local time. */
 const EVENTS = [
-  {id: 'halloween', name: 'Halloween', start: [10, 1], end: [10, 31], map: 'spooky', decor: 'pumpkin', items: ['design:car:ghost', 'design:store:batwing', 'decor:ghostlight', 'title:ghost'],
-   tag: 'Event', title: 'Halloween in Junction', text: 'Ghost cars, bat-wing stores and ghost lights in the Store until October 31, plus three spooky quests and a new mode: Haunted Night.',
-   quests: [['deliver', 300, 'Deliver 300 parcels on the Spooky map', {c: 120}, 'spooky'], ['build_light', 6, 'Light up 6 junctions in one city', {c: 150}], ['survive', 8, 'Survive to week 8 in the dark', {item: 'design:car:ghost'}]]}
+  {id: 'halloween', rev: 'b', name: 'Halloween', start: [10, 1], end: [10, 31], map: 'spooky', decor: 'pumpkin', items: ['design:car:ghost', 'design:store:batwing', 'decor:ghostlight', 'title:ghost'],
+   tag: 'Event', title: 'Halloween in Junction', text: 'Ghost cars, bat-wing stores and ghost lights in the Store until October 31, plus 30 season objectives and a new mode with its own story: Haunted Night.',
+   quests: [
+     ['deliver', 50, 'Deliver 50 parcels in any city', {c: 40}], ['trips', 40, 'Make 40 trips', {c: 40}], ['build_light', 3, 'Place 3 traffic lights in one city', {c: 50}],
+     ['pumpkin', 5, 'Collect 5 pumpkins', {c: 60}], ['lore', 2, 'Unlock 2 chapters of The Hollow Hour', {c: 70}],
+     ['survive', 4, 'Survive to week 4 in Haunted Night', {c: 80}, '', 'haunted'], ['deliver', 150, 'Deliver 150 parcels in Haunted Night', {c: 80}, '', 'haunted'], ['earn', 1500, 'Earn $1,500 in one city', {c: 80}],
+     ['pumpkin', 15, 'Collect 15 pumpkins', {s: 2}], ['egg', 1, 'Find your first easter egg', {crate: 'colour'}],
+     ['witch', 1, 'Survive a Witching Hour', {c: 100}], ['build_round', 3, 'Build 3 roundabouts in one city', {c: 100}], ['deliver', 300, 'Deliver 300 parcels on the Spooky map', {c: 120}, 'spooky'],
+     ['combo', 3, 'Chain 3 pumpkins in a row', {c: 100}], ['store', 2, 'Buy 2 things in the Store', {crate: 'item'}],
+     ['survive', 8, 'Survive to week 8 in Haunted Night', {c: 150}, '', 'haunted'], ['pumpkin', 40, 'Collect 40 pumpkins', {c: 150}], ['ghost', 3, 'Tap the ghost mail van 3 times', {s: 4}],
+     ['lore', 6, 'Unlock 6 chapters of The Hollow Hour', {c: 150}], ['egg', 3, 'Find 3 easter eggs', {item: 'frame:jack'}],
+     ['witch', 3, 'Survive 3 Witching Hours', {c: 180}], ['deliver', 600, 'Deliver 600 parcels in any city', {c: 200}], ['golden', 1, 'Catch a golden pumpkin', {s: 5}],
+     ['build_moto', 2, 'Build 2 motorways in one city', {c: 180}], ['crate', 2, 'Open 2 mystery crates', {item: 'banner:hollow'}],
+     ['survive', 12, 'Survive to week 12 in Haunted Night', {c: 250}, '', 'haunted'], ['pumpkin', 100, 'Collect 100 pumpkins', {item: 'title:pumpkinking'}], ['egg', 6, 'Find all 6 easter eggs', {s: 10}],
+     ['lore', 13, 'Read the whole story: unlock all 13 chapters', {item: 'title:bellringer'}], ['survive', 13, 'Survive to week 13 in Haunted Night. Friday the 13th.', {item: 'title:postmaster'}, '', 'haunted']
+   ]}
 ];
 function activeEvent(d) {
   const x = d || new Date(), m = x.getMonth() + 1, day = x.getDate();
@@ -10257,6 +10274,7 @@ function purchase(id, kind, fn) {
   if (info[2] === 'C') { hint(name + ' is a campaign reward \u2014 finish its chapter in Campaign to unlock it.'); return; }
   if (info[2] === 'U') { hint(name + ' is unique — it only comes out of mystery crates in the Store.'); return; }
   if (info[2] === 'S') { hint(name + ' is a ranked season reward: finish a season in that division.'); return; }
+  if (info[2] === 'H') { hint(name + ' is a Halloween season reward: finish its objective in Quests, Season.'); return; }
   if (!inStock(id)) { hint(name + ' isn’t in the Store right now. The Store restocks every hour (new stock in ' + fmtLeft(HOUR_MS - Date.now() % HOUR_MS) + ')' + (info[2] === 'R' ? ' and has one special item a day.' : '.') + ' Crates can have it too.'); buyPending = null; renderLook(); return; }
   const price = kind === 'hire' ? HIRE_PRICE : info[0], rare = kind !== 'hire' && info[2] === 'R';
   const sym = rare ? RCUR : CUR, have = rare ? jb.rbucks : jb.bucks;
@@ -10368,8 +10386,8 @@ function ensureQuests() {
   if (!q) { q = {day: '', week: '', daily: [], weekly: [], event: [], rerollDay: ''}; dirty = true; }
   if (q.week !== wk) { q.week = wk; q.weekly = []; const used = []; for (let i = 0; i < 3; i++) { const x = makeQuest('weekly', wn + i * 13, used); used.push(x.type); q.weekly.push(x); } dirty = true; }
   if (q.day !== day) { q.day = day; q.daily = []; const used = q.weekly.map(x => x.type); for (let i = 0; i < 3; i++) { const x = makeQuest('daily', dn * 31 + i * 7, used); used.push(x.type); q.daily.push(x); } dirty = true; }
-  const ev = activeEvent(), evId = ev ? ev.id + '-' + new Date().getFullYear() : '';
-  if ((q.eventId || '') !== evId) { q.eventId = evId; q.event = ev ? ev.quests.map(([t, n, text, reward, map], i) => ({id: 'event:' + evId + ':' + i, kind: 'event', type: t, n, text, mode: '', map: map || '', reward, p: 0, done: false, claimed: false})) : []; dirty = true; }
+  const ev = activeEvent(), evId = ev ? ev.id + '-' + new Date().getFullYear() + (ev.rev || '') : '';
+  if ((q.eventId || '') !== evId) { q.eventId = evId; q.event = ev ? ev.quests.map(([t, n, text, reward, map, mode], i) => ({id: 'event:' + evId + ':' + i, kind: 'event', type: t, n, text, mode: mode || '', map: map || '', reward, p: 0, done: false, claimed: false})) : []; dirty = true; }
   jb.quests = q; if (dirty) saveShop();
   return q;
 }
@@ -10381,11 +10399,11 @@ const questsActive = () => started && !over && !tutorialMode && !spectating && !
 function questEvent(type, amount, mode) {
   if (typeof jb === 'undefined' || !jb) return;
   const q = ensureQuests(); let changed = false, finished = [];
-  const inCity = ['build_round', 'build_light', 'build_moto', 'survive', 'earn'].includes(type);
+  const inCity = ['build_round', 'build_light', 'build_moto', 'survive', 'earn', 'combo', 'lore', 'egg'].includes(type);
   for (const x of q.daily.concat(q.weekly, q.event)) {
     if (x.done || x.type !== type) continue;
     if (x.mode && x.mode !== (mode || diffKey)) continue;
-    if (x.map && mapPrefs.theme !== x.map) continue;
+    if (x.map && mapPrefs.theme !== x.map && !(x.map === 'spooky' && diffKey === 'haunted')) continue;
     const np = inCity ? Math.max(x.p, amount) : x.p + amount;
     if (np === x.p) continue;
     x.p = Math.min(np, x.n); changed = true;
@@ -10440,7 +10458,7 @@ function renderQuests() {
    Each hour's stock is shuffled from the hour itself, so everyone's Store is alike, with things you don't own first. */
 const HOUR_MS = 3600e3, DAY_MS = 86400e3;
 const RARITY = {standard: 'Standard', rare: 'Rare', unique: 'Unique', special: 'Special', ach: 'Achievement', camp: 'Campaign'};
-function rarityOf(id) { const i = itemInfo(id); if (!i) return 'standard'; return i[2] === 'C' ? 'camp' : i[2] === 'A' || i[2] === 'S' ? 'ach' : i[2] === 'R' ? 'special' : i[2] === 'U' ? 'unique' : i[0] >= 750 ? 'rare' : 'standard'; }
+function rarityOf(id) { const i = itemInfo(id); if (!i) return 'standard'; return i[2] === 'C' ? 'camp' : i[2] === 'A' || i[2] === 'S' || i[2] === 'H' ? 'ach' : i[2] === 'R' ? 'special' : i[2] === 'U' ? 'unique' : i[0] >= 750 ? 'rare' : 'standard'; }
 const CRATES = {
   colour: {name: 'Colour crate', price: 150, holds: 'a colour', test: id => id.startsWith('colour:')},
   item:   {name: 'Item crate', price: 200, holds: 'a theme, map, panel style, decoration, banner, frame or title', test: id => /^(ui|style|map|decor|banner|frame|title):/.test(id)},
@@ -10538,6 +10556,7 @@ function howToGet(id) {
   if (owns(id)) return 'Owned';
   if (i[2] === 'A') return '🏆 ' + achName(i[3]);
   if (i[2] === 'S') return 'Ranked season reward';
+  if (i[2] === 'H') return 'Halloween season reward';
   if (EVENT_ITEMS.has(id)) { const e = eventOf(id); return e.name + ' event · ' + eventWhen(e) + (activeEvent() === e ? ' · in the Store now' : ''); }
   if (i[2] === 'C') return 'Campaign reward';
   if (i[2] === 'U') return 'Crates only';
@@ -13174,4 +13193,224 @@ function drawPumpkins() {
     return _rp.apply(this, arguments);
   };
   window.JunctionAPI = window.JunctionAPI || {}; window.JunctionAPI.haunt = haunt;
+}
+
+
+/* ===== p75: Haunted Night, part two. The Hollow Hour (story), the Journal, the Witching Hour, combos, golden pumpkins, the ghost van,
+   six easter eggs, and the Season tab in Quests. Story progress and found eggs are kept in this browser. ===== */
+const HK = 'junction-haunt-v1';
+const hs = {lore: 0, eggs: {}};
+try { const d = JSON.parse(localStorage.getItem(HK)); if (d && typeof d === 'object') { hs.lore = clamp(d.lore | 0, 0, 13); if (d.eggs && typeof d.eggs === 'object') for (const k in d.eggs) if (d.eggs[k]) hs.eggs[k] = 1; } } catch (e) {}
+const hsSave = () => { try { localStorage.setItem(HK, JSON.stringify(hs)); } catch (e) {} };
+const LORE = [
+  ['The Night Shift', 'The Hollowmere Post Office has been dark since the first frost, but the lamp over the sorting desk is lit and a note says: Keep the parcels moving. Do not ask who they are for. You are the new night dispatcher. Nobody remembers hiring you.'],
+  ['Return to Sender', 'The first parcels arrive with no sender and no stamp. The addresses are real streets, but the names on the labels belong to people who left town years ago. Some of them left a long time ago, and not on foot.'],
+  ['The Postmaster’s Ledger', 'In the desk drawer you find the old ledger. Every delivery is ticked off in neat green ink, until the last line: 13 Elm Street, never delivered. Beneath it, in a shakier hand: Somebody has to finish it.'],
+  ['Fog Tide', 'The fog comes up from the canal at night, thick enough to hide a house. Drivers swear the traffic lights blink out of turn. The old dispatchers called it the tide, and learned to keep the lamps lit.'],
+  ['Lanterns', 'The townsfolk carve pumpkins and set them along the roads. They say the lights guide the lost home. You notice the cars slow down when they pass one, as if they were being greeted.'],
+  ['The Pale Van', 'At the far end of the sorting room hangs a photo of Ambrose Wick, postmaster for forty years, grinning beside a pale blue van. The van parked outside last night. The engine was warm. The seat was empty.'],
+  ['Witching Hour', 'At midnight the parcels stop trickling and start pouring. The pumpkins glow brighter and the roads fill. The dead collect their post at this hour, the ledger says, and they are not patient.'],
+  ['Mrs Marrow’s Letter', 'One parcel finally gets accepted. A woman in a grey coat takes it on her doorstep, reads the label, and smiles for the first time in sixty years. Then the doorstep is empty and the porch light goes out. It is the nicest thing you have seen all week.'],
+  ['The Cartographer', 'The streets are not where you left them. A road you built ends one tile earlier than it should, and a house has moved a block north. The map is not wrong. The town is rearranging itself to be found.'],
+  ['The Bells', 'The clock tower has been broken for decades, and tonight it rings. You count the strokes. Thirteen. Every window in Hollowmere lights up at once, then goes dark, as if the whole town were holding its breath.'],
+  ['Ambrose Wick', 'The radio on the sorting desk crackles: Evening, dispatcher. It is Wick. He was not taken, he explains. He stayed, because a postmaster does not leave while a parcel is undelivered. Forty years of one last parcel, and he has run out of roads.'],
+  ['The Last Parcel', 'The final parcel is small, brown, tied with green string. The address reads 13 Elm Street, which has been empty for as long as anyone knows. The ledger has one space left. The pale van waits at the curb with its engine running.'],
+  ['Dawn', 'You carry it up the path. The door opens before you knock. Inside, a desk, a lamp, and a name plate: your own. Wick tips his hat from the van. The night shift is yours now, he says. The sun comes up over Hollowmere. See you next Halloween.']
+];
+const EGGS = {
+  boo: ['Boo!', 'You said the magic word. Somewhere in Hollowmere, a ghost jumped.', 'Say a certain two-syllable word out loud, in the dark. Typing counts.'],
+  konami: ['Bat signal', 'Old habits from the arcade. The bats approve and fly past to say so.', 'An old cheat code. Up, up, and onwards from there.'],
+  elm: ['13 Elm Street', 'The Haunted Night sign has a door. Nobody is home. Yet.', 'Knock on the Haunted Night sign. Thirteen is the lucky number.'],
+  van: ['The Ghost Postmaster', 'You tapped Wick’s van and he tipped his hat.', 'Something pale drives the roads after dark. Say hello.'],
+  golden: ['Golden hour', 'A pumpkin worth its weight in gold, and you caught it.', 'Some pumpkins glitter. They do not stay long.'],
+  patch: ['Pumpkin patch', 'Five in a row. The whole field is yours.', 'Chain pumpkins together without letting the chain break.']
+};
+const WICK = ['“Evening, dispatcher. Mind the fog.”', '“Forty years, and the roads still surprise me.”', '“Keep the lamps lit. They follow the light.”', '“You deliver better than I did. Do not tell the others.”', '“One more parcel. There is always one more parcel.”', '“The green ink is for finished work.”'];
+const eggCount = () => Object.keys(hs.eggs).length;
+function hauntEgg(id) {
+  if (!EGGS[id] || hs.eggs[id]) return; hs.eggs[id] = 1; hsSave();
+  toast('Easter egg found: ' + EGGS[id][0] + ' (' + eggCount() + '/6)', 'good'); sfx('claim'); confetti(); questEvent('egg', eggCount());
+  if (haunt.chip) hauntChipUpdate();
+}
+Object.assign(haunt, {combo: 0, comboT: 0, witchT: 0, lastPh: null, ghostT: 75, ghost: null, golds: 0, elm: 0, newChap: false});
+{
+  const _hs = hauntSync;
+  hauntSync = function (fresh) { const was = haunt.on; _hs.apply(this, arguments); if (haunt.on && (fresh || !was)) { Object.assign(haunt, {combo: 0, comboT: 0, witchT: 0, lastPh: null, ghostT: 60 + Math.random() * 40, ghost: null, golds: 0}); hauntChipUpdate(); } };
+}
+hauntChipUpdate = function () {
+  if (!haunt.chip) {
+    const st = $('stage'); if (!st) return;
+    const el = document.createElement('div'); el.className = 'camp-hud plate haunt-chip'; el.id = 'haunt-chip'; el.hidden = true; el.setAttribute('aria-live', 'polite');
+    el.innerHTML = '<b id="hc-title" title="Haunted Night">Haunted Night</b><span id="hc-line"></span><div class="hc-btns"><button type="button" class="act small" id="hc-journal">Journal</button></div>';
+    st.appendChild(el); haunt.chip = el;
+    $('hc-title').addEventListener('click', () => { haunt.elm++; if (haunt.elm >= 13) { haunt.elm = 0; hauntEgg('elm'); popText(cam.x, cam.y, 'Nobody is home at 13 Elm Street.', '#ffb02e'); } });
+    $('hc-journal').addEventListener('click', () => openJournal());
+  }
+  haunt.chip.hidden = !haunt.on;
+  const l = $('hc-line'); if (l) l.textContent = 'Pumpkins: ' + haunt.got + (haunt.combo > 1 ? ' · Combo x' + haunt.combo : '') + (haunt.witchT > 0 ? ' · Witching Hour ' + Math.ceil(haunt.witchT) + 's' : '') + (haunt.ghost ? ' · A pale van is out' : '');
+  haunt.chip.classList.toggle('witching', haunt.witchT > 0);
+  const j = $('hc-journal'); if (j) j.classList.toggle('pulse', !!haunt.newChap);
+};
+function hauntSpawn(gold) {
+  const es = edges.filter(e => e && !e.dead && !e.fast && e.L > 30); if (!es.length) return;
+  const e = es[Math.floor(Math.random() * es.length)], s = e.L * (0.25 + Math.random() * 0.5), g = gold === undefined ? Math.random() < 0.06 : gold;
+  haunt.pumpkins.push({x: e.ax + e.ux * s, y: e.ay + e.uy * s, t: 0, life: g ? 11 : haunt.witchT > 0 ? 14 : 20, gold: g});
+}
+function hauntCollect(p) {
+  const base = 40 + 5 * Math.min(week, 10);
+  haunt.combo = haunt.comboT > 0 ? haunt.combo + 1 : 1; haunt.comboT = 8;
+  const mult = Math.min(2.5, 1 + 0.25 * (haunt.combo - 1)) * (haunt.witchT > 0 ? 2 : 1) * (p.gold ? 5 : 1), v = Math.round(base * mult);
+  money += v; haunt.got++;
+  popText(p.x, p.y - 4, '+' + fmt$(v) + (haunt.combo > 1 ? '  x' + haunt.combo : ''), p.gold ? '#ffe066' : '#ffb02e'); sfx(p.gold ? 'claim' : 'deliver'); bump('v-money');
+  questEvent('pumpkin', 1); questEvent('combo', haunt.combo);
+  if (p.gold) { haunt.golds++; questEvent('golden', 1); hauntEgg('golden'); }
+  if (haunt.combo >= 5) hauntEgg('patch');
+  hauntChipUpdate(); JEvents.emit('pumpkin', {n: haunt.got});
+}
+function hauntWitchStart() {
+  haunt.witchT = 30; haunt.spawnT = 0.4; rush.t = Math.max(rush.t, 30);
+  toast('The Witching Hour: parcels pour in and pumpkins pay double. Hold on for 30 seconds.', 'warn'); sfx('claim');
+  const b = document.createElement('div'); b.className = 'haunt-banner'; b.textContent = 'THE WITCHING HOUR'; document.body.appendChild(b); setTimeout(() => b.remove(), 3200);
+  hauntChipUpdate();
+}
+function hauntWitchEnd() {
+  haunt.witchT = 0; toast('The bell tolls. You made it through the Witching Hour.', 'good'); questEvent('witch', 1); hauntChipUpdate();
+}
+function hauntGhostSpawn() {
+  const es = edges.filter(e => e && !e.dead && !e.fast && e.L > 30); if (!es.length) return;
+  const e = es[Math.floor(Math.random() * es.length)];
+  haunt.ghost = {x: e.ax + e.ux * e.L * 0.2, y: e.ay + e.uy * e.L * 0.2, vx: e.ux * 15, vy: e.uy * 15, t: 0, life: 18};
+  toast('A pale van is driving the roads. Tap it before it fades.', 'tip'); hauntChipUpdate();
+}
+function hauntGhostTap() {
+  const g = haunt.ghost; if (!g) return;
+  const v = 60 + 5 * Math.min(week, 10); money += v; popText(g.x, g.y - 8, WICK[Math.floor(Math.random() * WICK.length)], '#cfe8ff'); popText(g.x, g.y + 6, '+' + fmt$(v), '#ffb02e');
+  haunt.ghost = null; sfx('claim'); bump('v-money'); questEvent('ghost', 1); hauntEgg('van'); hauntChipUpdate();
+}
+function hauntLoreCheck() {
+  const n = Math.min(13, week | 0); if (n <= hs.lore) return;
+  const from = hs.lore + 1; hs.lore = n; hsSave(); haunt.newChap = true; questEvent('lore', hs.lore); sfx('claim');
+  toast(from === n ? 'Chapter ' + n + ' unlocked: ' + LORE[n - 1][0] + '. Open the Journal.' : 'Chapters ' + from + ' to ' + n + ' unlocked. Open the Journal.', 'tip'); hauntChipUpdate();
+}
+hauntStep = function (dt) {
+  if (!haunt.on) return;
+  const wit = haunt.witchT > 0;
+  haunt.spawnT -= dt; if (haunt.spawnT <= 0) { haunt.spawnT = wit ? 1.6 : 6 + Math.random() * 6; if (haunt.pumpkins.length < (wit ? 7 : 3)) hauntSpawn(); }
+  haunt.fogT -= dt; if (haunt.fogT <= 0) { haunt.fogT = 80 + Math.random() * 60; if (!(weather.t > 0)) startWeather('fog', 30 + Math.random() * 20); }
+  if (haunt.comboT > 0) { haunt.comboT -= dt; if (haunt.comboT <= 0) { haunt.combo = 0; hauntChipUpdate(); } }
+  const ph = dayPhase();
+  if (haunt.lastPh !== null && haunt.lastPh < 0.5 && ph >= 0.5 && !wit) hauntWitchStart();
+  haunt.lastPh = ph;
+  if (wit) { haunt.witchT -= dt; rush.t = Math.max(rush.t, 2); if (haunt.witchT <= 0) hauntWitchEnd(); else if (Math.floor(haunt.witchT) !== Math.floor(haunt.witchT + dt)) hauntChipUpdate(); }
+  haunt.ghostT -= dt; if (haunt.ghostT <= 0 && !haunt.ghost) { haunt.ghostT = 110 + Math.random() * 60; hauntGhostSpawn(); }
+  if (haunt.ghost) { const g = haunt.ghost; g.t += dt; g.x += g.vx * dt; g.y += g.vy * dt; if (g.t >= g.life) { haunt.ghost = null; hauntChipUpdate(); } }
+  for (let i = haunt.pumpkins.length - 1; i >= 0; i--) {
+    const p = haunt.pumpkins[i]; p.t += dt;
+    if (p.t >= p.life) { haunt.pumpkins.splice(i, 1); continue; }
+    if (p.t < 1.5) continue;
+    for (const c of cars) {
+      if (c.state === 'parked' || c.state === 'loading' || c.isBus) continue;
+      const dx = c.x - p.x, dy = c.y - p.y;
+      if (dx * dx + dy * dy < 17 * 17) { haunt.pumpkins.splice(i, 1); hauntCollect(p); break; }
+    }
+  }
+  hauntLoreCheck();
+};
+drawPumpkins = function () {
+  for (const p of haunt.pumpkins) {
+    const u = p.t / p.life; if (u > 0.78 && Math.floor(animT * 6) % 2) continue;
+    const g = !!p.gold, s = Math.min(1, p.t / 0.35) * (g ? 1.25 : 1), bob = REDUCED_MOTION ? 0 : Math.sin(animT * 3 + p.x) * 1.2;
+    ctx.save(); ctx.translate(p.x, p.y + bob); ctx.scale(s, s);
+    ctx.globalAlpha = g ? 0.5 : 0.32; ctx.fillStyle = g ? '#ffe066' : '#ffb02e'; ctx.beginPath(); ctx.arc(0, 0, 13, 0, 6.3); ctx.fill(); ctx.globalAlpha = 1;
+    ctx.fillStyle = g ? '#ffd23a' : '#ff8a1f'; ctx.strokeStyle = g ? '#a8780a' : '#a84a08'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.ellipse(0, 1, 7.6, 6.4, 0, 0, 6.3); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = g ? '#f2b705' : '#d9690f'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.ellipse(0, 1, 3.6, 6.2, 0, 0, 6.3); ctx.stroke();
+    ctx.fillStyle = '#4c8f3a'; ctx.fillRect(-1, -7, 2.4, 3.2);
+    ctx.fillStyle = g ? '#6b4a05' : '#3a1d05'; ctx.beginPath(); ctx.moveTo(-4.2, -1.2); ctx.lineTo(-1.6, -1.2); ctx.lineTo(-2.9, -3.2); ctx.closePath(); ctx.moveTo(1.6, -1.2); ctx.lineTo(4.2, -1.2); ctx.lineTo(2.9, -3.2); ctx.closePath();
+    ctx.moveTo(-3.6, 2); ctx.lineTo(3.6, 2); ctx.lineTo(2.4, 4.2); ctx.lineTo(0.8, 3.1); ctx.lineTo(-0.8, 4.2); ctx.lineTo(-2.4, 3.1); ctx.closePath(); ctx.fill();
+    if (g && !REDUCED_MOTION) { ctx.fillStyle = 'rgba(255,255,255,' + (0.5 + 0.5 * Math.sin(animT * 7 + p.x)).toFixed(2) + ')'; ctx.beginPath(); ctx.arc(5, -5, 1.3, 0, 6.3); ctx.arc(-6, 3, 1, 0, 6.3); ctx.fill(); }
+    ctx.restore();
+  }
+  const gv = haunt.ghost;
+  if (gv) {
+    const a = Math.atan2(gv.vy, gv.vx), al = Math.min(1, gv.t / 1.2) * Math.min(1, (gv.life - gv.t) / 1.5) * (0.6 + 0.15 * Math.sin(animT * 4));
+    ctx.save(); ctx.translate(gv.x, gv.y + (REDUCED_MOTION ? 0 : Math.sin(animT * 2.5) * 1.5)); ctx.rotate(a); ctx.globalAlpha = al;
+    ctx.fillStyle = 'rgba(160,215,255,.35)'; ctx.beginPath(); ctx.arc(0, 0, 17, 0, 6.3); ctx.fill();
+    ctx.fillStyle = '#cfe8ff'; ctx.strokeStyle = '#8fb8dd'; ctx.lineWidth = 1; rrp(-8, -4.6, 16, 9.2, 2.6); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#4a6a8a'; rrp(2.4, -3.4, 4.4, 6.8, 1.2); ctx.fill();
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(-5, -2, 5, 4); ctx.strokeStyle = '#8fb8dd'; ctx.beginPath(); ctx.moveTo(-5, -2); ctx.lineTo(-2.5, 0.2); ctx.lineTo(0, -2); ctx.stroke();
+    ctx.restore();
+  }
+};
+/* taps on the ghost van, the keyboard easter eggs, and the two overlays */
+cv.addEventListener('pointerdown', e => {
+  if (!haunt.on || !haunt.ghost) return;
+  const r = cv.getBoundingClientRect(), w = toWorld(e.clientX - r.left, e.clientY - r.top), g = haunt.ghost;
+  if ((w.x - g.x) * (w.x - g.x) + (w.y - g.y) * (w.y - g.y) < 26 * 26) hauntGhostTap();
+});
+{
+  let typed = '', code = [];
+  const KONAMI = 'ArrowUp,ArrowUp,ArrowDown,ArrowDown,ArrowLeft,ArrowRight,ArrowLeft,ArrowRight,b,a';
+  window.addEventListener('keydown', e => {
+    if (!haunt.on) return; const t = e.target; if (t && /input|textarea|select/i.test(t.tagName || '')) return;
+    const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    if (e.key.length === 1) { typed = (typed + k).slice(-3); if (typed === 'boo') { typed = ''; hauntBoo(); } }
+    code.push(k); code = code.slice(-10); if (code.join(',') === KONAMI) { code = []; hauntBats(); }
+  });
+}
+function hauntBoo() {
+  const d = document.createElement('div'); d.className = 'haunt-boo'; d.textContent = 'BOO!'; document.body.appendChild(d); setTimeout(() => d.remove(), 1500);
+  money += 13; popText(cam.x, cam.y, '+$13', '#ffb02e'); sfx('claim'); hauntEgg('boo');
+}
+function hauntBats() {
+  const wrap = document.createElement('div'); wrap.className = 'haunt-bats'; wrap.setAttribute('aria-hidden', 'true');
+  const bat = '<svg viewBox="0 0 40 20" width="34" height="17"><path d="M20 6c-2-4-6-5-10-4 3 1 4 3 4 5-3-2-8-2-14 3 5 0 8 1 9 4 2-1 4-1 5 1l2-3 2 3c1-2 3-2 5-1 1-3 4-4 9-4-6-5-11-5-14-3 0-2 1-4 4-5-4-1-8 0-10 4z" fill="#1a1024"/></svg>';
+  for (let i = 0; i < 16; i++) { const b = document.createElement('i'); b.innerHTML = bat; b.style.top = (6 + Math.random() * 78) + '%'; b.style.animationDelay = (Math.random() * 1.6).toFixed(2) + 's'; b.style.animationDuration = (2.4 + Math.random() * 1.6).toFixed(2) + 's'; wrap.appendChild(b); }
+  document.body.appendChild(wrap); setTimeout(() => wrap.remove(), 5000);
+  toast('The bats say hello.', 'tip'); hauntEgg('konami');
+}
+/* ---- the Journal ---- */
+function journalHTML() {
+  const eggs = Object.keys(EGGS).map(k => hs.eggs[k]
+    ? '<li class="found"><b>' + EGGS[k][0] + '</b><small>' + EGGS[k][1] + '</small></li>'
+    : '<li><b>???</b><small>' + EGGS[k][2] + '</small></li>').join('');
+  const chap = LORE.map((c, i) => i < hs.lore
+    ? '<article class="jr-ch"><h4><span>Chapter ' + (i + 1) + '</span> ' + c[0] + '</h4><p>' + c[1] + '</p></article>'
+    : '<article class="jr-ch locked"><h4><span>Chapter ' + (i + 1) + '</span> Locked</h4><p>Reach week ' + (i + 1) + ' in Haunted Night.</p></article>').join('');
+  return '<small class="over-kicker">Halloween</small><h2>The Hollow Hour</h2><p class="mini">A night dispatcher, a town that will not let go, and one last parcel. Each week you survive in Haunted Night opens the next chapter. ' + hs.lore + ' of 13 unlocked.</p>' +
+    '<div class="jr-list">' + chap + '</div><h3 class="jr-h">Easter eggs <small>' + eggCount() + ' of 6 found</small></h3><ul class="jr-eggs">' + eggs + '</ul>' +
+    '<div class="btnrow"><button class="bigbtn" id="jr-close" type="button">Close</button></div>';
+}
+function openJournal() {
+  let m = $('m-journal');
+  if (!m) { m = document.createElement('div'); m.className = 'modal'; m.id = 'm-journal'; m.hidden = true; m.innerHTML = '<div class="card plate wide jrcard"></div>'; const host = $('m-whatsnew'); (host ? host.parentNode : document.body).appendChild(m); }
+  m.firstChild.innerHTML = journalHTML(); haunt.newChap = false; if (haunt.chip) hauntChipUpdate();
+  $('jr-close').onclick = () => closeModal('m-journal'); openModal('m-journal');
+}
+window.JunctionAPI.openJournal = openJournal;
+/* ---- the Season tab in Quests ---- */
+const SEASON_NIGHTS = ['Night I · Trick or Treat', 'Night II · The Hollow Hour', 'Night III · Witching Hour', 'Night IV · Ghosts in the Machine', 'Night V · Midnight Bells', 'Night VI · The Last Parcel'];
+let questTab = 'daily';
+{
+  const _rq = renderQuests;
+  renderQuests = function () {
+    const box = $('mm-quests'); if (!box) return;
+    _rq.apply(this, arguments);
+    const ev = activeEvent(), q = ensureQuests(); if (!ev || ev.id !== 'halloween' || !q.event || q.event.length < 30) return;
+    const h = box.querySelector('h3.q-h.ev'); if (h) { let n = h.nextElementSibling; h.remove(); while (n && n.classList.contains('q-row')) { const k = n.nextElementSibling; n.remove(); n = k; } }
+    const done = q.event.filter(x => x.done).length, claimed = q.event.filter(x => x.claimed).length, ready = q.event.filter(x => x.done && !x.claimed).length;
+    const tabs = '<div class="seg q-tabs"><button type="button" data-qtab="daily" aria-pressed="' + (questTab === 'daily') + '">Daily and weekly</button><button type="button" data-qtab="season" aria-pressed="' + (questTab === 'season') + '">Season ' + done + '/30' + (ready ? ' <em class="tabbadge">' + ready + '</em>' : '') + '</button></div>';
+    if (questTab === 'season') {
+      const row = x => '<div class="q-row' + (x.done ? (x.claimed ? ' claimed' : ' done') : '') + '"><div class="q-t"><b>' + questText(x) + '</b><small>' + (x.claimed ? 'Claimed' : x.done ? 'Complete!' : x.p.toLocaleString('en-US') + ' / ' + x.n.toLocaleString('en-US')) + '</small>' +
+        '<span class="q-bar"><i style="width:' + Math.round(Math.min(1, x.p / x.n) * 100) + '%"></i></span></div><div class="q-r"><em class="q-reward">' + qRewardText(x.reward) + '</em>' +
+        (x.done && !x.claimed ? '<button class="bigbtn" type="button" data-qclaim="' + x.id + '">Claim</button>' : x.claimed ? '<span class="q-tick">✓</span>' : '') + '</div></div>';
+      let body = '<div class="season-head"><div><b>Halloween Season</b><small>' + eventWhen(ev) + ' · ' + done + ' of 30 complete · ' + claimed + ' claimed</small><span class="q-bar"><i style="width:' + Math.round(done / 30 * 100) + '%"></i></span></div>' +
+        '<button type="button" class="act" id="q-journal">The Hollow Hour</button></div>';
+      for (let n = 0; n < 6; n++) { const g = q.event.slice(n * 5, n * 5 + 5); body += '<h3 class="q-h">' + SEASON_NIGHTS[n] + ' <small>' + g.filter(x => x.done).length + '/5</small></h3>' + g.map(row).join(''); }
+      box.innerHTML = tabs + body;
+    } else box.insertAdjacentHTML('afterbegin', tabs);
+    box.querySelectorAll('[data-qtab]').forEach(b => b.onclick = () => { questTab = b.dataset.qtab; renderQuests(); });
+    const jb2 = $('q-journal'); if (jb2) jb2.onclick = () => openJournal();
+    box.querySelectorAll('[data-qclaim]').forEach(b => b.onclick = () => claimQuest(b.dataset.qclaim));
+    box.querySelectorAll('[data-qreroll]').forEach(b => b.onclick = () => rerollQuest(b.dataset.qreroll));
+  };
 }

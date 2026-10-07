@@ -2297,3 +2297,34 @@ ol.board li.sel{box-shadow:inset 0 0 0 1px var(--accent)}
 .haunt-chip{border-left:4px solid #ff8a1f}
 .haunt-chip span{font-size:12px;line-height:1.4}.haunt-chip strong{color:#ffb02e}
 #app.in-menu #haunt-chip{visibility:hidden}
+
+
+/* ===== 27. Halloween, part two (p75) ===== */
+.haunt-chip .hc-btns{display:flex;gap:6px;margin-top:2px}
+.haunt-chip.witching{border-left-color:#c0392b;animation:hc-pulse 1s ease-in-out infinite}
+@keyframes hc-pulse{50%{box-shadow:0 0 0 3px rgba(255,138,31,.35)}}
+.haunt-chip .pulse{box-shadow:0 0 0 2px #ffb02e;animation:hc-pulse 1.2s ease-in-out infinite}
+#hc-title{cursor:default;user-select:none}
+.haunt-banner{position:fixed;left:50%;top:22%;transform:translateX(-50%);z-index:9999;padding:14px 26px;border-radius:16px;background:rgba(20,8,32,.88);color:#ffb02e;font:italic 900 clamp(22px,5vw,40px)/1 "Overpass",system-ui,sans-serif;letter-spacing:.12em;box-shadow:0 0 0 2px #ff8a1f,0 18px 50px rgba(0,0,0,.5);pointer-events:none;animation:hb-in 3.2s ease both}
+@keyframes hb-in{0%{opacity:0;transform:translateX(-50%) scale(.8)}12%,80%{opacity:1;transform:translateX(-50%) scale(1)}100%{opacity:0;transform:translateX(-50%) scale(1.05)}}
+.haunt-boo{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(10,4,20,.82);color:#ffb02e;font:italic 900 clamp(70px,22vw,220px)/1 "Overpass",system-ui,sans-serif;pointer-events:none;animation:boo 1.5s ease both}
+@keyframes boo{0%{opacity:0;transform:scale(.5)}15%{opacity:1;transform:scale(1.08)}30%{transform:scale(1)}85%{opacity:1}100%{opacity:0}}
+.haunt-bats{position:fixed;inset:0;z-index:9998;pointer-events:none;overflow:hidden}
+.haunt-bats i{position:absolute;left:-60px;animation:bat-fly 3s linear both}
+@keyframes bat-fly{0%{transform:translate(0,0) scale(.8)}25%{transform:translate(30vw,-30px) scale(1.1)}50%{transform:translate(60vw,20px) scale(.9)}75%{transform:translate(90vw,-20px) scale(1.1)}100%{transform:translate(120vw,10px) scale(.9)}}
+@media (prefers-reduced-motion:reduce){.haunt-bats i{animation-duration:6s!important}.haunt-banner,.haunt-boo{animation-duration:2s}}
+.jrcard{max-width:660px;max-height:calc(100dvh - 24px);overflow-y:auto}
+.jr-list{display:grid;gap:10px;margin:12px 0}
+.jr-ch{padding:12px 14px;border-radius:14px;background:rgba(var(--ov),.05)}
+.jr-ch h4{margin:0 0 6px;font-size:15px}.jr-ch h4 span{display:block;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#ffb02e;margin-bottom:2px}
+.jr-ch p{margin:0;font-size:13px;line-height:1.6}
+.jr-ch.locked{opacity:.55}.jr-ch.locked p{font-style:italic}
+.jr-h{margin:14px 0 6px}.jr-h small{font-weight:600;opacity:.7;margin-left:6px;font-size:12px}
+.jr-eggs{list-style:none;margin:0 0 12px;padding:0;display:grid;gap:6px}
+.jr-eggs li{padding:9px 12px;border-radius:12px;background:rgba(var(--ov),.04);display:grid;gap:2px}
+.jr-eggs li.found{background:rgba(255,176,46,.14);box-shadow:inset 0 0 0 1px rgba(255,176,46,.4)}
+.jr-eggs b{font-size:13px}.jr-eggs small{font-size:12px;opacity:.8;line-height:1.45}
+.q-tabs{margin-bottom:10px}
+.season-head{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:12px 14px;border-radius:14px;background:rgba(255,138,31,.12);box-shadow:inset 0 0 0 1px rgba(255,138,31,.4);margin-bottom:6px}
+.season-head>div{flex:1;min-width:0;display:grid;gap:4px}.season-head small{opacity:.8;font-size:12px}
+.season-head .q-bar{display:block;height:6px;border-radius:99px;background:rgba(var(--ov),.14);overflow:hidden}.season-head .q-bar i{display:block;height:100%;background:#ff8a1f;border-radius:99px}
