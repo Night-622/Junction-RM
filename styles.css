@@ -3346,3 +3346,16 @@ html[data-lay="D"] #panel .minibox{display:none}
 .ir-reward{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px;margin:0 0 12px;padding:10px 16px;border-radius:999px;background:rgba(var(--accent-rgb),.14);box-shadow:inset 0 0 0 1px rgba(var(--accent-rgb),.5);font-weight:800}
 .ir-reward[hidden]{display:none}.ir-reward b{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
 .ir-reward span{color:var(--mid)}.ir-reward .rr{color:#d6aaff}
+
+/* profile card: the avatar letter is centred, the ring (avatar frame) shows, and the name row lines up */
+.rl-profile .as-av{display:flex;align-items:center;justify-content:center;font:800 26px/1 "Overpass",sans-serif;font-style:normal;padding:0 0 1px;text-align:center;overflow:visible}
+.rl-profile .as-av[class*=" f-"]{box-shadow:0 0 0 3px var(--fr,#fff),0 0 0 5px rgba(0,0,0,.28);border-color:transparent}
+.rl-profile .as-av.f-prism{box-shadow:none}
+.rl-profile .as-av.f-prism::before{content:"";position:absolute;inset:-4px;border-radius:50%;background:var(--fr);z-index:-1}
+.rl-profile .as-av.f-halo::before{content:"";position:absolute;inset:-8px;border-radius:50%;background:radial-gradient(circle,rgba(255,241,168,.55),transparent 70%);z-index:-1}
+.rl-profile .as-av.f-crown::after{content:"\265b";position:absolute;top:-15px;left:50%;transform:translateX(-50%);font-size:15px;line-height:1;color:#ffd23a;text-shadow:0 1px 2px rgba(0,0,0,.5)}
+.rl-profile .as-av.f-laurel::after{content:"\1f33f";position:absolute;bottom:-6px;right:-8px;font-size:14px;line-height:1}
+.rl-profile .as-who b{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;line-height:1.15}
+.rl-profile .as-who b .star{font-style:normal;line-height:1;flex:none}
+.rl-profile .as-who b .ptitle{flex:none;font:800 11px/1 "Overpass",sans-serif;font-style:normal;letter-spacing:.08em;text-transform:uppercase;padding:5px 9px;border-radius:999px;background:rgba(0,0,0,.28);color:var(--accent)}
+.rl-profile .as-who small{line-height:1.2}
