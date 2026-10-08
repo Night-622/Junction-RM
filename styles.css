@@ -1980,7 +1980,7 @@ html[data-motion="reduce"] *{animation-duration:.01ms!important;animation-iterat
 .acct-av.f-prism::before,.av.f-prism::before{content:"";position:absolute;inset:-4px;border-radius:50%;background:var(--fr);z-index:-1}
 .acct-av.f-halo::before,.av.f-halo::before{content:"";position:absolute;inset:-6px;border-radius:50%;background:radial-gradient(circle,rgba(255,241,168,.55),transparent 70%);z-index:-1}
 .acct-av.f-crown::after,.av.f-crown::after{content:"\u265b";position:absolute;top:-14px;left:50%;transform:translateX(-50%);font-size:14px;color:#ffd23a;text-shadow:0 1px 2px rgba(0,0,0,.4)}
-.acct-av.f-laurel::after,.av.f-laurel::after{content:"\ud83c\udf3f";position:absolute;bottom:-6px;right:-8px;font-size:13px}
+.acct-av.f-laurel::after,.av.f-laurel::after{content:"\1f33f";position:absolute;bottom:-6px;right:-8px;font-size:13px}
 .ptitle{font-style:normal;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:99px;background:rgba(var(--accent-rgb),.18);color:var(--accent);margin-left:6px;vertical-align:middle;white-space:nowrap}
 .pl-pins{display:flex;flex-wrap:wrap;gap:6px;margin:-2px 0 8px}
 .bn-prev{display:block;height:44px;border-radius:9px}
@@ -3359,3 +3359,6 @@ html[data-lay="D"] #panel .minibox{display:none}
 .rl-profile .as-who b .star{font-style:normal;line-height:1;flex:none}
 .rl-profile .as-who b .ptitle{flex:none;font:800 11px/1 "Overpass",sans-serif;font-style:normal;letter-spacing:.08em;text-transform:uppercase;padding:5px 9px;border-radius:999px;background:rgba(0,0,0,.28);color:var(--accent)}
 .rl-profile .as-who small{line-height:1.2}
+/* Account window avatar: upright letter, centred */
+#m-acct .acct-av{display:flex;align-items:center;justify-content:center;font:800 32px/1 "Overpass",sans-serif;font-style:normal;padding-bottom:1px}
+.acct-av.f-laurel::after,.av.f-laurel::after{line-height:1;pointer-events:none}
